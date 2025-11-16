@@ -21,9 +21,13 @@ if ($existingService) {
 
 # Create the service
 Write-Host "Creating service '$ServiceName'..."
-$result = sc.exe create $ServiceName binPath= "$ServicePath" start= auto DisplayName= "System Logger Service"
+$result = sc.exe create $ServiceName binPath= "$ServicePath --service" start= auto DisplayName= "System Logger Service"
 if ($LASTEXITCODE -eq 0) {
     Write-Host "Service created successfully."
+
+    # Configure failure recovery to restart the service
+    Write-Host "Configuring failure recovery..."
+    sc.exe failure $ServiceName reset= 86400 actions= restart/60000/restart/60000/""/60000
 
     # Start the service
     Write-Host "Starting service..."
