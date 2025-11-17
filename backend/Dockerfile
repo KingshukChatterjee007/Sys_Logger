@@ -32,7 +32,7 @@ ENV LOG_FOLDER=/app/logs
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD python -c "import requests; requests.get('http://localhost:5000/api/health')"
+    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:5000/api/health').read()" || exit 1
 
 # Run with gunicorn for production
 # Note: For Windows-specific features (GPU monitoring), you may need to run this on Windows

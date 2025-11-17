@@ -39,15 +39,13 @@ export const useUsageData = (dataSource: 'local' | 'gist' = 'local'): UseUsageDa
           gpu_load = log.gpu_load
         } else if (gpuData) {
           // Parse from raw GPU data if API parsing failed
-          console.log('Parsing from raw GPU data:', gpuData)
           // Look for "GPU Usage: X%" pattern
           if (gpuData.includes('GPU Usage: ')) {
             try {
               const usageMatch = gpuData.split('GPU Usage: ')[1].split('%')[0].trim()
               gpu_load = parseFloat(usageMatch)
-              console.log('Parsed GPU usage:', gpu_load)
             } catch (e) {
-              console.log('Failed to parse GPU usage:', e)
+              // Silently fail and use 0
               gpu_load = 0
             }
           }

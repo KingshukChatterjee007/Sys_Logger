@@ -32,6 +32,9 @@ else:
 app = Flask(__name__)
 # CORS will be configured after environment variables are loaded
 
+# Load Flask debug flag early for use in functions
+FLASK_DEBUG = os.getenv('FLASK_DEBUG', 'False').lower() == 'true'
+
 def get_gpu_usage():
     """Get GPU usage for both NVIDIA and AMD GPUs using Windows Performance Counters"""
     gpu_info = {}
@@ -73,14 +76,15 @@ def get_gpu_usage():
                             usage_value = float(value.strip())
                             gpu_info['overall_gpu_usage'] = usage_value
                             gpu_info['detection_method'] = 'powershell'
-                            print(f"PowerShell GPU Detection: {usage_value:.1f}%")
-                            print(f"DEBUG - Returning gpu_info: {gpu_info}")
+                            if FLASK_DEBUG:
+                                print(f"PowerShell GPU Detection: {usage_value:.1f}%")
                             return gpu_info
                         except ValueError:
                             continue
 
         except Exception as e:
-            print(f"PowerShell GPU detection failed: {e}")
+            if FLASK_DEBUG:
+                print(f"PowerShell GPU detection failed: {e}")
 
         # Fallback to typeperf method
         result = subprocess.run([
@@ -115,11 +119,12 @@ def get_gpu_usage():
                     gpu_info['overall_gpu_usage'] = max_gpu_usage
                     gpu_info['gpu_engine_count'] = engine_count
                     gpu_info['detection_method'] = 'typeperf'
-                    print(f"TypePerf GPU Detection: {engine_count} engines, max usage: {max_gpu_usage:.1f}%")
-                    print(f"DEBUG - Returning gpu_info: {gpu_info}")
+                    if FLASK_DEBUG:
+                        print(f"TypePerf GPU Detection: {engine_count} engines, max usage: {max_gpu_usage:.1f}%")
                     return gpu_info
 
-        print("No GPU usage detected")
+        if FLASK_DEBUG:
+            print("No GPU usage detected")
         gpu_info['overall_gpu_usage'] = 0.0
         gpu_info['detection_method'] = 'none'
 
@@ -130,8 +135,42 @@ def get_gpu_usage():
         gpu_info['gpu_monitoring_error'] = str(e)
         gpu_info['overall_gpu_usage'] = 0.0
 
-    print(f"DEBUG - Final gpu_info: {gpu_info}")
     return gpu_info
+
+# Configuration - Load before routes
+GITHUB_TOKEN = os.getenv('GITHUB_TOKEN')  # Set your GitHub personal access token as environment variable
+LOG_FOLDER = os.getenv('LOG_FOLDER', 'C://Usage_Logs')
+LOG_RETENTION_DAYS = int(os.getenv('LOG_RETENTION_DAYS', '2'))
+LOG_INTERVAL = int(os.getenv('LOG_INTERVAL', '4'))
+CREDENTIALS_FILE = 'credentials.json'
+TOKEN_FILE = 'token.json'
+UPLOAD_FOLDER_ID = 'Usage Logs'  # Set this to your Google Drive folder ID
+
+# Flask Configuration
+FLASK_ENV = os.getenv('FLASK_ENV', 'development')
+# FLASK_DEBUG already defined above
+PORT = int(os.getenv('PORT', '5000'))
+HOST = os.getenv('HOST', '0.0.0.0')
+
+# CORS Configuration - Configure before routes
+CORS_ORIGINS_STR = os.getenv('CORS_ORIGINS', 'http://localhost:3000')
+if CORS_ORIGINS_STR.strip() == '*':
+    CORS(app, resources={r"/api/*": {"origins": "*"}})
+else:
+    CORS_ORIGINS = [origin.strip() for origin in CORS_ORIGINS_STR.split(',')]
+    CORS(app, resources={r"/api/*": {"origins": CORS_ORIGINS}})
+
+# Set up logging directory
+if not os.path.exists(LOG_FOLDER):
+    os.makedirs(LOG_FOLDER)
+
+# Create session start timestamp
+session_start = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+LOG_FILE = os.path.join(LOG_FOLDER, f'system_usage_{session_start}.log')
+
+# Set up logging
+logging.basicConfig(filename=LOG_FILE, level=logging.INFO,
+                    format='%(asctime)s - %(message)s')
 
 @app.route('/api/usage', methods=['GET'])
 def get_usage():
@@ -159,15 +198,18 @@ def get_logs():
                 if filename.startswith('system_usage_') and filename.endswith('.log'):
                     file_path = os.path.join(LOG_FOLDER, filename)
                     try:
-                        with open(file_path, 'r') as f:
+                        with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
                             lines = f.readlines()
                             for line in lines[1:]:  # Skip header
                                 if 'CPU Usage:' in line:
                                     timestamp_str = line.split(' - ')[0]
                                     try:
                                         timestamp = datetime.strptime(timestamp_str, '%Y-%m-%d %H:%M:%S,%f')
-                                    except:
-                                        timestamp = datetime.strptime(timestamp_str, '%Y-%m-%d %H:%M:%S')
+                                    except (ValueError, AttributeError):
+                                        try:
+                                            timestamp = datetime.strptime(timestamp_str, '%Y-%m-%d %H:%M:%S')
+                                        except (ValueError, AttributeError):
+                                            continue  # Skip invalid timestamp
                                     parts = line.split(' - ')[1].strip()
                                     cpu_part = parts.split(', ')[0].split(': ')[1].rstrip('%')
                                     ram_part = parts.split(', ')[1].split(': ')[1].rstrip('%')
@@ -181,7 +223,7 @@ def get_logs():
                                             try:
                                                 usage_part = gpu_part.split('overall_gpu_usage: ')[1].split(',')[0]
                                                 gpu_load = float(usage_part)
-                                            except:
+                                            except (ValueError, IndexError, AttributeError):
                                                 pass
 
                                     logs.append({
@@ -249,8 +291,11 @@ def get_gist_logs():
                 timestamp_str = line.split(' - ')[0]
                 try:
                     timestamp = datetime.strptime(timestamp_str, '%Y-%m-%d %H:%M:%S,%f')
-                except:
-                    timestamp = datetime.strptime(timestamp_str, '%Y-%m-%d %H:%M:%S')
+                except (ValueError, AttributeError):
+                    try:
+                        timestamp = datetime.strptime(timestamp_str, '%Y-%m-%d %H:%M:%S')
+                    except (ValueError, AttributeError):
+                        continue  # Skip invalid timestamp
                 parts = line.split(' - ')[1].strip()
                 cpu_part = parts.split(', ')[0].split(': ')[1].rstrip('%')
                 ram_part = parts.split(', ')[1].split(': ')[1].rstrip('%')
@@ -259,23 +304,21 @@ def get_gist_logs():
                 # Extract GPU usage for charting
                 gpu_load = 0
                 if gpu_part:
-                    print(f"Parsing GPU part: '{gpu_part}'")  # Debug
                     # Look for "GPU Usage: X%" pattern from logs
                     if 'GPU Usage: ' in gpu_part:
                         try:
                             usage_str = gpu_part.split('GPU Usage: ')[1].split('%')[0].strip()
-                            print(f"Extracted usage string: '{usage_str}'")  # Debug
                             gpu_load = float(usage_str)
-                            print(f"Parsed GPU load: {gpu_load}")  # Debug
                         except Exception as e:
-                            print(f"Error parsing GPU usage: {e}")
+                            if FLASK_DEBUG:
+                                logging.debug(f"Error parsing GPU usage: {e}")
                             pass
                     # Also check for overall_gpu_usage in the GPU string (for future compatibility)
                     elif 'overall_gpu_usage' in gpu_part:
                         try:
                             usage_part = gpu_part.split('overall_gpu_usage: ')[1].split(',')[0]
                             gpu_load = float(usage_part)
-                        except:
+                        except (ValueError, IndexError, AttributeError):
                             pass
 
                 logs.append({
@@ -290,35 +333,6 @@ def get_gist_logs():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-def run_flask_server():
-    """Run Flask server in a separate thread"""
-    print(f"Starting Flask server on http://{HOST}:{PORT}")
-    server = make_server(HOST, PORT, app)
-    print(f"Flask server started successfully on {HOST}:{PORT}")
-    server.serve_forever()
-
-# Configuration
-GITHUB_TOKEN = os.getenv('GITHUB_TOKEN')  # Set your GitHub personal access token as environment variable
-LOG_FOLDER = os.getenv('LOG_FOLDER', 'C://Usage_Logs')
-LOG_RETENTION_DAYS = int(os.getenv('LOG_RETENTION_DAYS', '2'))
-LOG_INTERVAL = int(os.getenv('LOG_INTERVAL', '4'))
-CREDENTIALS_FILE = 'credentials.json'
-TOKEN_FILE = 'token.json'
-UPLOAD_FOLDER_ID = 'Usage Logs'  # Set this to your Google Drive folder ID
-
-# Flask Configuration
-FLASK_ENV = os.getenv('FLASK_ENV', 'development')
-FLASK_DEBUG = os.getenv('FLASK_DEBUG', 'False').lower() == 'true'
-PORT = int(os.getenv('PORT', '5000'))
-HOST = os.getenv('HOST', '0.0.0.0')
-
-# CORS Configuration
-CORS_ORIGINS = os.getenv('CORS_ORIGINS', 'http://localhost:3000').split(',')
-if CORS_ORIGINS == ['*']:
-    CORS(app, resources={r"/api/*": {"origins": "*"}})
-else:
-    CORS(app, resources={r"/api/*": {"origins": CORS_ORIGINS}})
-
 # Health check endpoint
 @app.route('/api/health', methods=['GET'])
 def health_check():
@@ -329,17 +343,12 @@ def health_check():
         'service': 'system-logger'
     })
 
-# Create session start timestamp
-session_start = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-LOG_FILE = os.path.join(LOG_FOLDER, f'system_usage_{session_start}.log')
-
-# Set up logging directory
-if not os.path.exists(LOG_FOLDER):
-    os.makedirs(LOG_FOLDER)
-
-# Set up logging
-logging.basicConfig(filename=LOG_FILE, level=logging.INFO,
-                    format='%(asctime)s - %(message)s')
+def run_flask_server():
+    """Run Flask server in a separate thread"""
+    print(f"Starting Flask server on http://{HOST}:{PORT}")
+    server = make_server(HOST, PORT, app)
+    print(f"Flask server started successfully on {HOST}:{PORT}")
+    server.serve_forever()
 
 def get_system_usage():
     cpu_usage = psutil.cpu_percent(interval=1)
@@ -409,8 +418,15 @@ def upload_to_gist():
                 break
 
     # Read the log file content
-    with open(LOG_FILE, 'r') as f:
-        content = f.read()
+    try:
+        with open(LOG_FILE, 'r', encoding='utf-8', errors='ignore') as f:
+            content = f.read()
+    except FileNotFoundError:
+        logging.error(f"Log file not found: {LOG_FILE}")
+        return
+    except Exception as e:
+        logging.error(f"Error reading log file: {e}")
+        return
 
     gist_data = {
         'description': f'System usage logs - {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}',
@@ -459,19 +475,29 @@ def main():
 
     if is_frozen or is_service:
         logging.info("Running in service mode")
+        # In service mode, keep the main thread alive
+        # Upload happens periodically (every hour) or on exit
+        upload_interval = 3600  # Upload every hour in service mode
+        last_upload_time = time.time()
+        
         while True:
-            time.sleep(0)  # Upload every seconds in service mode
-            if GITHUB_TOKEN:
-                if is_connected():
-                    try:
-                        upload_to_gist()
-                        logging.info("Logs uploaded successfully to gist in service mode.")
-                    except Exception as e:
-                        logging.error(f"Gist upload failed in service mode: {e}")
+            time.sleep(60)  # Check every minute
+            current_time = time.time()
+            
+            # Upload if interval has passed
+            if current_time - last_upload_time >= upload_interval:
+                if GITHUB_TOKEN:
+                    if is_connected():
+                        try:
+                            upload_to_gist()
+                            last_upload_time = current_time
+                            logging.info("Logs uploaded successfully to gist in service mode.")
+                        except Exception as e:
+                            logging.error(f"Gist upload failed in service mode: {e}")
+                    else:
+                        logging.info("Skipping upload: No internet connection in service mode.")
                 else:
-                    logging.info("Skipping upload: No internet connection in service mode.")
-            else:
-                logging.info("Skipping upload: GITHUB_TOKEN environment variable not set (logging works without upload).")
+                    logging.info("Skipping upload: GITHUB_TOKEN environment variable not set (logging works without upload).")
     else:
         input("Press Enter to exit and upload logs...\n")
         if GITHUB_TOKEN:

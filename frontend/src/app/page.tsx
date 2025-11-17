@@ -1,20 +1,10 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import { Line } from 'react-chartjs-2'
+import { useState } from 'react'
 import { Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend } from 'chart.js'
-import { ResponsiveContainer, LineChart, CartesianGrid, XAxis, YAxis, Tooltip as RechartsTooltip, Legend as RechartsLegend, Line as RechartsLine } from 'recharts'
 import { UsageGraph } from '../components/UsageGraph'
 import { useUsageData } from '../components/hooks/useUsageData'
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend)
-
-interface UsageData {
-  timestamp: string
-  cpu: number
-  ram: number
-  gpu: string
-  gpu_load?: number
-}
 
 export default function Dashboard() {
   const [dataSource, setDataSource] = useState<'local' | 'gist'>('local')
