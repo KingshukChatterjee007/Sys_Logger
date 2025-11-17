@@ -30,7 +30,7 @@ else:
     load_dotenv()
 
 app = Flask(__name__)
-CORS(app)
+# CORS will be configured after environment variables are loaded
 
 def get_gpu_usage():
     """Get GPU usage for both NVIDIA and AMD GPUs using Windows Performance Counters"""
@@ -136,60 +136,68 @@ def get_gpu_usage():
 @app.route('/api/usage', methods=['GET'])
 def get_usage():
     """API endpoint to get current system usage"""
-    cpu_usage, ram_usage, gpu_usage = get_system_usage()
-    data = {
-        'cpu': cpu_usage,
-        'ram': ram_usage,
-        'gpu': gpu_usage,
-        'timestamp': datetime.now().isoformat()
-    }
-    return jsonify(data)
+    try:
+        cpu_usage, ram_usage, gpu_usage = get_system_usage()
+        data = {
+            'cpu': cpu_usage,
+            'ram': ram_usage,
+            'gpu': gpu_usage,
+            'timestamp': datetime.now().isoformat()
+        }
+        return jsonify(data)
+    except Exception as e:
+        logging.error(f"Error getting usage: {e}")
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/api/logs', methods=['GET'])
 def get_logs():
     """API endpoint to get usage logs from local folder"""
-    logs = []
-    if os.path.exists(LOG_FOLDER):
-        for filename in sorted(os.listdir(LOG_FOLDER), reverse=True):
-            if filename.startswith('system_usage_') and filename.endswith('.log'):
-                file_path = os.path.join(LOG_FOLDER, filename)
-                try:
-                    with open(file_path, 'r') as f:
-                        lines = f.readlines()
-                        for line in lines[1:]:  # Skip header
-                            if 'CPU Usage:' in line:
-                                timestamp_str = line.split(' - ')[0]
-                                try:
-                                    timestamp = datetime.strptime(timestamp_str, '%Y-%m-%d %H:%M:%S,%f')
-                                except:
-                                    timestamp = datetime.strptime(timestamp_str, '%Y-%m-%d %H:%M:%S')
-                                parts = line.split(' - ')[1].strip()
-                                cpu_part = parts.split(', ')[0].split(': ')[1].rstrip('%')
-                                ram_part = parts.split(', ')[1].split(': ')[1].rstrip('%')
-                                gpu_part = ', '.join(parts.split(', ')[2:]) if len(parts.split(', ')) > 2 else ''
+    try:
+        logs = []
+        if os.path.exists(LOG_FOLDER):
+            for filename in sorted(os.listdir(LOG_FOLDER), reverse=True):
+                if filename.startswith('system_usage_') and filename.endswith('.log'):
+                    file_path = os.path.join(LOG_FOLDER, filename)
+                    try:
+                        with open(file_path, 'r') as f:
+                            lines = f.readlines()
+                            for line in lines[1:]:  # Skip header
+                                if 'CPU Usage:' in line:
+                                    timestamp_str = line.split(' - ')[0]
+                                    try:
+                                        timestamp = datetime.strptime(timestamp_str, '%Y-%m-%d %H:%M:%S,%f')
+                                    except:
+                                        timestamp = datetime.strptime(timestamp_str, '%Y-%m-%d %H:%M:%S')
+                                    parts = line.split(' - ')[1].strip()
+                                    cpu_part = parts.split(', ')[0].split(': ')[1].rstrip('%')
+                                    ram_part = parts.split(', ')[1].split(': ')[1].rstrip('%')
+                                    gpu_part = ', '.join(parts.split(', ')[2:]) if len(parts.split(', ')) > 2 else ''
 
-                                # Extract GPU usage for charting
-                                gpu_load = 0
-                                if gpu_part:
-                                    # Look for overall_gpu_usage in the GPU string
-                                    if 'overall_gpu_usage' in gpu_part:
-                                        try:
-                                            usage_part = gpu_part.split('overall_gpu_usage: ')[1].split(',')[0]
-                                            gpu_load = float(usage_part)
-                                        except:
-                                            pass
+                                    # Extract GPU usage for charting
+                                    gpu_load = 0
+                                    if gpu_part:
+                                        # Look for overall_gpu_usage in the GPU string
+                                        if 'overall_gpu_usage' in gpu_part:
+                                            try:
+                                                usage_part = gpu_part.split('overall_gpu_usage: ')[1].split(',')[0]
+                                                gpu_load = float(usage_part)
+                                            except:
+                                                pass
 
-                                logs.append({
-                                    'timestamp': timestamp.isoformat(),
-                                    'cpu': float(cpu_part),
-                                    'ram': float(ram_part),
-                                    'gpu': gpu_part,
-                                    'gpu_load': gpu_load
-                                })
-                        break  # Only read the latest log file
-                except Exception as e:
-                    continue
-    return jsonify(logs)
+                                    logs.append({
+                                        'timestamp': timestamp.isoformat(),
+                                        'cpu': float(cpu_part),
+                                        'ram': float(ram_part),
+                                        'gpu': gpu_part,
+                                        'gpu_load': gpu_load
+                                    })
+                            break  # Only read the latest log file
+                    except Exception as e:
+                        continue
+        return jsonify(logs)
+    except Exception as e:
+        logging.error(f"Error getting logs: {e}")
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/api/gist-logs', methods=['GET'])
 def get_gist_logs():
@@ -284,17 +292,42 @@ def get_gist_logs():
 
 def run_flask_server():
     """Run Flask server in a separate thread"""
-    print("Starting Flask server on http://localhost:5000")
-    server = make_server('0.0.0.0', 5000, app)
-    print("Flask server started successfully")
+    print(f"Starting Flask server on http://{HOST}:{PORT}")
+    server = make_server(HOST, PORT, app)
+    print(f"Flask server started successfully on {HOST}:{PORT}")
     server.serve_forever()
 
 # Configuration
 GITHUB_TOKEN = os.getenv('GITHUB_TOKEN')  # Set your GitHub personal access token as environment variable
-LOG_FOLDER = 'C://Usage_Logs'
+LOG_FOLDER = os.getenv('LOG_FOLDER', 'C://Usage_Logs')
+LOG_RETENTION_DAYS = int(os.getenv('LOG_RETENTION_DAYS', '2'))
+LOG_INTERVAL = int(os.getenv('LOG_INTERVAL', '4'))
 CREDENTIALS_FILE = 'credentials.json'
 TOKEN_FILE = 'token.json'
 UPLOAD_FOLDER_ID = 'Usage Logs'  # Set this to your Google Drive folder ID
+
+# Flask Configuration
+FLASK_ENV = os.getenv('FLASK_ENV', 'development')
+FLASK_DEBUG = os.getenv('FLASK_DEBUG', 'False').lower() == 'true'
+PORT = int(os.getenv('PORT', '5000'))
+HOST = os.getenv('HOST', '0.0.0.0')
+
+# CORS Configuration
+CORS_ORIGINS = os.getenv('CORS_ORIGINS', 'http://localhost:3000').split(',')
+if CORS_ORIGINS == ['*']:
+    CORS(app, resources={r"/api/*": {"origins": "*"}})
+else:
+    CORS(app, resources={r"/api/*": {"origins": CORS_ORIGINS}})
+
+# Health check endpoint
+@app.route('/api/health', methods=['GET'])
+def health_check():
+    """Health check endpoint for monitoring"""
+    return jsonify({
+        'status': 'healthy',
+        'timestamp': datetime.now().isoformat(),
+        'service': 'system-logger'
+    })
 
 # Create session start timestamp
 session_start = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
@@ -321,7 +354,7 @@ def log_usage():
         gpu_str = ", ".join([f"{key}: {value}" for key, value in (gpu or {}).items()])
         gpu_usage = gpu.get('overall_gpu_usage', 0) if gpu else 0
         logging.info(f"CPU Usage: {cpu:.1f}%, RAM Usage: {ram:.1f}%, GPU Usage: {gpu_usage:.1f}%")
-        time.sleep(4)  # Log every 4 seconds to match the 5-second frontend refresh
+        time.sleep(LOG_INTERVAL)  # Log at configured interval
 
 def is_connected():
     try:
@@ -332,11 +365,11 @@ def is_connected():
     return False
 
 def cleanup_old_logs():
-    """Delete log files older than 2 days"""
+    """Delete log files older than specified retention days"""
     if not os.path.exists(LOG_FOLDER):
         return
 
-    cutoff_date = datetime.now() - timedelta(days=2)
+    cutoff_date = datetime.now() - timedelta(days=LOG_RETENTION_DAYS)
 
     for filename in os.listdir(LOG_FOLDER):
         if filename.startswith('system_usage_') and filename.endswith('.log'):
