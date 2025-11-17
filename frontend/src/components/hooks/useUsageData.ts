@@ -16,17 +16,46 @@ export const useUsageData = (dataSource: 'local' | 'gist' = 'local'): UseUsageDa
   const fetchData = useCallback(async () => {
     try {
       const endpoint = dataSource === 'gist' ? '/api/gist-logs' : '/api/logs'
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000'
-      const response = await fetch(`${apiUrl}${endpoint}`, {
-        mode: 'cors',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      })
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}))
-        throw new Error(errorData.error || `HTTP error! status: ${response.status}`)
+      
+      // Try both ports 5000 and 5001 for compatibility
+      const tryFetch = async (url: string): Promise<Response> => {
+        return fetch(`${url}${endpoint}`, {
+          mode: 'cors',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        })
       }
+
+      let response: Response | null = null
+      let apiUrl = ''
+
+      // If NEXT_PUBLIC_API_URL is set, use it
+      if (process.env.NEXT_PUBLIC_API_URL) {
+        apiUrl = process.env.NEXT_PUBLIC_API_URL
+        response = await tryFetch(apiUrl)
+      } else {
+        // Try 5001 first, then fallback to 5000
+        const ports = ['5001', '5000']
+        for (const port of ports) {
+          try {
+            apiUrl = `http://localhost:${port}`
+            response = await tryFetch(apiUrl)
+            if (response.ok) {
+              break
+            }
+          } catch {
+            // Continue to next port
+            continue
+          }
+        }
+      }
+
+      if (!response || !response.ok) {
+        const errorData = await response?.json().catch(() => ({}))
+        throw new Error(errorData.error || `HTTP error! status: ${response?.status || 'Connection failed'}`)
+      }
+      
       const logs: UsageData[] = await response.json()
 
       // Process GPU data to extract load for charting
@@ -44,7 +73,7 @@ export const useUsageData = (dataSource: 'local' | 'gist' = 'local'): UseUsageDa
             try {
               const usageMatch = gpuData.split('GPU Usage: ')[1].split('%')[0].trim()
               gpu_load = parseFloat(usageMatch)
-            } catch (e) {
+            } catch {
               // Silently fail and use 0
               gpu_load = 0
             }
