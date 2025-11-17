@@ -29,7 +29,7 @@ export const UsageGraph: React.FC<UsageGraphProps> = ({
   timeRange = '1m'
 }) => {
   const [selectedTimeRange, setSelectedTimeRange] = useState<TimeRange>(timeRange)
-  const [currentTime, setCurrentTime] = useState(0)
+  const [currentTime, setCurrentTime] = useState(() => Date.now())
 
   // Update current time every second to force re-filtering
   useEffect(() => {
