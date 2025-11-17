@@ -12,6 +12,8 @@ from google.auth.transport.requests import Request
 import socket
 import threading
 from flask import Flask, jsonify
+from flask_cors import CORS
+from werkzeug.serving import make_server
 try:
     import GPUtil
     NVIDIA_AVAILABLE = True
@@ -19,58 +21,249 @@ except ImportError:
     NVIDIA_AVAILABLE = False
 AMD_AVAILABLE = False  # AMD GPU monitoring not available - library not found
 
+app = Flask(__name__)
+CORS(app)
+
 def get_gpu_usage():
-    """Get GPU usage for NVIDIA GPUs with process-level monitoring"""
+    """Get GPU usage for both NVIDIA and AMD GPUs using Windows Performance Counters"""
     gpu_info = {}
 
-    if NVIDIA_AVAILABLE:
-        try:
-            gpus = GPUtil.getGPUs()
-            for i, gpu in enumerate(gpus):
-                gpu_info[f'nvidia_gpu_{i}_load'] = gpu.load * 100
-                gpu_info[f'nvidia_gpu_{i}_memory_used'] = gpu.memoryUsed
-                gpu_info[f'nvidia_gpu_{i}_memory_total'] = gpu.memoryTotal
-                gpu_info[f'nvidia_gpu_{i}_memory_percent'] = gpu.memoryUtil * 100
-                gpu_info[f'nvidia_gpu_{i}_temperature'] = gpu.temperature
-        except Exception as e:
-            gpu_info['nvidia_error'] = str(e)
-
-    # AMD GPU monitoring - try to get basic usage via Windows Performance Counters
+    # Get all GPU usage data from Windows Performance Monitor
     try:
         import subprocess
-        # Check for AMD GPU presence
-        result = subprocess.run(['wmic', 'path', 'win32_videocontroller', 'get', 'name'],
-                               capture_output=True, text=True, timeout=5)
-        if 'AMD' in result.stdout.upper() or 'RADEON' in result.stdout.upper():
-            gpu_info['amd_available'] = True
-            # Try to get GPU usage via typeperf (Windows Performance Monitor)
-            try:
-                usage_result = subprocess.run(['typeperf', '\\GPU Engine(*)\\Utilization Percentage', '-sc', '1'],
-                                            capture_output=True, text=True, timeout=10)
-                if usage_result.returncode == 0 and usage_result.stdout:
-                    # Parse the output to extract GPU usage
-                    lines = usage_result.stdout.strip().split('\n')
-                    if len(lines) > 2:
-                        # Last line typically contains the value
-                        last_line = lines[-1].strip()
-                        if ',' in last_line:
-                            parts = last_line.split(',')
-                            if len(parts) > 1:
-                                try:
-                                    usage_value = float(parts[-1].strip('"\r\n'))
-                                    gpu_info['amd_gpu_usage'] = usage_value
-                                except ValueError:
-                                    pass
-            except subprocess.TimeoutExpired:
-                gpu_info['amd_note'] = 'AMD GPU detected - usage monitoring timed out'
-            except Exception:
-                gpu_info['amd_note'] = 'AMD GPU detected - detailed monitoring limited'
-        else:
-            gpu_info['amd_available'] = False
-    except Exception:
-        gpu_info['amd_available'] = False
 
+        # Try PowerShell method for better GPU detection
+        try:
+            ps_command = '''
+            $counters = Get-Counter -ListSet "GPU Engine" -ErrorAction SilentlyContinue
+            if ($counters) {
+                $paths = $counters.Paths | Where-Object { $_ -like "*Utilization*" }
+                if ($paths) {
+                    $gpuCounters = Get-Counter -Counter $paths -SampleInterval 1 -MaxSamples 2 -ErrorAction SilentlyContinue
+                    if ($gpuCounters) {
+                        $maxValue = 0
+                        $gpuCounters.CounterSamples | ForEach-Object {
+                            $value = [math]::Round($_.CookedValue, 1)
+                            if ($value -gt $maxValue) { $maxValue = $value }
+                        }
+                        if ($maxValue -gt 0) {
+                            Write-Output "GPU:$maxValue"
+                        }
+                    }
+                }
+            }
+            '''
+            ps_result = subprocess.run([
+                'powershell', '-ExecutionPolicy', 'Bypass', '-Command', ps_command
+            ], capture_output=True, text=True, timeout=15)
+
+            if ps_result.returncode == 0 and ps_result.stdout.strip():
+                for line in ps_result.stdout.strip().split('\n'):
+                    if line.startswith('GPU:'):
+                        try:
+                            _, value = line.split(':', 1)
+                            usage_value = float(value.strip())
+                            gpu_info['overall_gpu_usage'] = usage_value
+                            gpu_info['detection_method'] = 'powershell'
+                            print(f"PowerShell GPU Detection: {usage_value:.1f}%")
+                            print(f"DEBUG - Returning gpu_info: {gpu_info}")
+                            return gpu_info
+                        except ValueError:
+                            continue
+
+        except Exception as e:
+            print(f"PowerShell GPU detection failed: {e}")
+
+        # Fallback to typeperf method
+        result = subprocess.run([
+            'typeperf',
+            '\\GPU Engine(*)\\Utilization Percentage',
+            '-sc', '2'
+        ], capture_output=True, text=True, timeout=15)
+
+        if result.returncode == 0 and result.stdout:
+            lines = result.stdout.strip().split('\n')
+            data_lines = [line for line in lines if line.strip() and not line.startswith('"') and not 'Exiting' in line and not 'completed' in line.lower()]
+
+            if len(data_lines) >= 1:
+                # Get the last data line
+                last_data_line = data_lines[-1]
+                values = last_data_line.split(',')
+
+                # Find maximum GPU usage from all engines
+                max_gpu_usage = 0
+                engine_count = 0
+
+                for value in values[1:]:  # Skip timestamp
+                    try:
+                        usage_value = float(value.strip('"\r\n'))
+                        if usage_value > max_gpu_usage:
+                            max_gpu_usage = usage_value
+                        engine_count += 1
+                    except (ValueError, IndexError):
+                        continue
+
+                if max_gpu_usage > 0:
+                    gpu_info['overall_gpu_usage'] = max_gpu_usage
+                    gpu_info['gpu_engine_count'] = engine_count
+                    gpu_info['detection_method'] = 'typeperf'
+                    print(f"TypePerf GPU Detection: {engine_count} engines, max usage: {max_gpu_usage:.1f}%")
+                    print(f"DEBUG - Returning gpu_info: {gpu_info}")
+                    return gpu_info
+
+        print("No GPU usage detected")
+        gpu_info['overall_gpu_usage'] = 0.0
+        gpu_info['detection_method'] = 'none'
+
+    except subprocess.TimeoutExpired:
+        gpu_info['gpu_monitoring_timeout'] = 'GPU monitoring timed out'
+        gpu_info['overall_gpu_usage'] = 0.0
+    except Exception as e:
+        gpu_info['gpu_monitoring_error'] = str(e)
+        gpu_info['overall_gpu_usage'] = 0.0
+
+    print(f"DEBUG - Final gpu_info: {gpu_info}")
     return gpu_info
+
+@app.route('/api/usage', methods=['GET'])
+def get_usage():
+    """API endpoint to get current system usage"""
+    cpu_usage, ram_usage, gpu_usage = get_system_usage()
+    data = {
+        'cpu': cpu_usage,
+        'ram': ram_usage,
+        'gpu': gpu_usage,
+        'timestamp': datetime.now().isoformat()
+    }
+    return jsonify(data)
+
+@app.route('/api/logs', methods=['GET'])
+def get_logs():
+    """API endpoint to get usage logs from local folder"""
+    logs = []
+    if os.path.exists(LOG_FOLDER):
+        for filename in sorted(os.listdir(LOG_FOLDER), reverse=True):
+            if filename.startswith('system_usage_') and filename.endswith('.log'):
+                file_path = os.path.join(LOG_FOLDER, filename)
+                try:
+                    with open(file_path, 'r') as f:
+                        lines = f.readlines()
+                        for line in lines[1:]:  # Skip header
+                            if 'CPU Usage:' in line:
+                                timestamp_str = line.split(' - ')[0]
+                                try:
+                                    timestamp = datetime.strptime(timestamp_str, '%Y-%m-%d %H:%M:%S,%f')
+                                except:
+                                    timestamp = datetime.strptime(timestamp_str, '%Y-%m-%d %H:%M:%S')
+                                parts = line.split(' - ')[1].strip()
+                                cpu_part = parts.split(', ')[0].split(': ')[1].rstrip('%')
+                                ram_part = parts.split(', ')[1].split(': ')[1].rstrip('%')
+                                gpu_part = ', '.join(parts.split(', ')[2:]) if len(parts.split(', ')) > 2 else ''
+
+                                # Extract GPU usage for charting
+                                gpu_load = 0
+                                if gpu_part:
+                                    # Look for overall_gpu_usage in the GPU string
+                                    if 'overall_gpu_usage' in gpu_part:
+                                        try:
+                                            usage_part = gpu_part.split('overall_gpu_usage: ')[1].split(',')[0]
+                                            gpu_load = float(usage_part)
+                                        except:
+                                            pass
+
+                                logs.append({
+                                    'timestamp': timestamp.isoformat(),
+                                    'cpu': float(cpu_part),
+                                    'ram': float(ram_part),
+                                    'gpu': gpu_part,
+                                    'gpu_load': gpu_load
+                                })
+                        break  # Only read the latest log file
+                except Exception as e:
+                    continue
+    return jsonify(logs)
+
+@app.route('/api/drive-logs', methods=['GET'])
+def get_drive_logs():
+    """API endpoint to get usage logs from Google Drive"""
+    try:
+        creds = None
+        if os.path.exists(TOKEN_FILE):
+            creds = Credentials.from_authorized_user_file(TOKEN_FILE, SCOPES)
+        if not creds or not creds.valid:
+            if creds and creds.expired and creds.refresh_token:
+                creds.refresh(Request())
+            else:
+                return jsonify({'error': 'Authentication required. Please run the backend locally first to authenticate with Google Drive.'}), 401
+
+        service = build('drive', 'v3', credentials=creds)
+
+        # Search for log files in the specified folder
+        query = f"name contains 'system_usage_' and '{UPLOAD_FOLDER_ID}' in parents" if UPLOAD_FOLDER_ID else "name contains 'system_usage_'"
+        results = service.files().list(q=query, orderBy='createdTime desc', pageSize=10).execute()
+        files = results.get('files', [])
+
+        if not files:
+            return jsonify({'error': 'No log files found in Google Drive'}), 404
+
+        # Get the most recent log file
+        file_id = files[0]['id']
+        file_content = service.files().get_media(fileId=file_id).execute().decode('utf-8')
+
+        logs = []
+        lines = file_content.strip().split('\n')
+        for line in lines[1:]:  # Skip header
+            if 'CPU Usage:' in line:
+                timestamp_str = line.split(' - ')[0]
+                try:
+                    timestamp = datetime.strptime(timestamp_str, '%Y-%m-%d %H:%M:%S,%f')
+                except:
+                    timestamp = datetime.strptime(timestamp_str, '%Y-%m-%d %H:%M:%S')
+                parts = line.split(' - ')[1].strip()
+                cpu_part = parts.split(', ')[0].split(': ')[1].rstrip('%')
+                ram_part = parts.split(', ')[1].split(': ')[1].rstrip('%')
+                gpu_part = ', '.join(parts.split(', ')[2:]) if len(parts.split(', ')) > 2 else ''
+
+                # Extract GPU usage for charting
+                gpu_load = 0
+                if gpu_part:
+                    print(f"Parsing GPU part: '{gpu_part}'")  # Debug
+                    # Look for "GPU Usage: X%" pattern from logs
+                    if 'GPU Usage: ' in gpu_part:
+                        try:
+                            usage_str = gpu_part.split('GPU Usage: ')[1].split('%')[0].strip()
+                            print(f"Extracted usage string: '{usage_str}'")  # Debug
+                            gpu_load = float(usage_str)
+                            print(f"Parsed GPU load: {gpu_load}")  # Debug
+                        except Exception as e:
+                            print(f"Error parsing GPU usage: {e}")
+                            pass
+                    # Also check for overall_gpu_usage in the GPU string (for future compatibility)
+                    elif 'overall_gpu_usage' in gpu_part:
+                        try:
+                            usage_part = gpu_part.split('overall_gpu_usage: ')[1].split(',')[0]
+                            gpu_load = float(usage_part)
+                        except:
+                            pass
+
+                logs.append({
+                    'timestamp': timestamp.isoformat(),
+                    'cpu': float(cpu_part),
+                    'ram': float(ram_part),
+                    'gpu': gpu_part,
+                    'gpu_load': gpu_load
+                })
+
+        return jsonify(logs)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+def run_flask_server():
+    """Run Flask server in a separate thread"""
+    print("Starting Flask server on http://localhost:5000")
+    server = make_server('0.0.0.0', 5000, app)
+    print("Flask server started successfully")
+    server.serve_forever()
 
 # Configuration
 SCOPES = ['https://www.googleapis.com/auth/drive.file']
@@ -101,8 +294,10 @@ def log_usage():
     logging.info("Session started")
     while True:
         cpu, ram, gpu = get_system_usage()
-        gpu_str = ", ".join([f"{key}: {value}" for key, value in gpu.items()])
-        logging.info(f"CPU Usage: {cpu}%, RAM Usage: {ram}%, GPU Usage: {gpu_str}")
+        gpu_str = ", ".join([f"{key}: {value}" for key, value in (gpu or {}).items()])
+        gpu_usage = gpu.get('overall_gpu_usage', 0) if gpu else 0
+        logging.info(f"CPU Usage: {cpu:.1f}%, RAM Usage: {ram:.1f}%, GPU Usage: {gpu_usage:.1f}%")
+        time.sleep(4)  # Log every 4 seconds to match the 5-second frontend refresh
 
 def is_connected():
     try:
@@ -170,6 +365,11 @@ def main():
     logging_thread = threading.Thread(target=log_usage)
     logging_thread.daemon = True
     logging_thread.start()
+
+    # Start Flask server thread
+    flask_thread = threading.Thread(target=run_flask_server)
+    flask_thread.daemon = True
+    flask_thread.start()
 
     # For service mode, run indefinitely without waiting for input
     if len(os.sys.argv) > 1 and os.sys.argv[1] == '--service':
