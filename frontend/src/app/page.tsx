@@ -1,7 +1,12 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
+import { Line } from 'react-chartjs-2'
+import { Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend } from 'chart.js'
+import { ResponsiveContainer, LineChart, CartesianGrid, XAxis, YAxis, Tooltip as RechartsTooltip, Legend as RechartsLegend, Line as RechartsLine } from 'recharts'
+import { UsageGraph } from '../components/UsageGraph'
+import { useUsageData } from '../components/hooks/useUsageData'
+ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend)
 
 interface UsageData {
   timestamp: string
@@ -12,135 +17,25 @@ interface UsageData {
 }
 
 export default function Dashboard() {
-  const [data, setData] = useState<UsageData[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-  const [dataSource, setDataSource] = useState<'local' | 'drive'>('local')
+  const [dataSource, setDataSource] = useState<'local' | 'gist'>('local')
+  const { data, loading, error, refetch } = useUsageData(dataSource)
   const [switchingSource, setSwitchingSource] = useState(false)
-  const [timeRange, setTimeRange] = useState<'30s' | '1m' | '1h' | '24h'>('1m')
-  const [filteredData, setFilteredData] = useState<UsageData[]>([])
 
-  useEffect(() => {
-    fetchData()
-    const interval = setInterval(fetchData, 5000) // Update every 5 seconds
-    return () => clearInterval(interval)
-  }, [dataSource])
+  // The useUsageData hook handles fetching and real-time updates
 
-  useEffect(() => {
-    filterDataByTimeRange()
-  }, [data, timeRange])
+  // Data fetching is now handled by useUsageData hook
 
-  const fetchData = async () => {
-    try {
-      const endpoint = dataSource === 'drive' ? '/api/drive-logs' : '/api/logs'
-      const response = await fetch(`http://localhost:5000${endpoint}`, {
-        mode: 'cors',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      })
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}))
-        throw new Error(errorData.error || `HTTP error! status: ${response.status}`)
-      }
-      const logs: UsageData[] = await response.json()
-
-      // Process GPU data to extract load for charting
-      const processedLogs = logs.map(log => {
-        const gpuData = log.gpu
-        let gpu_load = 0
-
-        if (log.gpu_load !== undefined && log.gpu_load !== null && log.gpu_load > 0) {
-          // Use the already parsed gpu_load from API
-          gpu_load = log.gpu_load
-        } else if (gpuData) {
-          // Parse from raw GPU data if API parsing failed
-          console.log('Parsing from raw GPU data:', gpuData)
-          // Look for "GPU Usage: X%" pattern
-          if (gpuData.includes('GPU Usage: ')) {
-            try {
-              const usageMatch = gpuData.split('GPU Usage: ')[1].split('%')[0].trim()
-              gpu_load = parseFloat(usageMatch)
-              console.log('Parsed GPU usage:', gpu_load)
-            } catch (e) {
-              console.log('Failed to parse GPU usage:', e)
-              gpu_load = 0
-            }
-          }
-        }
-
-        return {
-          ...log,
-          gpu_load: gpu_load || 0
-        }
-      })
-
-      setData(processedLogs) // Keep last 50 data points
-      setLoading(false)
-      setError(null)
-      setSwitchingSource(false)
-    } catch (err) {
-      console.error('Error fetching data:', err)
-      setError(`Failed to connect to backend. Make sure the backend is running. Error: ${err}`)
-      setLoading(false)
-      setSwitchingSource(false)
-    }
-  }
-
-  const switchDataSource = (source: 'local' | 'drive') => {
+  const switchDataSource = (source: 'local' | 'gist') => {
     if (source !== dataSource) {
       setSwitchingSource(true)
       setDataSource(source)
+      // Reset switching state after a short delay
+      setTimeout(() => setSwitchingSource(false), 1000)
     }
   }
 
   const formatTimestamp = (timestamp: string) => {
     return new Date(timestamp).toLocaleTimeString()
-  }
-
-  const formatTooltipValue = (value: any, name: string) => {
-    if (name === 'CPU' || name === 'RAM' || name === 'GPU Usage') {
-      return [`${value.toFixed(1)}%`, name]
-    }
-    return [value, name]
-  }
-
-  const filterDataByTimeRange = () => {
-    const now = new Date()
-    let cutoff: Date
-
-    switch (timeRange) {
-      case '30s':
-        cutoff = new Date(now.getTime() - 30 * 1000)
-        break
-      case '1m':
-        cutoff = new Date(now.getTime() - 60 * 1000)
-        break
-      case '1h':
-        cutoff = new Date(now.getTime() - 60 * 60 * 1000)
-        break
-      case '24h':
-        cutoff = new Date(now.getTime() - 24 * 60 * 60 * 1000)
-        break
-      default:
-        cutoff = new Date(0)
-    }
-
-    const filtered = data.filter(log => new Date(log.timestamp) >= cutoff)
-    setFilteredData(filtered)
-  }
-
-  const downloadCSV = () => {
-    const csvContent = "data:text/csv;charset=utf-8,"
-      + "timestamp,cpu,ram,gpu_load\n"
-      + filteredData.map(row => `${row.timestamp},${row.cpu},${row.ram},${row.gpu_load || 0}`).join("\n")
-    const encodedUri = encodeURI(csvContent)
-    const link = document.createElement("a")
-    link.setAttribute("href", encodedUri)
-    link.setAttribute("download", "system_data.csv")
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
   }
 
   if (loading) {
@@ -172,7 +67,7 @@ export default function Dashboard() {
           <h2 className="text-xl font-semibold text-white mb-2">Connection Failed</h2>
           <p className="text-red-200 text-sm mb-4">{error}</p>
           <button
-            onClick={fetchData}
+            onClick={refetch}
             className="bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white px-6 py-3 rounded-lg font-medium transition-all duration-200 transform hover:scale-105 shadow-lg"
           >
             Retry Connection
@@ -195,7 +90,7 @@ export default function Dashboard() {
             </div>
           </div>
           <h1 className="text-5xl font-bold bg-gradient-to-r from-white via-cyan-200 to-white bg-clip-text text-transparent mb-3">
-            System Monitor Pro
+            System Monitor
           </h1>
           <p className="text-slate-300 text-xl max-w-2xl mx-auto mb-6">
             Advanced real-time monitoring dashboard for CPU, RAM, and GPU performance metrics
@@ -218,19 +113,18 @@ export default function Dashboard() {
               <span>Local Logs</span>
             </button>
             <button
-              onClick={() => switchDataSource('drive')}
+              onClick={() => switchDataSource('gist')}
               disabled={switchingSource}
               className={`px-6 py-3 rounded-full font-medium transition-all duration-200 flex items-center space-x-2 ${
-                dataSource === 'drive'
+                dataSource === 'gist'
                   ? 'bg-gradient-to-r from-cyan-500 to-blue-500 text-white shadow-lg'
                   : 'text-slate-300 hover:text-white hover:bg-slate-700/50'
               } ${switchingSource ? 'opacity-50 cursor-not-allowed' : ''}`}
             >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2H5a2 2 0 00-2-2z" />
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 5a2 2 0 012-2h4a2 2 0 012 2v2H8V5z" />
+              <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                <path d="M12 0C5.374 0 0 5.373 0 12 0 17.302 3.438 21.8 8.207 23.387c.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23A11.509 11.509 0 0112 5.803c1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576C20.566 21.797 24 17.3 24 12c0-6.627-5.373-12-12-12z"/>
               </svg>
-              <span>Google Drive</span>
+              <span>Gist</span>
             </button>
           </div>
 
@@ -242,131 +136,29 @@ export default function Dashboard() {
           )}
         </header>
 
-        {/* Main Chart */}
-        <div className="bg-slate-800/50 backdrop-blur-sm rounded-2xl p-8 shadow-2xl border border-slate-700/50 mb-8">
-          <div className="flex items-center justify-between mb-6">
-            <div>
-              <h2 className="text-2xl font-semibold text-white mb-1">Performance Analytics</h2>
-              <p className="text-slate-400">Live usage trends over time</p>
-            </div>
-            <div className="flex items-center space-x-4">
-              <div className="flex items-center space-x-2 text-sm text-slate-400">
-                <div className="w-3 h-3 bg-green-400 rounded-full animate-pulse"></div>
-                <span>Live Data</span>
-              </div>
-              <div className="bg-slate-700/30 rounded-lg p-1 flex space-x-1">
-                {(['30s', '1m', '1h', '24h'] as const).map((range) => (
-                  <button
-                    key={range}
-                    onClick={() => setTimeRange(range)}
-                    className={`px-3 py-1 rounded text-xs font-medium transition-colors ${
-                      timeRange === range
-                        ? 'bg-cyan-500 text-white'
-                        : 'text-slate-400 hover:text-white hover:bg-slate-600/30'
-                    }`}
-                  >
-                    {range === '30s' ? '30s' : range === '1m' ? '1m' : range === '1h' ? '1h' : '24h'}
-                  </button>
-                ))}
-              </div>
-              <button
-                onClick={downloadCSV}
-                className="bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-600 hover:to-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 flex items-center space-x-2 shadow-lg"
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                </svg>
-                <span>Download CSV</span>
-              </button>
-            </div>
-          </div>
-          <div className="h-96">
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={filteredData} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
-                <defs>
-                  <linearGradient id="cpuGradient" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#EF4444" stopOpacity={0.3}/>
-                    <stop offset="95%" stopColor="#EF4444" stopOpacity={0}/>
-                  </linearGradient>
-                  <linearGradient id="ramGradient" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#3B82F6" stopOpacity={0.3}/>
-                    <stop offset="95%" stopColor="#3B82F6" stopOpacity={0}/>
-                  </linearGradient>
-                  <linearGradient id="gpuGradient" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#10B981" stopOpacity={0.3}/>
-                    <stop offset="95%" stopColor="#10B981" stopOpacity={0}/>
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.3} />
-                <XAxis
-                  dataKey="timestamp"
-                  tickFormatter={formatTimestamp}
-                  stroke="#9CA3AF"
-                  fontSize={12}
-                  axisLine={false}
-                  tickLine={false}
-                />
-                <YAxis
-                  stroke="#9CA3AF"
-                  fontSize={12}
-                  axisLine={false}
-                  tickLine={false}
-                  label={{
-                    value: 'Usage (%)',
-                    angle: -90,
-                    position: 'insideLeft',
-                    style: { textAnchor: 'middle', fill: '#9CA3AF', fontSize: '12px' }
-                  }}
-                />
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: 'rgba(15, 23, 42, 0.95)',
-                    border: '1px solid rgba(71, 85, 105, 0.5)',
-                    borderRadius: '12px',
-                    color: 'white',
-                    boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.3)',
-                    backdropFilter: 'blur(8px)'
-                  }}
-                  formatter={formatTooltipValue}
-                  labelFormatter={(label) => `Time: ${formatTimestamp(label)}`}
-                />
-                <Legend
-                  wrapperStyle={{ paddingTop: '20px' }}
-                  iconType="circle"
-                />
-                <Line
-                  type="monotone"
-                  dataKey="cpu"
-                  stroke="#EF4444"
-                  strokeWidth={3}
-                  dot={{ fill: '#EF4444', strokeWidth: 2, r: 5, stroke: '#1F2937' }}
-                  activeDot={{ r: 6, stroke: '#EF4444', strokeWidth: 2, fill: '#1F2937' }}
-                  name="CPU Usage"
-                  fill="url(#cpuGradient)"
-                />
-                <Line
-                  type="monotone"
-                  dataKey="ram"
-                  stroke="#3B82F6"
-                  strokeWidth={3}
-                  dot={{ fill: '#3B82F6', strokeWidth: 2, r: 5, stroke: '#1F2937' }}
-                  activeDot={{ r: 6, stroke: '#3B82F6', strokeWidth: 2, fill: '#1F2937' }}
-                  name="RAM Usage"
-                  fill="url(#ramGradient)"
-                />
-                <Line
-                  type="monotone"
-                  dataKey="gpu_load"
-                  stroke="#10B981"
-                  strokeWidth={3}
-                  dot={{ fill: '#10B981', strokeWidth: 2, r: 5, stroke: '#1F2937' }}
-                  activeDot={{ r: 6, stroke: '#10B981', strokeWidth: 2, fill: '#1F2937' }}
-                  name="GPU Usage"
-                  fill="url(#gpuGradient)"
-                />
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
+        {/* Usage Graphs */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+          <UsageGraph
+            data={data}
+            metric="cpu"
+            loading={loading}
+            error={error}
+            onRetry={refetch}
+          />
+          <UsageGraph
+            data={data}
+            metric="ram"
+            loading={loading}
+            error={error}
+            onRetry={refetch}
+          />
+          <UsageGraph
+            data={data}
+            metric="gpu"
+            loading={loading}
+            error={error}
+            onRetry={refetch}
+          />
         </div>
 
         {/* Stats Cards */}
@@ -459,7 +251,7 @@ export default function Dashboard() {
         {/* Footer */}
         <footer className="text-center py-8 mt-8 border-t border-slate-700/50">
           <p className="text-slate-400 text-sm">
-            System Monitor Pro • Real-time performance tracking • Built with Next.js & Flask
+            System Monitor • Real-time performance tracking • Built with Next.js & Flask
           </p>
         </footer>
       </div>

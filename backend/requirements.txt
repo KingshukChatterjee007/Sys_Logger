@@ -1,7 +1,12 @@
 psutil
-google-api-python-client
-google-auth-oauthlib
-google-auth-httplib2
+requests
 GPUtil
 pyinstaller
 flask
+flask-cors
+python-dotenv
+click
+werkzeug
+itsdangerous
+jinja2
+markupsafe

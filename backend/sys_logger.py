@@ -1,25 +1,33 @@
 import psutil
 import logging
 import os
+import sys
 import time
 import atexit
 from datetime import datetime, timedelta
-from google.oauth2.credentials import Credentials
-from google_auth_oauthlib.flow import InstalledAppFlow
-from googleapiclient.discovery import build
-from googleapiclient.http import MediaFileUpload
-from google.auth.transport.requests import Request
+import requests
 import socket
 import threading
 from flask import Flask, jsonify
 from flask_cors import CORS
 from werkzeug.serving import make_server
+from dotenv import load_dotenv
 try:
     import GPUtil
     NVIDIA_AVAILABLE = True
 except ImportError:
     NVIDIA_AVAILABLE = False
 AMD_AVAILABLE = False  # AMD GPU monitoring not available - library not found
+
+# Load environment variables
+if getattr(sys, 'frozen', False):
+    # Running as exe, load from bundled .env file
+    bundle_dir = getattr(sys, '_MEIPASS', '.')
+    env_path = os.path.join(bundle_dir, '.env')
+    load_dotenv(env_path)
+else:
+    # Running as script, load from current directory
+    load_dotenv()
 
 app = Flask(__name__)
 CORS(app)
@@ -183,32 +191,48 @@ def get_logs():
                     continue
     return jsonify(logs)
 
-@app.route('/api/drive-logs', methods=['GET'])
-def get_drive_logs():
-    """API endpoint to get usage logs from Google Drive"""
+@app.route('/api/gist-logs', methods=['GET'])
+def get_gist_logs():
+    """API endpoint to get usage logs from GitHub Gist"""
     try:
-        creds = None
-        if os.path.exists(TOKEN_FILE):
-            creds = Credentials.from_authorized_user_file(TOKEN_FILE, SCOPES)
-        if not creds or not creds.valid:
-            if creds and creds.expired and creds.refresh_token:
-                creds.refresh(Request())
-            else:
-                return jsonify({'error': 'Authentication required. Please run the backend locally first to authenticate with Google Drive.'}), 401
+        if not GITHUB_TOKEN:
+            return jsonify({'error': 'GITHUB_TOKEN environment variable not set'}), 500
 
-        service = build('drive', 'v3', credentials=creds)
+        # First, get the user's gists to find the system_usage gist
+        headers = {
+            'Authorization': f'token {GITHUB_TOKEN}',
+            'Accept': 'application/vnd.github.v3+json'
+        }
 
-        # Search for log files in the specified folder
-        query = f"name contains 'system_usage_' and '{UPLOAD_FOLDER_ID}' in parents" if UPLOAD_FOLDER_ID else "name contains 'system_usage_'"
-        results = service.files().list(q=query, orderBy='createdTime desc', pageSize=10).execute()
-        files = results.get('files', [])
+        response = requests.get('https://api.github.com/gists', headers=headers)
+        if response.status_code != 200:
+            return jsonify({'error': f'Failed to fetch gists: {response.text}'}), response.status_code
 
-        if not files:
-            return jsonify({'error': 'No log files found in Google Drive'}), 404
+        gists = response.json()
+        usage_gist = None
 
-        # Get the most recent log file
-        file_id = files[0]['id']
-        file_content = service.files().get_media(fileId=file_id).execute().decode('utf-8')
+        # Find the gist with system_usage_ in the filename
+        for gist in gists:
+            for filename in gist['files']:
+                if 'system_usage_' in filename:
+                    usage_gist = gist
+                    break
+            if usage_gist:
+                break
+
+        if not usage_gist:
+            return jsonify({'error': 'No system usage gist found'}), 404
+
+        # Get the content of the latest file
+        for filename, file_info in usage_gist['files'].items():
+            if 'system_usage_' in filename:
+                raw_url = file_info['raw_url']
+                content_response = requests.get(raw_url)
+                if content_response.status_code != 200:
+                    return jsonify({'error': f'Failed to fetch gist content: {content_response.text}'}), content_response.status_code
+
+                file_content = content_response.text
+                break
 
         logs = []
         lines = file_content.strip().split('\n')
@@ -266,7 +290,7 @@ def run_flask_server():
     server.serve_forever()
 
 # Configuration
-SCOPES = ['https://www.googleapis.com/auth/drive.file']
+GITHUB_TOKEN = os.getenv('GITHUB_TOKEN')  # Set your GitHub personal access token as environment variable
 LOG_FOLDER = 'C://Usage_Logs'
 CREDENTIALS_FILE = 'credentials.json'
 TOKEN_FILE = 'token.json'
@@ -328,32 +352,57 @@ def cleanup_old_logs():
 def on_exit():
     logging.info("Session ended")
 
-def upload_to_drive():
-    creds = None
-    if os.path.exists(TOKEN_FILE):
-        creds = Credentials.from_authorized_user_file(TOKEN_FILE, SCOPES)
-    if not creds or not creds.valid:
-        if creds and creds.expired and creds.refresh_token:
-            creds.refresh(Request())
-        else:
-            flow = InstalledAppFlow.from_client_secrets_file(CREDENTIALS_FILE, SCOPES)
-            creds = flow.run_local_server(port=0)
-        with open(TOKEN_FILE, 'w') as token:
-            token.write(creds.to_json())
+def upload_to_gist():
+    if not GITHUB_TOKEN:
+        logging.error("GITHUB_TOKEN environment variable not set. Skipping gist upload.")
+        return
 
-    service = build('drive', 'v3', credentials=creds)
-
-    file_metadata = {
-        'name': os.path.basename(LOG_FILE),
-        'parents': [UPLOAD_FOLDER_ID] if UPLOAD_FOLDER_ID else []
+    headers = {
+        'Authorization': f'token {GITHUB_TOKEN}',
+        'Accept': 'application/vnd.github.v3+json'
     }
-    media = MediaFileUpload(LOG_FILE, mimetype='text/plain')
-    file = service.files().create(body=file_metadata, media_body=media, fields='id').execute()
-    print('File ID: %s' % file.get('id'))
 
-    # Delete the log file locally after successful upload
-    if os.path.exists(LOG_FILE):
-        os.remove(LOG_FILE)
+    # Check if gist already exists
+    gist_id = None
+    response = requests.get('https://api.github.com/gists', headers=headers)
+    if response.status_code == 200:
+        gists = response.json()
+        for gist in gists:
+            for filename in gist['files']:
+                if 'system_usage_' in filename:
+                    gist_id = gist['id']
+                    break
+            if gist_id:
+                break
+
+    # Read the log file content
+    with open(LOG_FILE, 'r') as f:
+        content = f.read()
+
+    gist_data = {
+        'description': f'System usage logs - {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}',
+        'public': False,
+        'files': {
+            os.path.basename(LOG_FILE): {
+                'content': content
+            }
+        }
+    }
+
+    if gist_id:
+        # Update existing gist
+        response = requests.patch(f'https://api.github.com/gists/{gist_id}', headers=headers, json=gist_data)
+    else:
+        # Create new gist
+        response = requests.post('https://api.github.com/gists', headers=headers, json=gist_data)
+
+    if response.status_code in [200, 201]:
+        print('Gist uploaded successfully')
+        # Delete the log file locally after successful upload
+        if os.path.exists(LOG_FILE):
+            os.remove(LOG_FILE)
+    else:
+        logging.error(f"Gist upload failed: {response.text}")
 
 def main():
     atexit.register(on_exit)
@@ -371,36 +420,39 @@ def main():
     flask_thread.daemon = True
     flask_thread.start()
 
-    # For service mode, run indefinitely without waiting for input
-    if len(os.sys.argv) > 1 and os.sys.argv[1] == '--service':
+    # Check if running as frozen exe or in service mode
+    is_frozen = getattr(sys, 'frozen', False)
+    is_service = len(sys.argv) > 1 and sys.argv[1] == '--service'
+
+    if is_frozen or is_service:
         logging.info("Running in service mode")
         while True:
-            time.sleep(3600)  # Upload every hour in service mode
-            if os.path.exists(CREDENTIALS_FILE):
+            time.sleep(0)  # Upload every seconds in service mode
+            if GITHUB_TOKEN:
                 if is_connected():
                     try:
-                        upload_to_drive()
-                        logging.info("Logs uploaded successfully in service mode.")
+                        upload_to_gist()
+                        logging.info("Logs uploaded successfully to gist in service mode.")
                     except Exception as e:
-                        logging.error(f"Upload failed in service mode: {e}")
+                        logging.error(f"Gist upload failed in service mode: {e}")
                 else:
                     logging.info("Skipping upload: No internet connection in service mode.")
             else:
-                logging.info("Skipping upload: credentials.json not found (logging works without upload).")
+                logging.info("Skipping upload: GITHUB_TOKEN environment variable not set (logging works without upload).")
     else:
         input("Press Enter to exit and upload logs...\n")
-        if os.path.exists(CREDENTIALS_FILE):
+        if GITHUB_TOKEN:
             if is_connected():
                 try:
-                    upload_to_drive()
-                    print("Logs uploaded successfully.")
+                    upload_to_gist()
+                    print("Logs uploaded to gist successfully.")
                 except Exception as e:
-                    logging.error(f"Upload failed: {e}")
-                    print(f"Upload failed: {e}")
+                    logging.error(f"Gist upload failed: {e}")
+                    print(f"Gist upload failed: {e}")
             else:
                 print("Skipping upload: No internet connection.")
         else:
-            print("Skipping upload: credentials.json not found (logging works without upload).")
+            print("Skipping upload: GITHUB_TOKEN environment variable not found (logging works without upload).")
 
 if __name__ == "__main__":
     main()
