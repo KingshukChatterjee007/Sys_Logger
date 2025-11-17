@@ -29,12 +29,14 @@ A comprehensive system monitoring application that tracks CPU, RAM, and GPU usag
 ### Development Setup
 
 1. **Clone the repository:**
+
    ```bash
    git clone <repository-url>
    cd Sys_Logger
    ```
 
 2. **Backend Setup:**
+
    ```bash
    cd backend
    pip install -r requirements.txt
@@ -44,6 +46,7 @@ A comprehensive system monitoring application that tracks CPU, RAM, and GPU usag
    ```
 
 3. **Frontend Setup:**
+
    ```bash
    cd frontend
    npm install
@@ -134,12 +137,14 @@ npm run dev
 ### Building for Production
 
 **Backend:**
+
 ```bash
 cd backend
 gunicorn --config gunicorn_config.py sys_logger:app
 ```
 
 **Frontend:**
+
 ```bash
 cd frontend
 npm run build
@@ -153,8 +158,15 @@ For detailed deployment instructions, see [DEPLOYMENT.md](./DEPLOYMENT.md).
 ### Quick Deploy Options
 
 - **Docker Compose**: `docker-compose up -d`
-- **Vercel** (Frontend): Connect GitHub repo
-- **Railway/Render**: Connect GitHub repo
+- **Vercel** (Frontend):
+  - Connect GitHub repo to Vercel
+  - Set `NEXT_PUBLIC_API_URL` environment variable to your backend URL
+  - Deployed at: https://sys-logger.vercel.app
+- **Render** (Backend):
+  - Connect GitHub repo to Render
+  - Use `render.yaml` for configuration
+  - Set environment variables in Render dashboard
+  - See [DEPLOYMENT.md](./DEPLOYMENT.md) for details
 - **Manual**: Follow deployment guide
 
 ## Platform Support
@@ -177,7 +189,7 @@ For detailed deployment instructions, see [DEPLOYMENT.md](./DEPLOYMENT.md).
 ## Support
 
 For issues and questions:
+
 - Check [DEPLOYMENT.md](./DEPLOYMENT.md) for deployment help
 - Review backend and frontend README files
 - Open an issue on GitHub
-

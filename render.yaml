@@ -1,0 +1,29 @@
+services:
+  - type: web
+    name: sys-logger-backend
+    env: python
+    region: oregon
+    plan: free
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn -c gunicorn_config.py sys_logger:app
+    healthCheckPath: /api/health
+    envVars:
+      - key: HOST
+        value: 0.0.0.0
+      - key: FLASK_ENV
+        value: production
+      - key: FLASK_DEBUG
+        value: "False"
+      - key: CORS_ORIGINS
+        value: https://sys-logger.vercel.app,https://sys-logger-git-main.vercel.app
+      - key: LOG_FOLDER
+        value: /tmp/usage_logs
+      - key: LOG_RETENTION_DAYS
+        value: "2"
+      - key: LOG_INTERVAL
+        value: "4"
+      - key: GUNICORN_WORKERS
+        value: "2"
+      - key: LOG_LEVEL
+        value: info

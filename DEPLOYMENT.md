@@ -33,6 +33,7 @@ HOST=0.0.0.0
 
 # CORS Configuration (comma-separated origins)
 # For production, specify your frontend domain(s)
+# Example: https://sys-logger.vercel.app,https://sys-logger-git-main.vercel.app
 CORS_ORIGINS=https://your-frontend-domain.com,https://www.your-frontend-domain.com
 
 # GitHub Gist Integration (Optional)
@@ -50,7 +51,8 @@ Copy `frontend/env.example` to `frontend/.env.local` and configure:
 
 ```bash
 # Backend API URL
-# For production, use your backend domain
+# For production, use your backend domain (e.g., Render backend URL)
+# Example: https://your-backend.onrender.com
 NEXT_PUBLIC_API_URL=https://api.your-domain.com
 
 # Environment
@@ -236,14 +238,50 @@ docker run -d \
    ```
 
 3. **Set environment variables in Vercel dashboard:**
-   - `NEXT_PUBLIC_API_URL`: Your backend API URL
+
+   - `NEXT_PUBLIC_API_URL`: Your Render backend API URL (e.g., `https://your-backend.onrender.com`)
+
+   **Example for sys-logger.vercel.app:**
+
+   ```
+   NEXT_PUBLIC_API_URL=https://your-render-backend-url.onrender.com
+   ```
+
+#### Deploy Backend to Render
+
+1. **Connect your Git repository to Render:**
+
+   - Go to https://render.com
+   - Create a new Web Service
+   - Connect your GitHub repository
+   - Select the `backend` directory as the root
+
+2. **Configure build settings:**
+
+   - **Build Command:** `pip install -r requirements.txt`
+   - **Start Command:** `gunicorn -c gunicorn_config.py sys_logger:app`
+
+3. **Set environment variables in Render dashboard:**
+
+   ```
+   HOST=0.0.0.0
+   PORT=5000
+   FLASK_ENV=production
+   FLASK_DEBUG=False
+   CORS_ORIGINS=https://sys-logger.vercel.app,https://sys-logger-git-main.vercel.app
+   LOG_FOLDER=/tmp/usage_logs
+   LOG_RETENTION_DAYS=2
+   LOG_INTERVAL=4
+   GITHUB_TOKEN=your_github_token_here  # Optional
+   ```
+
+4. **Note:** Render automatically assigns a URL like `https://your-service.onrender.com`
 
 #### Deploy to Other Platforms
 
 - **Netlify:** Use `netlify deploy --prod`
 - **AWS Amplify:** Connect your Git repository
 - **Railway:** Connect your Git repository
-- **Render:** Connect your Git repository
 
 ## Platform-Specific Deployment
 

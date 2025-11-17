@@ -173,6 +173,26 @@ LOG_FILE = os.path.join(LOG_FOLDER, f'system_usage_{session_start}.log')
 logging.basicConfig(filename=LOG_FILE, level=logging.INFO,
                     format='%(asctime)s - %(message)s')
 
+# Flag to track if logging thread has been started
+_logging_thread_started = False
+
+def start_logging_thread():
+    """Start the logging thread if not already started (for Gunicorn/WSGI servers)"""
+    global _logging_thread_started
+    if not _logging_thread_started:
+        # Clean up old logs
+        cleanup_old_logs()
+        
+        # Register exit handler
+        atexit.register(on_exit)
+        
+        # Start logging thread
+        logging_thread = threading.Thread(target=log_usage)
+        logging_thread.daemon = True
+        logging_thread.start()
+        _logging_thread_started = True
+        logging.info("Logging thread started automatically")
+
 @app.route('/api/usage', methods=['GET'])
 def get_usage():
     """API endpoint to get current system usage"""
@@ -520,6 +540,16 @@ def main():
                     print("Skipping upload: No internet connection.")
             else:
                 print("Skipping upload: GITHUB_TOKEN environment variable not found (logging works without upload).")
+
+# Start logging thread automatically when imported by Gunicorn
+# This ensures data collection happens even when not running via main()
+# Note: cleanup_old_logs and on_exit are defined above, so this is safe
+if __name__ != "__main__":
+    # Start in a separate thread to avoid blocking module import
+    def _init_logging():
+        time.sleep(0.5)  # Give time for all imports to complete
+        start_logging_thread()
+    threading.Thread(target=_init_logging, daemon=True).start()
 
 if __name__ == "__main__":
     main()
