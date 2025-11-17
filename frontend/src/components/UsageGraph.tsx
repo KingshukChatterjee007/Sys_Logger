@@ -42,6 +42,13 @@ export const UsageGraph: React.FC<UsageGraphProps> = ({
   const filteredData = useMemo(() => {
     if (!data.length) return []
 
+    // Sort data by timestamp to ensure chronological order
+    const sortedData = [...data].sort((a, b) => {
+      const timeA = new Date(a.timestamp).getTime()
+      const timeB = new Date(b.timestamp).getTime()
+      return timeA - timeB
+    })
+
     const timeRanges = {
       '30s': 30 * 1000,
       '1m': 60 * 1000,
@@ -55,12 +62,58 @@ export const UsageGraph: React.FC<UsageGraphProps> = ({
       '1d': 24 * 60 * 60 * 1000
     }
 
-    const cutoff = currentTime - timeRanges[selectedTimeRange]
-    return data.filter(log => new Date(log.timestamp).getTime() >= cutoff)
+    // Get the most recent timestamp from data
+    const latestTimestamp = sortedData.length > 0 
+      ? new Date(sortedData[sortedData.length - 1].timestamp).getTime()
+      : currentTime
+
+    // Use the latest data timestamp as reference point instead of currentTime
+    // This handles timezone differences and system clock issues
+    const referenceTime = latestTimestamp > currentTime ? latestTimestamp : currentTime
+    const cutoff = referenceTime - timeRanges[selectedTimeRange]
+    
+    const filtered = sortedData.filter(log => {
+      const logTime = new Date(log.timestamp).getTime()
+      return logTime >= cutoff
+    })
+    
+    // If no data after filtering, show last N data points (fallback)
+    // This ensures graphs always show something if data exists
+    if (filtered.length === 0 && sortedData.length > 0) {
+      const maxPoints = Math.min(sortedData.length, Math.ceil(timeRanges[selectedTimeRange] / 4000)) // 4s per point
+      return sortedData.slice(-maxPoints)
+    }
+    
+    return filtered
   }, [data, selectedTimeRange, currentTime])
 
   const chartData = useMemo(() => {
-    const labels = filteredData.map(log => new Date(log.timestamp).toLocaleTimeString())
+    if (!filteredData.length) {
+      // Return empty chart data structure
+      return {
+        labels: [],
+        datasets: [{
+          label: 'Usage',
+          data: [],
+          borderColor: '#ef4444',
+          backgroundColor: 'rgba(239, 68, 68, 0.1)',
+          fill: true,
+          tension: 0.4,
+          pointRadius: 0,
+          pointHoverRadius: 4,
+          borderWidth: 2,
+          pointHoverBorderWidth: 2,
+        }]
+      }
+    }
+
+    const labels = filteredData.map(log => {
+      try {
+        return new Date(log.timestamp).toLocaleTimeString()
+      } catch {
+        return new Date(log.timestamp).toString()
+      }
+    })
 
     let dataset: { label: string; data: number[]; borderColor: string; backgroundColor: string; fill: boolean; tension: number; pointRadius: number; pointHoverRadius: number; borderWidth?: number; pointHoverBorderWidth?: number }
 
