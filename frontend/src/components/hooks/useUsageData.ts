@@ -16,7 +16,7 @@ export const useUsageData = (dataSource: 'local' | 'gist' = 'local'): UseUsageDa
   const fetchData = useCallback(async () => {
     try {
       const endpoint = dataSource === 'gist' ? '/api/gist-logs' : '/api/logs'
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5001'
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000'
       const response = await fetch(`${apiUrl}${endpoint}`, {
         mode: 'cors',
         headers: {
