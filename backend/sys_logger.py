@@ -30,7 +30,6 @@ else:
     load_dotenv()
 
 app = Flask(__name__)
-# CORS will be configured after environment variables are loaded
 
 # Load Flask debug flag early for use in functions
 FLASK_DEBUG = os.getenv('FLASK_DEBUG', 'False').lower() == 'true'
@@ -152,13 +151,15 @@ FLASK_ENV = os.getenv('FLASK_ENV', 'development')
 PORT = int(os.getenv('PORT', '5000'))
 HOST = os.getenv('HOST', '0.0.0.0')
 
-# CORS Configuration - Configure before routes
+# CORS Configuration - Configure BEFORE routes are defined
 CORS_ORIGINS_STR = os.getenv('CORS_ORIGINS', 'http://localhost:3000')
 if CORS_ORIGINS_STR.strip() == '*':
-    CORS(app, resources={r"/api/*": {"origins": "*"}})
+    CORS(app, allow_origins="*")
 else:
     CORS_ORIGINS = [origin.strip() for origin in CORS_ORIGINS_STR.split(',')]
-    CORS(app, resources={r"/api/*": {"origins": CORS_ORIGINS}})
+    CORS(app, allow_origins=CORS_ORIGINS)
+    
+print(f"CORS configured for origins: {CORS_ORIGINS if CORS_ORIGINS_STR.strip() != '*' else '*'}")
 
 # Set up logging directory
 if not os.path.exists(LOG_FOLDER):
