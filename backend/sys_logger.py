@@ -499,19 +499,26 @@ def main():
                 else:
                     logging.info("Skipping upload: GITHUB_TOKEN environment variable not set (logging works without upload).")
     else:
-        input("Press Enter to exit and upload logs...\n")
-        if GITHUB_TOKEN:
-            if is_connected():
-                try:
-                    upload_to_gist()
-                    print("Logs uploaded to gist successfully.")
-                except Exception as e:
-                    logging.error(f"Gist upload failed: {e}")
-                    print(f"Gist upload failed: {e}")
+        # Interactive mode - keep running until interrupted
+        print("Backend is running. Press Ctrl+C to stop and upload logs...")
+        try:
+            # Keep the main thread alive
+            while True:
+                time.sleep(1)
+        except KeyboardInterrupt:
+            print("\nShutting down...")
+            if GITHUB_TOKEN:
+                if is_connected():
+                    try:
+                        upload_to_gist()
+                        print("Logs uploaded to gist successfully.")
+                    except Exception as e:
+                        logging.error(f"Gist upload failed: {e}")
+                        print(f"Gist upload failed: {e}")
+                else:
+                    print("Skipping upload: No internet connection.")
             else:
-                print("Skipping upload: No internet connection.")
-        else:
-            print("Skipping upload: GITHUB_TOKEN environment variable not found (logging works without upload).")
+                print("Skipping upload: GITHUB_TOKEN environment variable not found (logging works without upload).")
 
 if __name__ == "__main__":
     main()
