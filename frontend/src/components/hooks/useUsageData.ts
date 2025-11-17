@@ -70,7 +70,7 @@ export const useUsageData = (dataSource: 'local' | 'gist' = 'local'): UseUsageDa
 
   useEffect(() => {
     fetchData()
-    const interval = setInterval(fetchData, 5000) // Update every 5 seconds
+    const interval = setInterval(fetchData, 1000) // Update every 1 second
     return () => clearInterval(interval)
   }, [fetchData])
 

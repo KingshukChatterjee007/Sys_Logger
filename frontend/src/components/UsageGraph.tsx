@@ -1,11 +1,13 @@
 'use client'
 
-import { useMemo } from 'react'
+import { useMemo, useState, useEffect } from 'react'
 import { Line } from 'react-chartjs-2'
 import { Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend } from 'chart.js'
 import { UsageData } from './types'
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend)
+
+type TimeRange = '30s' | '1m' | '5m' | '15m' | '30m' | '1h' | '3h' | '6h' | '12h' | '1d'
 
 interface UsageGraphProps {
   data: UsageData[]
@@ -14,6 +16,7 @@ interface UsageGraphProps {
   error?: string | null
   onRetry?: () => void
   className?: string
+  timeRange?: TimeRange
 }
 
 export const UsageGraph: React.FC<UsageGraphProps> = ({
@@ -22,10 +25,43 @@ export const UsageGraph: React.FC<UsageGraphProps> = ({
   loading = false,
   error = null,
   onRetry,
-  className = ''
+  className = '',
+  timeRange = '1m'
 }) => {
+  const [selectedTimeRange, setSelectedTimeRange] = useState<TimeRange>(timeRange)
+  const [currentTime, setCurrentTime] = useState(0)
+
+  // Update current time every second to force re-filtering
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setCurrentTime(Date.now())
+    }, 1000)
+    return () => clearInterval(interval)
+  }, [])
+
+  const filteredData = useMemo(() => {
+    if (!data.length) return []
+
+    const now = new Date()
+    const timeRanges = {
+      '30s': 30 * 1000,
+      '1m': 60 * 1000,
+      '5m': 5 * 60 * 1000,
+      '15m': 15 * 60 * 1000,
+      '30m': 30 * 60 * 1000,
+      '1h': 60 * 60 * 1000,
+      '3h': 3 * 60 * 60 * 1000,
+      '6h': 6 * 60 * 60 * 1000,
+      '12h': 12 * 60 * 60 * 1000,
+      '1d': 24 * 60 * 60 * 1000
+    }
+
+    const cutoff = currentTime - timeRanges[selectedTimeRange]
+    return data.filter(log => new Date(log.timestamp).getTime() >= cutoff)
+  }, [data, selectedTimeRange, currentTime])
+
   const chartData = useMemo(() => {
-    const labels = data.map(log => new Date(log.timestamp).toLocaleTimeString())
+    const labels = filteredData.map(log => new Date(log.timestamp).toLocaleTimeString())
 
     let dataset: { label: string; data: number[]; borderColor: string; backgroundColor: string; fill: boolean; tension: number; pointRadius: number; pointHoverRadius: number }
 
@@ -72,11 +108,15 @@ export const UsageGraph: React.FC<UsageGraphProps> = ({
       labels,
       datasets: [dataset],
     }
-  }, [data, metric])
+  }, [data, filteredData, metric])
 
   const chartOptions = useMemo(() => ({
     responsive: true,
     maintainAspectRatio: false,
+    animation: {
+      duration: 1000,
+      easing: 'easeInOutCubic' as const
+    },
     plugins: {
       legend: {
         display: true,
@@ -161,6 +201,19 @@ export const UsageGraph: React.FC<UsageGraphProps> = ({
     },
   }), [data])
 
+  const timeRangeOptions: { value: TimeRange; label: string }[] = [
+    { value: '30s', label: '30s' },
+    { value: '1m', label: '1m' },
+    { value: '5m', label: '5m' },
+    { value: '15m', label: '15m' },
+    { value: '30m', label: '30m' },
+    { value: '1h', label: '1h' },
+    { value: '3h', label: '3h' },
+    { value: '6h', label: '6h' },
+    { value: '12h', label: '12h' },
+    { value: '1d', label: '1d' }
+  ]
+
   if (loading) {
     return (
       <div className={`flex items-center justify-center bg-slate-800/50 backdrop-blur-sm rounded-2xl p-8 border border-slate-700/50 ${className}`}>
@@ -243,6 +296,22 @@ export const UsageGraph: React.FC<UsageGraphProps> = ({
           <div className="w-3 h-3 bg-green-400 rounded-full animate-pulse"></div>
           <span>Live</span>
         </div>
+      </div>
+      {/* Time Range Selector */}
+      <div className="flex flex-wrap gap-1 mb-4">
+        {timeRangeOptions.map((option) => (
+          <button
+            key={option.value}
+            onClick={() => setSelectedTimeRange(option.value)}
+            className={`px-3 py-1 text-xs font-medium rounded-lg transition-all duration-200 ${
+              selectedTimeRange === option.value
+                ? 'bg-cyan-500 text-white shadow-lg'
+                : 'bg-slate-700/50 text-slate-300 hover:bg-slate-600/50 hover:text-white'
+            }`}
+          >
+            {option.label}
+          </button>
+        ))}
       </div>
       <div className="h-64">
         <Line data={chartData} options={chartOptions} />

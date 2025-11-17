@@ -137,13 +137,14 @@ export default function Dashboard() {
         </header>
 
         {/* Usage Graphs */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+        <div className="grid grid-cols-1 gap-6 mb-8">
           <UsageGraph
             data={data}
             metric="cpu"
             loading={loading}
             error={error}
             onRetry={refetch}
+            timeRange="1m"
           />
           <UsageGraph
             data={data}
@@ -151,6 +152,7 @@ export default function Dashboard() {
             loading={loading}
             error={error}
             onRetry={refetch}
+            timeRange="1m"
           />
           <UsageGraph
             data={data}
@@ -158,6 +160,7 @@ export default function Dashboard() {
             loading={loading}
             error={error}
             onRetry={refetch}
+            timeRange="1m"
           />
         </div>
 
@@ -242,7 +245,7 @@ export default function Dashboard() {
               </div>
               <div className="flex justify-between items-center p-3 bg-slate-700/30 rounded-lg">
                 <span className="text-slate-300 text-sm">Auto Refresh</span>
-                <span className="text-green-400 font-bold text-sm">5s</span>
+                <span className="text-green-400 font-bold text-sm">1s</span>
               </div>
             </div>
           </div>
