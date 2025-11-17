@@ -10,3 +10,4 @@ werkzeug
 itsdangerous
 jinja2
 markupsafe
+gunicorn
