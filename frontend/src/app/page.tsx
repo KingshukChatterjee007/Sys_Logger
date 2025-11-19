@@ -24,7 +24,7 @@ export default function Dashboard() {
         <div className="flex-1 ml-64 flex items-center justify-center">
           <div className="text-center">
             <div className="animate-spin rounded-full h-8 w-8 border-2 border-blue-500 border-t-transparent mx-auto mb-3"></div>
-            <p className="text-slate-400 text-sm">Loading system data...</p>
+            <p className="text-slate-400 text-sm">Loading system data</p>
           </div>
         </div>
       </div>
