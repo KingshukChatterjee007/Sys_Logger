@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
-import { UsageData, GPUData } from '../types'
+import { UsageData } from '../types'
 
 interface UseUsageDataReturn {
   data: UsageData[]

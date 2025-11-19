@@ -36,65 +36,18 @@ export const useUnits = () => {
   }, [])
 
   const connectWebSocket = useCallback(() => {
-    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) return
-
-    // Try to connect to the backend WebSocket directly
-    const wsUrls = [
-      'ws://localhost:5000/socket.io/?EIO=4&transport=websocket',
-      'ws://127.0.0.1:5000/socket.io/?EIO=4&transport=websocket',
-      'ws://localhost:5001/socket.io/?EIO=4&transport=websocket',
-      'ws://127.0.0.1:5001/socket.io/?EIO=4&transport=websocket'
-    ]
-
-    let connected = false
-    for (const wsUrl of wsUrls) {
-      if (connected) break
-
-      try {
-        console.log('Attempting WebSocket connection to:', wsUrl)
-        const ws = new WebSocket(wsUrl)
-        wsRef.current = ws
-
-    ws.onopen = () => {
-      setIsConnected(true)
-      setError(null)
-    }
-
-    ws.onmessage = (event) => {
-      try {
-        const message = JSON.parse(event.data)
-        if (message.type === 'units_update') {
-          setUnits(message.data)
-        } else if (message.type === 'alerts_update') {
-          setAlerts(message.data)
-        }
-      } catch (err) {
-        console.error('Failed to parse WebSocket message:', err)
-      }
-    }
-
-    ws.onerror = (error) => {
-      console.error('WebSocket error:', error)
-      setError('WebSocket connection error')
-      setIsConnected(false)
-    }
-
-    ws.onclose = () => {
-      setIsConnected(false)
-      // Auto-reconnect after 5 seconds
-      setTimeout(() => {
-        connectWebSocket()
-      }, 5000)
-    }
-  }, [])
+    // HTTP polling instead of WebSocket for reliability
+    // This ensures we always get fresh data from the backend
+    setTimeout(() => {
+      fetchUnits()
+      fetchAlerts()
+      connectWebSocket()
+    }, 5000)
+  }, [fetchUnits, fetchAlerts])
 
   useEffect(() => {
-    const init = async () => {
-      setLoading(true)
-      await Promise.all([fetchUnits(), fetchAlerts()])
-      setLoading(false)
-    }
-    init()
+    fetchUnits()
+    fetchAlerts()
     connectWebSocket()
 
     return () => {
