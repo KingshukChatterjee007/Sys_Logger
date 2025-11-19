@@ -4,20 +4,14 @@ import { useState } from 'react'
 import { Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend } from 'chart.js'
 import { UsageGraph } from '../components/UsageGraph'
 import { useUsageData } from '../components/hooks/useUsageData'
+import { useUnits } from '../components/hooks/useUnits'
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend)
 
 export default function Dashboard() {
-  const [dataSource, setDataSource] = useState<'local' | 'gist'>('local')
-  const { data, loading, error, refetch } = useUsageData(dataSource)
+  const { data, loading, error, refetch, filteredData, setSelectedUnitId } = useUsageData()
+  const { units, loading: unitsLoading } = useUnits()
+  const [selectedUnit, setSelectedUnit] = useState<Unit | null>(null)
   const [switchingSource, setSwitchingSource] = useState(false)
-
-  const switchDataSource = (source: 'local' | 'gist') => {
-    if (source !== dataSource) {
-      setSwitchingSource(true)
-      setDataSource(source)
-      setTimeout(() => setSwitchingSource(false), 1000)
-    }
-  }
 
   const formatTimestamp = (timestamp: string) => {
     return new Date(timestamp).toLocaleTimeString()
@@ -56,7 +50,8 @@ export default function Dashboard() {
     )
   }
 
-  const currentData = data.length > 0 ? data[data.length - 1] : null
+  const displayData = selectedUnit ? filteredData : data
+  const currentData = displayData.length > 0 ? displayData[displayData.length - 1] : null
 
   return (
     <div className="min-h-screen bg-slate-900 flex">
@@ -77,45 +72,44 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* Data Source Selector */}
+        {/* Unit Selector */}
         <div className="p-4 border-b border-slate-700">
-          <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">Data Source</div>
+          <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">Units</div>
           <div className="space-y-2">
             <button
-              onClick={() => switchDataSource('local')}
-              disabled={switchingSource}
+              onClick={() => {
+                setSelectedUnitId(null)
+                setSelectedUnit(null)
+              }}
               className={`w-full px-4 py-3 rounded-lg transition-colors text-left flex items-center space-x-3 ${
-                dataSource === 'local'
+                selectedUnit === null
                   ? 'bg-blue-600 text-white'
                   : 'text-slate-300 hover:bg-slate-700'
-              } ${switchingSource ? 'opacity-50 cursor-not-allowed' : ''}`}
+              }`}
             >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
               </svg>
-              <span className="font-medium">Local</span>
+              <span className="font-medium">All Units</span>
             </button>
-            <button
-              onClick={() => switchDataSource('gist')}
-              disabled={switchingSource}
-              className={`w-full px-4 py-3 rounded-lg transition-colors text-left flex items-center space-x-3 ${
-                dataSource === 'gist'
-                  ? 'bg-blue-600 text-white'
-                  : 'text-slate-300 hover:bg-slate-700'
-              } ${switchingSource ? 'opacity-50 cursor-not-allowed' : ''}`}
-            >
-              <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
-                <path d="M12 0C5.374 0 0 5.373 0 12 0 17.302 3.438 21.8 8.207 23.387c.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23A11.509 11.509 0 0112 5.803c1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576C20.566 21.797 24 17.3 24 12c0-6.627-5.373-12-12-12z"/>
-              </svg>
-              <span className="font-medium">Gist</span>
-            </button>
+            {units.map((unit) => (
+              <button
+                key={unit.id}
+                onClick={() => {
+                  setSelectedUnitId(unit.id)
+                  setSelectedUnit(unit)
+                }}
+                className={`w-full px-4 py-3 rounded-lg transition-colors text-left flex items-center space-x-3 ${
+                  selectedUnit?.id === unit.id
+                    ? 'bg-blue-600 text-white'
+                    : 'text-slate-300 hover:bg-slate-700'
+                }`}
+              >
+                <div className={`w-2 h-2 rounded-full ${unit.status === 'online' ? 'bg-green-400' : 'bg-red-400'}`}></div>
+                <span className="font-medium">{unit.name}</span>
+              </button>
+            ))}
           </div>
-          {switchingSource && (
-            <div className="mt-4 flex items-center space-x-2 text-blue-400 text-sm">
-              <div className="animate-spin rounded-full h-4 w-4 border-2 border-blue-400 border-t-transparent"></div>
-              <span>Switching...</span>
-            </div>
-          )}
         </div>
 
         {/* Summary Stats in Sidebar */}
@@ -163,7 +157,7 @@ export default function Dashboard() {
 
             <div className="bg-slate-700/50 rounded-lg p-3 border border-slate-600">
               <div className="text-xs text-slate-400 mb-1">Data Points</div>
-              <div className="text-xl font-semibold text-white mb-1">{data.length}</div>
+              <div className="text-xl font-semibold text-white mb-1">{displayData.length}</div>
               <div className="text-xs text-slate-400">
                 {currentData ? formatTimestamp(currentData.timestamp) : 'N/A'}
               </div>
@@ -196,7 +190,7 @@ export default function Dashboard() {
             </div>
             <div className="p-3">
               <UsageGraph
-                data={data}
+                data={displayData}
                 metric="cpu"
                 loading={loading}
                 error={error}
@@ -218,7 +212,7 @@ export default function Dashboard() {
             </div>
             <div className="p-3">
               <UsageGraph
-                data={data}
+                data={displayData}
                 metric="gpu"
                 loading={loading}
                 error={error}
@@ -240,7 +234,7 @@ export default function Dashboard() {
             </div>
             <div className="p-3">
               <UsageGraph
-                data={data}
+                data={displayData}
                 metric="ram"
                 loading={loading}
                 error={error}

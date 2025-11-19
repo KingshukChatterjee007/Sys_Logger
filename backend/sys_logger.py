@@ -4,14 +4,20 @@ import os
 import sys
 import time
 import atexit
+import signal
+import json
 from datetime import datetime, timedelta
 import requests
 import socket
 import threading
-from flask import Flask, jsonify
+import uuid
+import pickle
+from flask import Flask, jsonify, request
 from flask_cors import CORS
+from flask_socketio import SocketIO, emit
 from werkzeug.serving import make_server
 from dotenv import load_dotenv
+import pickle
 try:
     import GPUtil
     NVIDIA_AVAILABLE = True
@@ -30,6 +36,11 @@ else:
     load_dotenv()
 
 app = Flask(__name__)
+
+# Global data structures for units, usage, and alerts
+units = {}  # Dictionary to store registered units
+unit_usage = {}  # Dictionary to store usage data per unit
+alerts = []  # List to store all alerts
 
 # Load Flask debug flag early for use in functions
 FLASK_DEBUG = os.getenv('FLASK_DEBUG', 'False').lower() == 'true'
@@ -158,8 +169,11 @@ if CORS_ORIGINS_STR.strip() == '*':
 else:
     CORS_ORIGINS = [origin.strip() for origin in CORS_ORIGINS_STR.split(',')]
     CORS(app, allow_origins=CORS_ORIGINS)
-    
+
 print(f"CORS configured for origins: {CORS_ORIGINS if CORS_ORIGINS_STR.strip() != '*' else '*'}")
+
+# Initialize SocketIO
+socketio = SocketIO(app, cors_allowed_origins=CORS_ORIGINS if CORS_ORIGINS_STR.strip() != '*' else "*")
 
 # Set up logging directory
 if not os.path.exists(LOG_FOLDER):
@@ -364,12 +378,296 @@ def health_check():
         'service': 'system-logger'
     })
 
+@app.route('/api/register_unit', methods=['POST'])
+def register_unit():
+    """Register a new unit with the system"""
+    try:
+        data = request.get_json()
+        if not data or 'system_id' not in data:
+            return jsonify({'error': 'system_id required'}), 400
+
+        system_id = data['system_id']
+        hostname = data.get('hostname', 'Unknown')
+        os_info = data.get('os_info', 'Unknown')
+        cpu_info = data.get('cpu_info', 'Unknown')
+        ram_total = data.get('ram_total', 0)
+        gpu_info = data.get('gpu_info', '{}')
+        network_interfaces = data.get('network_interfaces', '{}')
+
+        unit_id = str(uuid.uuid4())[:8]
+
+        # Check if already registered - use existing unit_id if found
+        for existing_unit_id, existing_unit in units.items():
+            if existing_unit['system_id'] == system_id:
+                existing_unit['last_seen'] = datetime.now().isoformat()
+                existing_unit['status'] = 'online'
+                # Update unit info if provided
+                if hostname != 'Unknown':
+                    existing_unit['hostname'] = hostname
+                if os_info != 'Unknown':
+                    existing_unit['os_info'] = os_info
+                if cpu_info != 'Unknown':
+                    existing_unit['cpu_info'] = cpu_info
+                if ram_total > 0:
+                    existing_unit['ram_total'] = ram_total
+                if gpu_info != '{}':
+                    existing_unit['gpu_info'] = gpu_info
+                if network_interfaces != '{}':
+                    existing_unit['network_interfaces'] = network_interfaces
+                return jsonify({'unit_id': existing_unit_id}), 200
+
+        # Create new unit only if system_id not found
+        unit = {
+            'id': unit_id,
+            'system_id': system_id,
+            'name': f"{hostname}-{unit_id}",
+            'status': 'online',
+            'last_seen': datetime.now().isoformat(),
+            'hostname': hostname,
+            'os_info': os_info,
+            'cpu_info': cpu_info,
+            'ram_total': ram_total,
+            'gpu_info': gpu_info,
+            'network_interfaces': network_interfaces,
+            'alerts': []
+        }
+
+        units[unit_id] = unit
+        unit_usage[unit_id] = []
+
+        print(f"Unit registered: {unit_id} ({hostname})")
+
+        # Broadcast unit update via WebSocket
+        socketio.emit('units_update', list(units.values()))
+
+        return jsonify({'unit_id': unit_id}), 201
+
+    except Exception as e:
+        print(f"Error registering unit: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/submit_usage', methods=['POST'])
+def submit_usage():
+    """Submit usage data from a unit"""
+    try:
+        data = request.get_json()
+        if not data or 'system_id' not in data:
+            return jsonify({'error': 'system_id required'}), 400
+
+        system_id = data['system_id']
+        timestamp = data.get('timestamp', datetime.now().isoformat())
+        cpu_usage = data.get('cpu_usage', 0)
+        ram_usage = data.get('ram_usage', 0)
+        gpu_usage = data.get('gpu_usage', 0)
+        temperature = data.get('temperature')
+        network_rx = data.get('network_rx', 0)
+        network_tx = data.get('network_tx', 0)
+
+        # Find unit by system_id
+        unit_id = None
+        for uid, unit in units.items():
+            if unit['system_id'] == system_id:
+                unit_id = uid
+                break
+
+        if not unit_id:
+            return jsonify({'error': 'Unit not registered'}), 404
+
+        # Update unit status
+        units[unit_id]['last_seen'] = datetime.now().isoformat()
+        units[unit_id]['status'] = 'online'
+
+        # Store usage data
+        usage_entry = {
+            'timestamp': timestamp,
+            'unit_id': unit_id,
+            'cpu': cpu_usage,
+            'ram': ram_usage,
+            'gpu': gpu_usage,
+            'temperature': temperature,
+            'network_rx': network_rx,
+            'network_tx': network_tx
+        }
+        unit_usage[unit_id].append(usage_entry)
+
+        # Keep only last 100 entries per unit
+        if len(unit_usage[unit_id]) > 100:
+            unit_usage[unit_id] = unit_usage[unit_id][-100:]
+
+        # Check for alerts
+        new_alerts = []
+        if cpu_usage > 90:
+            new_alerts.append({
+                'id': str(uuid.uuid4())[:8],
+                'unit_id': unit_id,
+                'type': 'cpu',
+                'message': f'High CPU usage: {cpu_usage:.1f}%',
+                'severity': 'high',
+                'timestamp': datetime.now().isoformat(),
+                'acknowledged': False
+            })
+        if ram_usage > 95:
+            new_alerts.append({
+                'id': str(uuid.uuid4())[:8],
+                'unit_id': unit_id,
+                'type': 'ram',
+                'message': f'High RAM usage: {ram_usage:.1f}%',
+                'severity': 'high',
+                'timestamp': datetime.now().isoformat(),
+                'acknowledged': False
+            })
+        if gpu_usage > 95:
+            new_alerts.append({
+                'id': str(uuid.uuid4())[:8],
+                'unit_id': unit_id,
+                'type': 'gpu',
+                'message': f'High GPU usage: {gpu_usage:.1f}%',
+                'severity': 'medium',
+                'timestamp': datetime.now().isoformat(),
+                'acknowledged': False
+            })
+        if temperature and temperature > 80:
+            new_alerts.append({
+                'id': str(uuid.uuid4())[:8],
+                'unit_id': unit_id,
+                'type': 'temperature',
+                'message': f'High temperature: {temperature:.1f}°C',
+                'severity': 'high',
+                'timestamp': datetime.now().isoformat(),
+                'acknowledged': False
+            })
+
+        alerts.extend(new_alerts)
+
+        # Broadcast updates via WebSocket
+        socketio.emit('units_update', list(units.values()))
+        if new_alerts:
+            socketio.emit('alerts_update', alerts)
+
+        print(f"Usage data received from unit {unit_id}: CPU={cpu_usage:.1f}%, RAM={ram_usage:.1f}%, GPU={gpu_usage:.1f}%")
+
+        return jsonify({'status': 'success'}), 200
+
+    except Exception as e:
+        print(f"Error submitting usage: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/units', methods=['GET'])
+def get_units():
+    """Get all registered units"""
+    try:
+        return jsonify(list(units.values())), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/alerts', methods=['GET'])
+def get_alerts():
+    """Get all alerts"""
+    try:
+        return jsonify(alerts), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/alerts/<alert_id>/acknowledge', methods=['POST'])
+def acknowledge_alert(alert_id):
+    """Acknowledge an alert"""
+    try:
+        for alert in alerts:
+            if alert['id'] == alert_id:
+                alert['acknowledged'] = True
+                socketio.emit('alerts_update', alerts)
+                return jsonify({'status': 'success'}), 200
+        return jsonify({'error': 'Alert not found'}), 404
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/unit/<unit_id>/usage', methods=['GET'])
+def get_unit_usage(unit_id):
+    """Get usage data for a specific unit"""
+    try:
+        if unit_id not in unit_usage:
+            return jsonify([]), 200
+
+        # Format data to match the expected format (add gpu_load for compatibility)
+        formatted_data = []
+        for usage in unit_usage[unit_id][-50:]:  # Last 50 entries
+            formatted_entry = dict(usage)
+            # Ensure gpu_load is set for frontend compatibility
+            if 'gpu' in formatted_entry and 'gpu_load' not in formatted_entry:
+                formatted_entry['gpu_load'] = formatted_entry['gpu']
+            formatted_data.append(formatted_entry)
+
+        return jsonify(formatted_data), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/all-units-usage', methods=['GET'])
+def get_all_units_usage():
+    """Get averaged usage data across all units grouped by timestamp"""
+    try:
+        # Dictionary to aggregate data by timestamp
+        aggregated_data = {}
+
+        for unit_id, usages in unit_usage.items():
+            for usage in usages[-100:]:  # Look at last 100 entries per unit
+                timestamp = usage.get('timestamp')
+                if not timestamp:
+                    continue
+
+                if timestamp not in aggregated_data:
+                    aggregated_data[timestamp] = {
+                        'cpu': [],
+                        'ram': [],
+                        'gpu': [],
+                        'temperature': [],
+                        'count': 0
+                    }
+
+                # Collect values for averaging
+                if 'cpu' in usage and usage['cpu'] is not None:
+                    aggregated_data[timestamp]['cpu'].append(float(usage['cpu']))
+                if 'ram' in usage and usage['ram'] is not None:
+                    aggregated_data[timestamp]['ram'].append(float(usage['ram']))
+                if 'gpu' in usage and usage['gpu'] is not None:
+                    aggregated_data[timestamp]['gpu'].append(float(usage['gpu']))
+                if 'temperature' in usage and usage['temperature'] is not None:
+                    aggregated_data[timestamp]['temperature'].append(float(usage['temperature']))
+
+                aggregated_data[timestamp]['count'] += 1
+
+        # Calculate averages and format output
+        result = []
+        for timestamp in sorted(aggregated_data.keys())[-50:]:  # Last 50 timestamps
+            data = aggregated_data[timestamp]
+            avg_entry = {
+                'timestamp': timestamp,
+                'cpu': sum(data['cpu']) / len(data['cpu']) if data['cpu'] else 0,
+                'ram': sum(data['ram']) / len(data['ram']) if data['ram'] else 0,
+                'gpu': sum(data['gpu']) / len(data['gpu']) if data['gpu'] else 0,
+                'gpu_load': sum(data['gpu']) / len(data['gpu']) if data['gpu'] else 0,  # For compatibility
+                'temperature': sum(data['temperature']) / len(data['temperature']) if data['temperature'] else None,
+                'unit_count': data['count']  # Number of units contributing to this average
+            }
+            result.append(avg_entry)
+
+        return jsonify(result), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@socketio.on('connect')
+def handle_connect():
+    """Handle WebSocket connection"""
+    print("Client connected to WebSocket")
+
+@socketio.on('disconnect')
+def handle_disconnect():
+    """Handle WebSocket disconnection"""
+    print("Client disconnected from WebSocket")
+
 def run_flask_server():
-    """Run Flask server in a separate thread"""
-    print(f"Starting Flask server on http://{HOST}:{PORT}")
-    server = make_server(HOST, PORT, app)
-    print(f"Flask server started successfully on {HOST}:{PORT}")
-    server.serve_forever()
+    """Run Flask-SocketIO server in a separate thread"""
+    print(f"Starting Flask-SocketIO server on http://{HOST}:{PORT}")
+    socketio.run(app, host=HOST, port=PORT, debug=FLASK_DEBUG, allow_unsafe_werkzeug=True)
 
 def get_system_usage():
     cpu_usage = psutil.cpu_percent(interval=1)
@@ -475,7 +773,18 @@ def upload_to_gist():
         logging.error(f"Gist upload failed: {response.text}")
 
 def main():
+    global _start_time
+    _start_time = time.time()
     atexit.register(on_exit)
+
+    # Set up signal handlers for graceful shutdown
+    def signal_handler(signum, frame):
+        logging.info(f"Received signal {signum}, initiating graceful shutdown")
+        on_exit()
+        sys.exit(0)
+
+    signal.signal(signal.SIGINT, signal_handler)
+    signal.signal(signal.SIGTERM, signal_handler)
 
     # Clean up old logs before starting
     cleanup_old_logs()
@@ -500,11 +809,11 @@ def main():
         # Upload happens periodically (every hour) or on exit
         upload_interval = 3600  # Upload every hour in service mode
         last_upload_time = time.time()
-        
+
         while True:
             time.sleep(60)  # Check every minute
             current_time = time.time()
-            
+
             # Upload if interval has passed
             if current_time - last_upload_time >= upload_interval:
                 if GITHUB_TOKEN:

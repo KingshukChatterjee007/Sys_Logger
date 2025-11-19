@@ -6,7 +6,6 @@ A comprehensive system monitoring application that tracks CPU, RAM, and GPU usag
 
 - 📊 **Real-time Monitoring**: Track CPU, RAM, and GPU usage with live charts
 - 🎨 **Modern Dashboard**: Beautiful, responsive Next.js frontend with Tailwind CSS
-- 🔄 **Dual Data Sources**: Switch between local logs and GitHub Gist storage
 - 🐳 **Docker Support**: Easy deployment with Docker and Docker Compose
 - 🔒 **Production Ready**: Configured for production deployment with Gunicorn
 - 📝 **Automatic Logging**: Configurable logging intervals and retention
@@ -16,7 +15,7 @@ A comprehensive system monitoring application that tracks CPU, RAM, and GPU usag
 
 - **Backend**: Python Flask API with system monitoring capabilities
 - **Frontend**: Next.js 16 with React 19 and TypeScript
-- **Data Storage**: Local file system or GitHub Gist (optional)
+- **Data Storage**: Local file system
 
 ## Quick Start
 
@@ -101,7 +100,6 @@ Sys_Logger/
 - `PORT`: Server port (default: 5000)
 - `HOST`: Server host (default: 0.0.0.0)
 - `CORS_ORIGINS`: Allowed CORS origins (comma-separated)
-- `GITHUB_TOKEN`: GitHub token for Gist integration (optional)
 - `LOG_FOLDER`: Directory for log files
 - `LOG_RETENTION_DAYS`: Days to keep logs (default: 2)
 - `LOG_INTERVAL`: Logging interval in seconds (default: 4)
@@ -115,7 +113,6 @@ Sys_Logger/
 
 - `GET /api/usage` - Get current system usage
 - `GET /api/logs` - Get local log files
-- `GET /api/gist-logs` - Get logs from GitHub Gist
 - `GET /api/health` - Health check endpoint
 
 ## Development

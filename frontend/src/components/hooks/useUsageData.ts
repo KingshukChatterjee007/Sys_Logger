@@ -1,24 +1,27 @@
-import { useState, useEffect, useCallback } from 'react'
-import { UsageData } from '../types'
+import { useState, useEffect, useCallback, useMemo } from 'react'
+import { UsageData, GPUData } from '../types'
 
 interface UseUsageDataReturn {
   data: UsageData[]
   loading: boolean
   error: string | null
   refetch: () => void
+  selectedUnitId: string | null
+  setSelectedUnitId: (id: string | null) => void
+  filteredData: UsageData[]
 }
 
-export const useUsageData = (dataSource: 'local' | 'gist' = 'local'): UseUsageDataReturn => {
+export const useUsageData = (): UseUsageDataReturn => {
   const [data, setData] = useState<UsageData[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [selectedUnitId, setSelectedUnitId] = useState<string | null>(null)
 
   const fetchData = useCallback(async () => {
     try {
-      const endpoint = dataSource === 'gist' ? '/api/gist-logs' : '/api/logs'
-      
       // Try both ports 5000 and 5001 for compatibility
       const tryFetch = async (url: string): Promise<Response> => {
+        const endpoint = selectedUnitId ? `/api/unit/${selectedUnitId}/usage` : '/api/all-units-usage'
         return fetch(`${url}${endpoint}`, {
           mode: 'cors',
           headers: {
@@ -55,28 +58,38 @@ export const useUsageData = (dataSource: 'local' | 'gist' = 'local'): UseUsageDa
         const errorData = await response?.json().catch(() => ({}))
         throw new Error(errorData.error || `HTTP error! status: ${response?.status || 'Connection failed'}`)
       }
-      
+
       const logs: UsageData[] = await response.json()
 
       // Process GPU data to extract load for charting
       const processedLogs = logs.map(log => {
-        const gpuData = log.gpu
         let gpu_load = 0
 
-        if (log.gpu_load !== undefined && log.gpu_load !== null && log.gpu_load > 0) {
+        if (log.gpu_load !== undefined && log.gpu_load !== null) {
           // Use the already parsed gpu_load from API
-          gpu_load = log.gpu_load
-        } else if (gpuData) {
-          // Parse from raw GPU data if API parsing failed
-          // Look for "GPU Usage: X%" pattern
-          if (gpuData.includes('GPU Usage: ')) {
-            try {
-              const usageMatch = gpuData.split('GPU Usage: ')[1].split('%')[0].trim()
-              gpu_load = parseFloat(usageMatch)
-            } catch {
-              // Silently fail and use 0
-              gpu_load = 0
+          gpu_load = typeof log.gpu_load === 'number' ? log.gpu_load : 0
+        } else if (log.gpu !== undefined && log.gpu !== null) {
+          // Handle different GPU data formats
+          const gpuData = log.gpu
+          if (typeof gpuData === 'number') {
+            // Direct numeric value (from unit submissions)
+            gpu_load = gpuData
+          } else if (typeof gpuData === 'string') {
+            // Parse from raw GPU data string if API parsing failed
+            // Look for "GPU Usage: X%" pattern
+            if (gpuData.includes('GPU Usage: ')) {
+              try {
+                const usageMatch = gpuData.split('GPU Usage: ')[1].split('%')[0].trim()
+                gpu_load = parseFloat(usageMatch)
+              } catch {
+                // Silently fail and use 0
+                gpu_load = 0
+              }
             }
+          } else if (typeof gpuData === 'object' && gpuData !== null) {
+            // Handle object format (from GPU monitoring)
+            const gpuObj = gpuData as Record<string, unknown>
+            gpu_load = (gpuObj.overall_gpu_usage as number) || (gpuObj.gpu_load as number) || 0
           }
         }
 
@@ -94,7 +107,12 @@ export const useUsageData = (dataSource: 'local' | 'gist' = 'local'): UseUsageDa
       setError(`Failed to connect to backend. Make sure the backend is running. Error: ${err}`)
       setLoading(false)
     }
-  }, [dataSource])
+  }, [])
+
+  const filteredData = useMemo(() => {
+    if (!selectedUnitId) return data
+    return data.filter(log => log.unit_id === selectedUnitId)
+  }, [data, selectedUnitId])
 
   useEffect(() => {
     fetchData()
@@ -106,6 +124,9 @@ export const useUsageData = (dataSource: 'local' | 'gist' = 'local'): UseUsageDa
     data,
     loading,
     error,
-    refetch: fetchData
+    refetch: fetchData,
+    selectedUnitId,
+    setSelectedUnitId,
+    filteredData
   }
 }

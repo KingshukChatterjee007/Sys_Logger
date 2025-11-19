@@ -11,7 +11,7 @@ type TimeRange = '30s' | '1m' | '5m' | '15m' | '30m' | '1h' | '3h' | '6h' | '12h
 
 interface UsageGraphProps {
   data: UsageData[]
-  metric: 'cpu' | 'ram' | 'gpu'
+  metric: 'cpu' | 'ram' | 'gpu' | 'temperature' | 'network_rx' | 'network_tx'
   loading?: boolean
   error?: string | null
   onRetry?: () => void
@@ -160,6 +160,55 @@ export const UsageGraph: React.FC<UsageGraphProps> = ({
           pointHoverBorderWidth: 2,
         }
         break
+      case 'temperature':
+        dataset = {
+          label: 'Temperature',
+          data: filteredData.map(log => log.temperature || 0),
+          borderColor: '#f59e0b',
+          backgroundColor: 'rgba(245, 158, 11, 0.1)',
+          fill: true,
+          tension: 0.4,
+          pointRadius: 0,
+          pointHoverRadius: 4,
+          borderWidth: 2,
+          pointHoverBorderWidth: 2,
+        }
+        break
+      case 'network_rx':
+        dataset = {
+          label: 'Network RX (KB/s)',
+          data: filteredData.map(log => log.network_rx || 0),
+          borderColor: '#8b5cf6',
+          backgroundColor: 'rgba(139, 92, 246, 0.1)',
+          fill: true,
+          tension: 0.4,
+          pointRadius: 0,
+          pointHoverRadius: 4,
+          borderWidth: 2,
+          pointHoverBorderWidth: 2,
+        }
+        break
+      case 'network_tx':
+        dataset = {
+          label: 'Network TX (KB/s)',
+          data: filteredData.map(log => log.network_tx || 0),
+          borderColor: '#06b6d4',
+          backgroundColor: 'rgba(6, 182, 212, 0.1)',
+          fill: true,
+          tension: 0.4,
+          pointRadius: 0,
+          pointHoverRadius: 4,
+          borderWidth: 2,
+          pointHoverBorderWidth: 2,
+        }
+        break
+    }
+
+    if (!dataset) {
+      return {
+        labels: [],
+        datasets: [],
+      }
     }
 
     return {
