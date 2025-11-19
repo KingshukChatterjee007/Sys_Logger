@@ -42,7 +42,7 @@ export const useUnits = () => {
       fetchUnits()
       fetchAlerts()
       connectWebSocket()
-    }, 5000)
+    }, 1000) // Update every 1 second
   }, [fetchUnits, fetchAlerts])
 
   useEffect(() => {

@@ -110,9 +110,10 @@ export const useUsageData = (): UseUsageDataReturn => {
   }, [])
 
   const filteredData = useMemo(() => {
-    if (!selectedUnitId) return data
-    return data.filter(log => log.unit_id === selectedUnitId)
-  }, [data, selectedUnitId])
+    // When no unit is selected, return all units data (aggregated)
+    // When a unit is selected, return individual unit data (already filtered by API)
+    return data
+  }, [data])
 
   useEffect(() => {
     fetchData()
