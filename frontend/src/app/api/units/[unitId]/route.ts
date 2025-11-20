@@ -2,10 +2,10 @@ import { NextRequest, NextResponse } from 'next/server'
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { unitId: string } }
+  { params }: { params: Promise<{ unitId: string }> }
 ) {
   try {
-    const unitId = params.unitId
+    const { unitId } = await params
 
     // Try both ports 5000 and 5001 for compatibility
     const tryFetch = async (url: string): Promise<Response> => {

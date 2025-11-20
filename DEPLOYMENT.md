@@ -1,417 +1,190 @@
-# Deployment Guide
+# Prerequisites for All Users (Server & Client)
+---
+## System Requirements:
 
-This guide covers deploying the System Logger application to production.
+### Windows 10/11, Linux, or macOS
+4GB RAM minimum, 8GB recommended
+2GB free disk space
+Internet connection for initial setup
+Automatic Prerequisite Installation:
+The setup scripts will automatically check and install required software:
 
-## Table of Contents
+### For Server Deployment:
 
-- [Prerequisites](#prerequisites)
-- [Environment Variables](#environment-variables)
-- [Docker Deployment](#docker-deployment)
-- [Manual Deployment](#manual-deployment)
-- [Platform-Specific Deployment](#platform-specific-deployment)
-- [Production Checklist](#production-checklist)
+**Docker Desktop (latest version)** - Container platform
+**Python 3.8+** - Runtime for setup scripts
+**Node.js 18+ (handled by Docker)** - For frontend building
 
-## Prerequisites
+### For Client Deployment:
+**Python 3.6+** - Runtime for monitoring
+**psutil** - System monitoring library
+**requests** - HTTP communication
+**GPUtil (optional)** - NVIDIA GPU monitoring
 
-- Python 3.11+ (for backend)
-- Node.js 20+ (for frontend)
-- Docker and Docker Compose (for containerized deployment)
-- Git
+--- 
 
-## Environment Variables
+## Distribution Package Contents
 
-### Backend Environment Variables
+Core Files to Ship:
 
-Copy `backend/env.example` to `backend/.env` and configure:
+`server_setup.py              # Automated server setup
+unit_client.py               # Client monitoring script
+docker-compose.yml           # Docker orchestration
+backend/                     # Flask API server
+frontend/                    # React dashboard
+installation/                # GUI installer & management tools
+README.md                    # Documentation
+DEPLOYMENT.md                # Deployment guide
+QUICK_START.md               # Quick start guide`
 
-```bash
-# Flask Configuration
-FLASK_ENV=production
-FLASK_DEBUG=False
-PORT=5000
-HOST=0.0.0.0
+---
 
-# CORS Configuration (comma-separated origins)
-# For production, specify your frontend domain(s)
-# Example: https://sys-logger.vercel.app,https://sys-logger-git-main.vercel.app
-CORS_ORIGINS=https://your-frontend-domain.com,https://www.your-frontend-domain.com
+## Deployment Options
 
-# GitHub Gist Integration (Optional)
-GITHUB_TOKEN=your_github_token_here
+### Option 1: Localhost Deployment (Recommended for Testing)
 
-# Logging Configuration
-LOG_FOLDER=/app/logs  # Use absolute path
-LOG_RETENTION_DAYS=7  # Keep logs for 7 days
-LOG_INTERVAL=4        # Log every 4 seconds
-```
+**Server Setup:**
 
-### Frontend Environment Variables
+1. Ensure Docker Desktop is installed and running
+2. Run: `python server_setup.py`
 
-Copy `frontend/env.example` to `frontend/.env.local` and configure:
+Services start on:
+`
+Backend API: http://localhost:5000
+Frontend Dashboard: http://localhost:3000
+Database: SQLite in data/sys_logger.db
+`
+**Client Setup:**
 
-```bash
-# Backend API URL
-# For production, use your backend domain (e.g., Render backend URL)
-# Example: https://your-backend.onrender.com
-NEXT_PUBLIC_API_URL=https://api.your-domain.com
+1. Install Python dependencies: pip install psutil requests
+2. Run: `python unit_client.py`
+Enter server URL: `http://localhost:5000`
 
-# Environment
-NODE_ENV=production
-```
+Client auto-registers and starts monitoring
 
-## Docker Deployment
+## Option 2: Domain/Public Access Deployment
 
-### Quick Start with Docker Compose
+**Server Setup:**
 
-1. **Clone the repository:**
+1. Complete localhost setup first
+2. Configure domain/reverse proxy (nginx, Apache, or cloud load balancer)
+3. Update **CORS** settings in `backend/.env`:
+`CORS_ORIGINS=https://yourdomain.com,http://yourdomain.com`
 
-   ```bash
-   git clone <repository-url>
-   cd Sys_Logger
-   ```
+4. For **HTTPS**, configure **SSL certificate**
+5. Update `frontend/.env.local`:
+`NEXT_PUBLIC_API_URL=https://yourdomain.com`
 
-2. **Configure environment variables:**
+**Network Configuration:**
 
-   - Copy `backend/env.example` to `backend/.env`
-   - Copy `frontend/env.example` to `frontend/.env.local`
-   - Update the values for your production environment
+1. Open ports **80/443** (HTTP/HTTPS) and **5000** (API)
+2. Configure firewall rules
+3. Set up DNS records for domain
 
-3. **Update docker-compose.yml:**
+**Client Connection:**
 
-   - Set `NEXT_PUBLIC_API_URL` in the frontend build args
-   - Update `CORS_ORIGINS` in backend environment
-   - Configure volume paths for logs
+1. Use full domain URL: https://yourdomain.com
+2. Clients connect securely over HTTPS
+3. No additional firewall configuration needed
 
-4. **Build and start:**
+**GUI Applications**
 
-   ```bash
-   docker-compose up -d --build
-   ```
+* Web Dashboard (Frontend)
+* **Framework:** Next.js 16 with React 19
+* **Styling:** Tailwind CSS for responsive design
+* **Components:** Interactive charts, real-time updates
+* **Responsive:** Mobile and desktop optimized
 
-5. **Check logs:**
+**Features:**
 
-   ```bash
-   docker-compose logs -f
-   ```
+* Real-time system monitoring graphs
+* Unit management interface
+* Alert dashboard
+* Responsive grid layout for all screen sizes
+* Desktop Management Applications
+* **Server Manager:** `server_manager.py` - GUI for client management
+* **Server Installer:** `server_installer.py` - Professional installation wizard
 
-6. **Stop services:**
-   ```bash
-   docker-compose down
-   ```
+---
+## Installation
+### Run the installer executable (when built)
 
-### Individual Docker Containers
+`SysLogger_Server_Installer.exe`
 
-#### Backend
+### Manual setup
 
-```bash
-cd backend
-docker build -t sys-logger-backend .
-docker run -d \
-  --name sys-logger-backend \
-  -p 5000:5000 \
-  -v $(pwd)/logs:/app/logs \
-  -e FLASK_ENV=production \
-  -e CORS_ORIGINS=https://your-frontend.com \
-  -e GITHUB_TOKEN=your_token \
-  sys-logger-backend
-```
+`python server_setup.py`
 
-#### Frontend
+**Or use systemd services**
 
-```bash
-cd frontend
-docker build \
-  --build-arg NEXT_PUBLIC_API_URL=https://api.your-domain.com \
-  -t sys-logger-frontend .
-docker run -d \
-  --name sys-logger-frontend \
-  -p 3000:3000 \
-  sys-logger-frontend
-```
+`sudo cp unit_client.service /etc/systemd/system/
+sudo systemctl enable unit_client
+sudo systemctl start unit_client`
 
-## Manual Deployment
+### Client Distribution Methods
 
-### Backend Deployment
+**Method 1: Direct Python Script**
 
-#### Using Gunicorn (Recommended for Production)
+1. Ship `unit_client.py` only
+2. Users run: python unit_client.py
+3. Script prompts for server URL
+4. Auto-installs dependencies if missing
 
-1. **Install dependencies:**
+**Method 2: Packaged Executable (PyInstaller)**
 
-   ```bash
-   cd backend
-   pip install -r requirements.txt
-   ```
+1. Build standalone executable: pyinstaller --onefile unit_client.py
+2. No Python installation required on client machines
+3. Self-contained with all dependencies
 
-2. **Configure environment:**
+**Method 3: Automated Installer Script**
 
-   ```bash
-   cp env.example .env
-   # Edit .env with your settings
-   ```
+1. Use setup.py for automated client installation
+2. Creates directories, installs services, configures startup
+3. Verification and Testing
 
-3. **Run with Gunicorn:**
+---
 
-   ```bash
-   gunicorn --config gunicorn_config.py sys_logger:app
-   ```
+## Server Health Check:
 
-   Or with custom settings:
+### Check services
+`docker-compose ps`
 
-   ```bash
-   gunicorn --bind 0.0.0.0:5000 \
-     --workers 4 \
-     --threads 2 \
-     --timeout 120 \
-     sys_logger:app
-   ```
+### Test API
+curl http://localhost:5000/api/health
 
-#### Using Systemd (Linux)
+### Test frontend
+curl http://localhost:3000
 
-1. **Create service file** `/etc/systemd/system/sys-logger.service`:
+---
 
-   ```ini
-   [Unit]
-   Description=System Logger Backend
-   After=network.target
+## Client Testing:
 
-   [Service]
-   Type=simple
-   User=www-data
-   WorkingDirectory=/opt/sys-logger/backend
-   Environment="PATH=/opt/sys-logger/backend/venv/bin"
-   ExecStart=/opt/sys-logger/backend/venv/bin/gunicorn --config gunicorn_config.py sys_logger:app
-   Restart=always
+# Run in foreground for testing
+`python unit_client.py --foreground`
 
-   [Install]
-   WantedBy=multi-user.target
-   ```
+# Check logs
+`python unit_client.py --status`
 
-2. **Enable and start:**
-   ```bash
-   sudo systemctl enable sys-logger
-   sudo systemctl start sys-logger
-   sudo systemctl status sys-logger
-   ```
+**Security Considerations**
+1. Default database uses SQLite (no external access)
+2. API endpoints require no authentication for basic monitoring
+3. *For production:* implement authentication, HTTPS, firewall rules
+4. Client-server communication uses HTTP (upgrade to HTTPS for security)
 
-### Frontend Deployment
+**Troubleshooting Distribution**
 
-#### Build and Deploy
+*Common Issues:*
 
-1. **Install dependencies:**
+1. **Docker not running:** Start Docker Desktop
+2. **Port conflicts:** Check ports 3000, 5000 availability
+3. **Permission errors:** Run as administrator/sudo
+4. **Network issues:** Verify firewall settings
 
-   ```bash
-   cd frontend
-   npm install
-   ```
+*Logs Location:*
 
-2. **Configure environment:**
+1. **Server logs:** `docker-compose logs -f`
+2. **Client logs:** unit_client.log (created automatically)
+3. **Setup logs:** Console output during installation
 
-   ```bash
-   cp env.example .env.local
-   # Edit .env.local with your backend URL
-   ```
 
-3. **Build for production:**
-
-   ```bash
-   npm run build
-   ```
-
-4. **Start production server:**
-   ```bash
-   npm start
-   ```
-
-#### Deploy to Vercel
-
-1. **Install Vercel CLI:**
-
-   ```bash
-   npm i -g vercel
-   ```
-
-2. **Deploy:**
-
-   ```bash
-   cd frontend
-   vercel
-   ```
-
-3. **Set environment variables in Vercel dashboard:**
-
-   - `NEXT_PUBLIC_API_URL`: Your Render backend API URL (e.g., `https://your-backend.onrender.com`)
-
-   **Example for sys-logger.vercel.app:**
-
-   ```
-   NEXT_PUBLIC_API_URL=https://your-render-backend-url.onrender.com
-   ```
-
-#### Deploy Backend to Render
-
-1. **Connect your Git repository to Render:**
-
-   - Go to https://render.com
-   - Create a new Web Service
-   - Connect your GitHub repository
-   - Select the `backend` directory as the root
-
-2. **Configure build settings:**
-
-   - **Build Command:** `pip install -r requirements.txt`
-   - **Start Command:** `gunicorn -c gunicorn_config.py sys_logger:app`
-
-3. **Set environment variables in Render dashboard:**
-
-   ```
-   HOST=0.0.0.0
-   PORT=5000
-   FLASK_ENV=production
-   FLASK_DEBUG=False
-   CORS_ORIGINS=https://sys-logger.vercel.app,https://sys-logger-git-main.vercel.app
-   LOG_FOLDER=/tmp/usage_logs
-   LOG_RETENTION_DAYS=2
-   LOG_INTERVAL=4
-   GITHUB_TOKEN=your_github_token_here  # Optional
-   ```
-
-4. **Note:** Render automatically assigns a URL like `https://your-service.onrender.com`
-
-#### Deploy to Other Platforms
-
-- **Netlify:** Use `netlify deploy --prod`
-- **AWS Amplify:** Connect your Git repository
-- **Railway:** Connect your Git repository
-
-## Platform-Specific Deployment
-
-### Windows Service
-
-For Windows deployment, use the provided PowerShell script:
-
-```powershell
-# Run as Administrator
-cd backend
-.\create_service.ps1
-```
-
-### Nginx Reverse Proxy
-
-Example Nginx configuration:
-
-```nginx
-# Backend API
-server {
-    listen 80;
-    server_name api.your-domain.com;
-
-    location / {
-        proxy_pass http://localhost:5000;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-    }
-}
-
-# Frontend
-server {
-    listen 80;
-    server_name your-domain.com;
-
-    location / {
-        proxy_pass http://localhost:3000;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-    }
-}
-```
-
-### SSL/HTTPS Setup
-
-Use Let's Encrypt with Certbot:
-
-```bash
-sudo certbot --nginx -d your-domain.com -d api.your-domain.com
-```
-
-## Production Checklist
-
-### Security
-
-- [ ] Set `FLASK_DEBUG=False` in production
-- [ ] Configure proper CORS origins (not `*`)
-- [ ] Use HTTPS for all connections
-- [ ] Secure environment variables (use secrets management)
-- [ ] Enable firewall rules
-- [ ] Regular security updates
-
-### Performance
-
-- [ ] Configure appropriate Gunicorn workers
-- [ ] Set up log rotation
-- [ ] Configure log retention
-- [ ] Enable caching (if applicable)
-- [ ] Monitor resource usage
-
-### Monitoring
-
-- [ ] Set up health check monitoring
-- [ ] Configure log aggregation
-- [ ] Set up error tracking (Sentry, etc.)
-- [ ] Monitor API response times
-- [ ] Set up uptime monitoring
-
-### Backup
-
-- [ ] Configure log backups
-- [ ] Set up database backups (if applicable)
-- [ ] Test restore procedures
-
-## Troubleshooting
-
-### Backend Issues
-
-**Port already in use:**
-
-```bash
-# Find process using port 5000
-lsof -i :5000  # macOS/Linux
-netstat -ano | findstr :5000  # Windows
-
-# Kill process or change PORT in .env
-```
-
-**CORS errors:**
-
-- Verify `CORS_ORIGINS` includes your frontend URL
-- Check that frontend is using correct `NEXT_PUBLIC_API_URL`
-
-**GPU monitoring not working:**
-
-- On Linux, GPU monitoring may require additional setup
-- Consider running backend on Windows for full GPU support
-- Or modify GPU detection for Linux containers
-
-### Frontend Issues
-
-**API connection failed:**
-
-- Verify `NEXT_PUBLIC_API_URL` is correct
-- Check backend is running and accessible
-- Verify CORS configuration
-
-**Build errors:**
-
-- Clear `.next` folder: `rm -rf .next`
-- Reinstall dependencies: `rm -rf node_modules && npm install`
-
-## Support
-
-For issues and questions, please check:
-
-- Backend README: `backend/README.md`
-- Frontend README: `frontend/README.md`
-- GitHub Issues (if applicable)
+This distribution package provides flexible deployment options for both localhost development and production domain hosting, with responsive web interfaces and user-friendly desktop applications.
