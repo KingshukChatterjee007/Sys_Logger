@@ -21,7 +21,7 @@ except ImportError:
 # Configuration
 CONFIG_FILE = 'unit_client_config.json'
 DEFAULT_SERVER_URL = 'http://localhost:5000'  # Change this to your central server URL
-COLLECTION_INTERVAL = 1  # seconds
+COLLECTION_INTERVAL = 1  # seconds - updated for 1-second updates
 RECONNECT_INTERVAL = 300  # seconds (5 minutes)
 MAX_RETRIES = 3
 RETRY_DELAY = 10  # seconds
