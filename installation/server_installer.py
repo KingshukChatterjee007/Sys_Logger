@@ -61,7 +61,9 @@ class ServerInstallerApp(tk.Tk):
 
         self.title("Server Installer - Krishi Sahayogi")
         self.geometry("950x700")
-        self.configure(bg="#eef1f7")
+        self.configure(bg="#f8f9fa")
+        self.prereq_passed = False
+        self.buttons = {}
 
         self._init_style()
         self._init_logging()
@@ -130,11 +132,12 @@ class ServerInstallerApp(tk.Tk):
         prereq_frame = ttk.Labelframe(
             left, text="Prerequisites", style="Card.TLabelframe")
         prereq_frame.grid(row=0, column=0, sticky="we", pady=5)
-        ttk.Button(
+        self.buttons['prereq'] = ttk.Button(
             prereq_frame,
-            text="Check Prerequisites",
+            text="🔍 Check Prerequisites",
             command=self.run_prereq_check
-        ).pack(fill="x", padx=10, pady=10)
+        )
+        self.buttons['prereq'].pack(fill="x", padx=10, pady=10)
 
         # PostgreSQL Setup
         pg_frame = ttk.Labelframe(
@@ -163,11 +166,13 @@ class ServerInstallerApp(tk.Tk):
         self.frontend_domain.insert(0, "http://localhost:3000")
         self.frontend_domain.pack(fill="x", padx=10, pady=2)
 
-        ttk.Button(
+        self.buttons['domain'] = ttk.Button(
             dom_frame,
-            text="Apply Domain Config",
-            command=self.run_domain_config
-        ).pack(fill="x", padx=10, pady=10)
+            text="🔗 Apply Domain Config",
+            command=self.run_domain_config,
+            state="disabled"
+        )
+        self.buttons['domain'].pack(fill="x", padx=10, pady=10)
 
         # Startup configuration
         startup_frame = ttk.Labelframe(
@@ -295,6 +300,7 @@ class ServerInstallerApp(tk.Tk):
             ("Python", self._check_python),
             ("Node.js", self._check_node),
             ("Docker", self._check_docker),
+            ("Chocolatey (optional)", self._check_choco),
         ]
 
         for i, (name, fn) in enumerate(checks):
@@ -326,6 +332,14 @@ class ServerInstallerApp(tk.Tk):
     def _check_docker(self):
         try:
             subprocess.run(["docker", "--version"],
+                           capture_output=True, check=True)
+            return True
+        except:
+            return False
+
+    def _check_choco(self):
+        try:
+            subprocess.run(["choco", "--version"],
                            capture_output=True, check=True)
             return True
         except:

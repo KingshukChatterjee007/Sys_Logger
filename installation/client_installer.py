@@ -57,11 +57,19 @@ class Worker(threading.Thread):
         try:
             func = getattr(self.app, f"op_{self.operation}")
             func()
+            # On success, update status
+            if self.operation in self.app.step_labels:
+                self.app.step_labels[self.operation].config(text="✅ Success", fg="#16a34a")
+                self.app.step_statuses[self.operation] = "✅ Success"
+                self.app.log(f"✓ Step '{self.operation}' completed successfully.")
         except Exception as e:
-            self.app.log(f"ERROR: {str(e)}")
-            messagebox.showerror("Error", str(e))
+            self.app.log(f"❌ ERROR: {str(e)}")
+            if self.operation in self.app.step_labels:
+                self.app.step_labels[self.operation].config(text="❌ Failed", fg="#dc2626")
+                self.app.step_statuses[self.operation] = "❌ Failed"
+            messagebox.showerror("Installation Error", f"Step '{self.operation}' failed:\n\n{str(e)}\n\nPlease resolve the issue and try again.")
         finally:
-            self.app.progress(100, "Done.")
+            self.app.progress(100, "Step completed.")
 
 
 # ===================================================================
@@ -73,7 +81,33 @@ class InstallerGUI(tk.Tk):
 
         self.title("SysLogger Client Installer")
         self.geometry("1100x700")
-        self.configure(bg="#eef1f7")
+        self.configure(bg="#f8fafc")
+
+        # Status tracking for steps
+        self.step_statuses = {
+            "prereq_check": "⏳ Pending",
+            "generate_id": "⏳ Pending",
+            "discover_server": "⏳ Pending",
+            "register_client": "⏳ Pending",
+            "start_monitoring": "⏳ Pending",
+            "configure_startup": "⏳ Pending",
+            "setup_protection": "⏳ Pending",
+            "handle_domain_updates": "⏳ Pending",
+        }
+        self.step_labels = {}
+
+        self.full_install_running = False
+        self.full_install_step_index = 0
+        self.full_install_steps = [
+            "prereq_check",
+            "generate_id",
+            "discover_server",
+            "register_client",
+            "start_monitoring",
+            "configure_startup",
+            "setup_protection",
+            "handle_domain_updates",
+        ]
 
         self._init_style()
         self._init_ui()
@@ -110,9 +144,9 @@ class InstallerGUI(tk.Tk):
         left = ttk.Frame(self, style="Card.TFrame")
         left.grid(row=0, column=0, sticky="nswe", padx=15, pady=15)
 
-        title = tk.Label(left, text="Installation Steps",
-                         font=("Segoe UI", 18, "bold"),
-                         bg="white")
+        title = tk.Label(left, text="📋 Installation Steps",
+                         font=("Segoe UI", 22, "bold"),
+                         bg="#ffffff", fg="#1f2937")
         title.pack(pady=20)
 
         steps = [
@@ -127,10 +161,15 @@ class InstallerGUI(tk.Tk):
         ]
 
         for label, op in steps:
-            ttk.Button(left, text=label,
-                       command=lambda o=op: self.start_worker(o)).pack(
-                           fill="x", padx=20, pady=5
-                       )
+            frame = ttk.Frame(left, style="Card.TFrame")
+            frame.pack(fill="x", padx=20, pady=5)
+            btn = ttk.Button(frame, text=label,
+                             command=lambda o=op: self.start_worker(o))
+            btn.pack(side="left", fill="x", expand=True)
+            status_label = tk.Label(frame, text=self.step_statuses[op],
+                                    bg="white", fg="#6b7280", font=("Segoe UI", 9))
+            status_label.pack(side="right", padx=10)
+            self.step_labels[op] = status_label
 
         ttk.Button(left, text="Run Full Installation",
                    command=self.run_full_install).pack(fill="x", padx=20, pady=30)
@@ -139,13 +178,27 @@ class InstallerGUI(tk.Tk):
         right = ttk.Frame(self, style="Card.TFrame")
         right.grid(row=0, column=1, sticky="nswe", padx=15, pady=15)
 
+        progress_title = tk.Label(right, text="📊 Installation Progress",
+                                  font=("Segoe UI", 18, "bold"),
+                                  bg="white", fg="#1f2937")
+        progress_title.pack(pady=10)
+
         self.progress_var = tk.IntVar()
-        ttk.Progressbar(right, variable=self.progress_var, length=600).pack(pady=20)
+        progress_frame = ttk.Frame(right, style="Card.TFrame")
+        progress_frame.pack(pady=10, padx=20, fill="x")
+        ttk.Progressbar(progress_frame, variable=self.progress_var, length=600).pack(pady=10, padx=20, fill="x")
 
-        self.log_box = tk.Text(right, bg="#f5f5f5", height=30)
-        self.log_box.pack(padx=20, pady=10, fill="both", expand=True)
+        log_title = tk.Label(right, text="📝 Activity Log",
+                             font=("Segoe UI", 16, "bold"),
+                             bg="white", fg="#374151")
+        log_title.pack(pady=5)
 
-        footer = tk.Label(right, text=FOOTER_TEXT, bg="white", fg="gray")
+        self.log_box = tk.Text(right, bg="#f8fafc", fg="#1f2937", font=("Consolas", 10),
+                               height=25, relief="flat", borderwidth=1)
+        self.log_box.pack(padx=20, pady=5, fill="both", expand=True)
+
+        footer = tk.Label(right, text=FOOTER_TEXT, bg="white", fg="#6b7280",
+                          font=("Segoe UI", 9))
         footer.pack(pady=10)
 
     # -------------------------------------------------------------------
@@ -169,31 +222,60 @@ class InstallerGUI(tk.Tk):
     # Start Worker Thread
     # -------------------------------------------------------------------
     def start_worker(self, operation):
+        if operation in self.step_labels:
+            self.step_labels[operation].config(text="▶️ Running", fg="#2563eb")
+            self.step_statuses[operation] = "▶️ Running"
         Worker(self, operation).start()
 
     # -------------------------------------------------------------------
     # Full Installation Runner
     # -------------------------------------------------------------------
     def run_full_install(self):
-        steps = [
-            "prereq_check",
-            "generate_id",
-            "discover_server",
-            "register_client",
-            "start_monitoring",
-            "configure_startup",
-            "setup_protection",
-            "handle_domain_updates",
-        ]
+        if self.full_install_running:
+            messagebox.showwarning("Warning", "Full installation is already running.")
+            return
 
-        def step(i=0):
-            if i >= len(steps):
-                messagebox.showinfo("Success", "Full Installation Complete!")
-                return
-            Worker(self, steps[i]).start()
-            self.after(2000, lambda: step(i + 1))
+        self.full_install_running = True
+        self.full_install_step_index = 0
 
-        step()
+        # Reset all statuses to pending
+        for op in self.step_statuses:
+            self.step_statuses[op] = "⏳ Pending"
+            self.step_labels[op].config(text="⏳ Pending", fg="#6b7280")
+
+        self.run_next_step()
+
+    def run_next_step(self):
+        if self.full_install_step_index >= len(self.full_install_steps):
+            self.full_install_running = False
+            messagebox.showinfo("Success", "Full Installation Complete!")
+            return
+
+        op = self.full_install_steps[self.full_install_step_index]
+        self.step_labels[op].config(text="▶️ Running", fg="#2563eb")
+        self.step_statuses[op] = "▶️ Running"
+
+        worker = Worker(self, op)
+        worker.start()
+        # Override worker's run to handle success/failure
+        original_run = worker.run
+        def patched_run():
+            try:
+                original_run()
+                # On success, proceed to next
+                self.step_labels[op].config(text="✅ Success", fg="#16a34a")
+                self.step_statuses[op] = "✅ Success"
+                self.log(f"Step {op} completed successfully.")
+                self.full_install_step_index += 1
+                self.after(500, self.run_next_step)
+            except Exception as e:
+                self.step_labels[op].config(text="❌ Failed", fg="#dc2626")
+                self.step_statuses[op] = "❌ Failed"
+                self.log(f"Step {op} failed: {str(e)}")
+                messagebox.showerror("Installation Failed", f"Step '{op}' failed: {str(e)}\n\nFull installation halted. Please resolve the issue and retry.")
+                self.full_install_running = False
+
+        worker.run = patched_run
 
     # ===================================================================
     #                    BACKEND OPERATIONS (Converted)
@@ -601,6 +683,22 @@ while True:
 
     def _save_cfg(self, cfg):
         json.dump(cfg, open(CLIENT_CONFIG_FILE, "w"), indent=4)
+
+    def _check_write_permissions(self):
+        try:
+            test_file = PROJECT_ROOT / "test_write.tmp"
+            test_file.write_text("test")
+            test_file.unlink()
+            return True
+        except:
+            return False
+
+    def _check_network_connectivity(self):
+        try:
+            socket.create_connection(("8.8.8.8", 53), timeout=5)
+            return True
+        except:
+            return False
 
     def _collect_system_info(self, sid):
         hostname = socket.gethostname()

@@ -581,6 +581,91 @@ def acknowledge_alert(alert_id):
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+@app.route('/api/units/<unit_id>', methods=['GET'])
+def get_unit(unit_id):
+    """Get a specific unit by ID"""
+    try:
+        if unit_id not in units:
+            return jsonify({'error': 'Unit not found'}), 404
+        return jsonify(units[unit_id]), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/units/<unit_id>', methods=['PUT'])
+def update_unit(unit_id):
+    """Update unit information (e.g., custom name)"""
+    try:
+        if unit_id not in units:
+            return jsonify({'error': 'Unit not found'}), 404
+
+        data = request.get_json()
+        if not data:
+            return jsonify({'error': 'No update data provided'}), 400
+
+        unit = units[unit_id]
+
+        # Allow updating name (custom name)
+        if 'name' in data:
+            unit['name'] = data['name']
+
+        # Broadcast unit update via WebSocket
+        socketio.emit('units_update', list(units.values()))
+
+        return jsonify(unit), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/units/<unit_id>', methods=['DELETE'])
+def delete_unit(unit_id):
+    """Remove a unit"""
+    try:
+        if unit_id not in units:
+            return jsonify({'error': 'Unit not found'}), 404
+
+        # Remove from units and unit_usage dictionaries
+        del units[unit_id]
+        if unit_id in unit_usage:
+            del unit_usage[unit_id]
+
+        # Broadcast unit update via WebSocket
+        socketio.emit('units_update', list(units.values()))
+
+        return jsonify({'status': 'success', 'message': f'Unit {unit_id} deleted'}), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/units/<unit_id>/status', methods=['PATCH'])
+def update_unit_status(unit_id):
+    """Enable/disable monitoring for a unit"""
+    try:
+        if unit_id not in units:
+            return jsonify({'error': 'Unit not found'}), 404
+
+        data = request.get_json()
+        if not data or 'monitoring_enabled' not in data:
+            return jsonify({'error': 'monitoring_enabled field required'}), 400
+
+        unit = units[unit_id]
+        monitoring_enabled = data['monitoring_enabled']
+
+        # Initialize monitoring_enabled if not present
+        if 'monitoring_enabled' not in unit:
+            unit['monitoring_enabled'] = True
+
+        unit['monitoring_enabled'] = monitoring_enabled
+
+        # If disabling monitoring, set status to offline
+        if not monitoring_enabled:
+            unit['status'] = 'offline'
+        # If re-enabling, check if recently seen - for simplicity keep as is
+
+        # Broadcast unit update via WebSocket
+        socketio.emit('units_update', list(units.values()))
+
+        return jsonify(unit), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
 @app.route('/api/unit/<unit_id>/usage', methods=['GET'])
 def get_unit_usage(unit_id):
     """Get usage data for a specific unit"""
