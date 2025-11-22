@@ -26,7 +26,14 @@ FOOTER_TEXT = "Product of NIELIT Bhubaneswar - Made by Krishi Sahayogi Team"
 REQUIRED_PYTHON_VERSION = (3, 8)
 REQUIRED_NODE_VERSION = (16, 0)
 
-PROJECT_ROOT = Path(__file__).parent.parent
+# Handle bundled executable path resolution
+if hasattr(sys, '_MEIPASS'):
+    # Running from PyInstaller bundle
+    PROJECT_ROOT = Path(sys._MEIPASS)
+else:
+    # Running from source
+    PROJECT_ROOT = Path(__file__).parent.parent
+
 SERVER_SETUP_FILE = PROJECT_ROOT / "server_setup.py"
 
 
@@ -311,6 +318,7 @@ class ServerInstallerApp(tk.Tk):
             self.log(f"✓ {name} OK")
 
         self.progress(100, "All prerequisites OK")
+        self.buttons['domain'].config(state="normal")
 
     def _check_python(self):
         try:

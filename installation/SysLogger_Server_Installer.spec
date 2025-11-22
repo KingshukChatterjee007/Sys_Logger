@@ -16,9 +16,11 @@ a = Analysis(
 
     datas=[
         # Include database schema if present
-        (str(project_root / "database_schema.sql"), "."),
-        (str(project_root / "server_setup.py"), ".") 
-            if (project_root / "server_setup.py").exists() else (),
+        ("database_schema.sql", "database_schema.sql"),
+        ("../server_setup.py", "server_setup.py"),
+        (str(Path(spec_dir) / "backend"), "backend"),
+        (str(Path(spec_dir) / "frontend"), "frontend"),
+        ("docker-compose.yml", "docker-compose.yml"),
     ],
 
     hiddenimports=[
@@ -48,6 +50,9 @@ a = Analysis(
         "psycopg2.extensions",
         "psycopg2.extras",
     ],
+
+    collect_data=['psycopg2'],
+    collect_binaries=['psycopg2'],
 
     # No Qt, no PyQt, no PySide
     excludes=[

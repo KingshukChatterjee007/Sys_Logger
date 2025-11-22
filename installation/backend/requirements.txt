@@ -1,0 +1,14 @@
+psutil
+requests
+GPUtil
+pyinstaller
+flask
+flask-cors
+python-dotenv
+click
+werkzeug
+itsdangerous
+jinja2
+markupsafe
+gunicorn
+flask-socketio==5.3.6
