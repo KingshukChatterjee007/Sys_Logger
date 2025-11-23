@@ -378,6 +378,15 @@ def health_check():
         'service': 'system-logger'
     })
 
+@app.route('/api/config', methods=['GET'])
+def get_config():
+    """Get server configuration"""
+    return jsonify({
+        'host': HOST,
+        'port': PORT,
+        'cors_origins': CORS_ORIGINS_STR if CORS_ORIGINS_STR.strip() != '*' else '*'
+    })
+
 @app.route('/api/register_unit', methods=['POST'])
 def register_unit():
     """Register a new unit with the system"""

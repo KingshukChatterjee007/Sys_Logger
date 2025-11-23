@@ -211,6 +211,16 @@ class ServerInstallerApp(tk.Tk):
             command=self.run_server_setup
         ).pack(fill="x", padx=10, pady=10)
 
+        # Start Server
+        start_frame = ttk.Labelframe(
+            left, text="Start Server", style="Card.TLabelframe")
+        start_frame.grid(row=6, column=0, sticky="we", pady=5)
+        ttk.Button(
+            start_frame,
+            text="Start Server (Service Mode)",
+            command=self.run_start_server
+        ).pack(fill="x", padx=10, pady=10)
+
         # ----------------- RIGHT: Progress + Log -----------------
 
         self.progress_var = tk.IntVar()
@@ -234,8 +244,7 @@ class ServerInstallerApp(tk.Tk):
     # Helper UI methods
     # ----------------------------------------------------------------------
     def log(self, msg: str):
-        self.log_widget.insert("end", msg + "\n")
-        self.log_widget.see("end")
+        print(msg)
         self.logger.info(msg)
 
     def progress(self, value: int, msg: str):
@@ -278,6 +287,9 @@ class ServerInstallerApp(tk.Tk):
     def run_server_setup(self):
         self.start_worker("run_server_setup")
 
+    def run_start_server(self):
+        self.start_worker("start_server")
+
     # =========================================================================
     # BACKEND OPERATIONS (PyQt → Tkinter refactor)
     # =========================================================================
@@ -300,6 +312,24 @@ class ServerInstallerApp(tk.Tk):
             raise Exception(result.stderr or "server_setup.py failed")
 
         self.progress(100, "server_setup.py completed successfully")
+
+    # ---------------------- start_server ----------------------
+    def op_start_server(self):
+        self.progress(10, "Starting server in service mode...")
+
+        sys_logger_path = PROJECT_ROOT / "backend" / "sys_logger.py"
+        if not sys_logger_path.exists():
+            raise Exception("sys_logger.py not found")
+
+        result = subprocess.run(
+            [sys.executable, str(sys_logger_path), "--service"],
+            cwd=PROJECT_ROOT,
+            capture_output=False,
+            text=True
+        )
+
+        # Note: In service mode, the server runs indefinitely, so we don't check returncode
+        self.progress(100, "Server started in service mode")
 
     # ---------------------- Prerequisite checks ----------------------
     def op_prereq_check(self):

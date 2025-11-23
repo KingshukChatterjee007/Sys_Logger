@@ -16,8 +16,12 @@ a = Analysis(
 
     datas=[
         (str(project_root / 'unit_client.py'), '.'),
-        (str(project_root / 'unit_client_config.json'), '.') 
-            if (project_root / 'unit_client_config.json').exists() else (),
+        (str(project_root / 'client_watchdog.sh'), '.')
+            if (project_root / 'client_watchdog.sh').exists() else (),
+        (str(project_root / 'domain_updater.py'), '.')
+            if (project_root / 'domain_updater.py').exists() else (),
+        (str(project_root / 'README.txt'), '.')
+            if (project_root / 'README.txt').exists() else (),
     ],
 
     # NO PyQt6 imports because GUI is now Tkinter
@@ -51,6 +55,10 @@ a = Analysis(
         "qtpy",
         "sip",
         "PyQt5",
+        "matplotlib",  # Exclude matplotlib if not needed
+        "numpy",  # Exclude numpy if not needed
+        "pandas",  # Exclude pandas if not needed
+        "scipy",  # Exclude scipy if not needed
     ],
 
     noarchive=False,
