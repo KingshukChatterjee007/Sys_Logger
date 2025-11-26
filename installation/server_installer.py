@@ -12,6 +12,7 @@ import threading
 
 import tkinter as tk
 from tkinter import ttk, messagebox
+from PIL import Image, ImageTk
 
 # Optional imports
 try:
@@ -67,12 +68,14 @@ class ServerInstallerApp(tk.Tk):
         super().__init__()
 
         self.title("Server Installer - Krishi Sahayogi")
-        self.geometry("950x700")
-        self.configure(bg="#f8f9fa")
+        self.geometry("1400x850")
+        self.configure(bg="#e0f2fe")
         self.prereq_passed = False
         self.buttons = {}
 
         self._init_style()
+        self._init_icons()
+        self._init_tooltips()
         self._init_logging()
         self._init_ui()
 
@@ -82,13 +85,65 @@ class ServerInstallerApp(tk.Tk):
     def _init_style(self):
         style = ttk.Style(self)
         style.theme_use("clam")
-        style.configure("TButton", font=("Segoe UI", 11), padding=6)
+
+        # Purple/indigo themed buttons matching client_installer.py
+        style.configure(
+            "TButton",
+            font=("Segoe UI", 12, "bold"),
+            padding=(12, 8),
+            background="#6366f1",
+            foreground="white",
+            relief="flat",
+            borderwidth=0
+        )
+        style.map("TButton",
+                  background=[("active", "#4f46e5"), ("pressed", "#4338ca")],
+                  relief=[("pressed", "sunken")])
+
+        # Card frames with subtle shadow
         style.configure("Card.TLabelframe",
                         background="white",
-                        borderwidth=2,
-                        relief="groove")
+                        borderwidth=3,
+                        relief="raised")
         style.configure("Card.TLabelframe.Label",
                         font=("Segoe UI", 11, "bold"))
+
+        # Wizard navigation buttons
+        style.configure("Wizard.TButton",
+                        font=("Segoe UI", 10, "bold"),
+                        padding=(8, 4))
+        style.map("Wizard.TButton",
+                  background=[("active", "#e0e7ff"), ("pressed", "#c7d2fe")])
+
+        # Loading spinner style
+        style.configure("Spinner.TLabel",
+                        font=("Segoe UI", 10),
+                        foreground="#6366f1")
+
+    def _init_icons(self):
+        # Create simple icons using PIL (fallback if images not available)
+        self.icons = {}
+        try:
+            # Create checkmark icon
+            img = Image.new('RGBA', (16, 16), (0, 0, 0, 0))
+            self.icons['check'] = ImageTk.PhotoImage(img)
+
+            # Create error icon
+            img = Image.new('RGBA', (16, 16), (220, 38, 38, 255))
+            self.icons['error'] = ImageTk.PhotoImage(img)
+
+            # Create loading spinner frames
+            self.spinner_frames = []
+            for i in range(8):
+                img = Image.new('RGBA', (16, 16), (0, 0, 0, 0))
+                self.spinner_frames.append(ImageTk.PhotoImage(img))
+
+        except Exception as e:
+            self.log(f"Icon creation failed: {e}")
+
+    def _init_tooltips(self):
+        # Tooltip functionality
+        self.tooltip_labels = {}
 
     def _init_logging(self):
         logging.basicConfig(
@@ -105,121 +160,198 @@ class ServerInstallerApp(tk.Tk):
         self.grid_columnconfigure(0, weight=1)
         self.grid_rowconfigure(0, weight=0)
         self.grid_rowconfigure(1, weight=1)
+        self.grid_rowconfigure(2, weight=0)
 
         # Top title
         title = tk.Label(
             self,
-            text="Krishi Sahayogi Server Installer",
-            font=("Segoe UI", 20, "bold"),
-            bg="#eef1f7"
+            text="📋 Krishi Sahayogi Server Installer",
+            font=("Segoe UI", 24, "bold"),
+            bg="#e0f2fe",
+            fg="#1f2937"
         )
-        title.grid(row=0, column=0, pady=(10, 5))
+        title.grid(row=0, column=0, pady=(20, 10))
 
         # Main frame
-        main = tk.Frame(self, bg="#eef1f7")
-        main.grid(row=1, column=0, sticky="nsew", padx=15, pady=10)
+        main = tk.Frame(self, bg="#e0f2fe")
+        main.grid(row=1, column=0, sticky="nsew", padx=20, pady=10)
         main.grid_columnconfigure(0, weight=1)
-        main.grid_columnconfigure(1, weight=1)
-        main.grid_rowconfigure(1, weight=1)
+        main.grid_columnconfigure(1, weight=2)
+        main.grid_rowconfigure(0, weight=1)
 
-        # Left column (actions)
-        left = tk.Frame(main, bg="#eef1f7")
-        left.grid(row=0, column=0, sticky="nwe", padx=(0, 10))
+        # Left column (wizard steps)
+        left = tk.Frame(main, bg="#ffffff", relief="raised", borderwidth=2)
+        left.grid(row=0, column=0, sticky="nwe", padx=(0, 15))
         left.grid_columnconfigure(0, weight=1)
 
-        # Right column (progress + log)
-        right = tk.Frame(main, bg="#eef1f7")
+        # Right column (step content + progress + log)
+        right = tk.Frame(main, bg="#e0f2fe")
         right.grid(row=0, column=1, sticky="nsew")
-        right.grid_rowconfigure(1, weight=1)
+        right.grid_rowconfigure(2, weight=1)
         right.grid_columnconfigure(0, weight=1)
+
+        # Wizard navigation
+        nav_frame = tk.Frame(self, bg="#e0f2fe")
+        nav_frame.grid(row=2, column=0, pady=(10, 20))
+        nav_frame.grid_columnconfigure(1, weight=1)
+
+        self.back_button = ttk.Button(nav_frame, text="⬅️ Back", style="Wizard.TButton",
+                                    command=self.wizard_back, state="disabled")
+        self.back_button.pack(side="left", padx=10)
+
+        self.next_button = ttk.Button(nav_frame, text="Next ➡️", style="Wizard.TButton",
+                                    command=self.wizard_next)
+        self.next_button.pack(side="left", padx=10)
+
+        self.finish_button = ttk.Button(nav_frame, text="✅ Finish Installation",
+                                      style="Wizard.TButton", command=self.wizard_finish, state="disabled")
+        self.finish_button.pack(side="right", padx=10)
 
         # ----------------- Groups on LEFT -----------------
 
-        # Prerequisites
-        prereq_frame = ttk.Labelframe(
-            left, text="Prerequisites", style="Card.TLabelframe")
-        prereq_frame.grid(row=0, column=0, sticky="we", pady=5)
-        self.buttons['prereq'] = ttk.Button(
-            prereq_frame,
-            text="🔍 Check Prerequisites",
-            command=self.run_prereq_check
-        )
-        self.buttons['prereq'].pack(fill="x", padx=10, pady=10)
+        # Left panel: Step indicators
+        steps_title = tk.Label(left, text="Installation Steps",
+                              font=("Segoe UI", 16, "bold"), bg="white", fg="#1f2937")
+        steps_title.pack(pady=20, padx=20)
 
-        # PostgreSQL Setup
-        pg_frame = ttk.Labelframe(
-            left, text="PostgreSQL Setup", style="Card.TLabelframe")
-        pg_frame.grid(row=1, column=0, sticky="we", pady=5)
-        ttk.Button(
-            pg_frame,
-            text="Setup PostgreSQL",
-            command=self.run_postgres_setup
-        ).pack(fill="x", padx=10, pady=10)
+        self.step_indicators = []
+        step_names = [
+            ("Prerequisites Check", "🔍"),
+            ("PostgreSQL Setup", "🐘"),
+            ("Domain Configuration", "🔗"),
+            ("Startup Configuration", "⚡"),
+            ("Protection Setup", "🛡️"),
+            ("Run Setup Script", "⚙️"),
+            ("Start Server", "🚀")
+        ]
 
-        # Domain configuration
-        dom_frame = ttk.Labelframe(
-            left, text="Domain Configuration", style="Card.TLabelframe")
-        dom_frame.grid(row=2, column=0, sticky="we", pady=5)
+        for i, (name, icon) in enumerate(step_names):
+            step_frame = ttk.Frame(left, style="Card.TFrame")
+            step_frame.pack(fill="x", padx=15, pady=5)
+            step_frame.grid_columnconfigure(1, weight=1)
 
-        tk.Label(dom_frame, text="Backend Domain:", bg="white").pack(
-            anchor="w", padx=10, pady=(8, 0))
-        self.backend_domain = tk.Entry(dom_frame)
+            # Step number/icon
+            indicator = tk.Label(step_frame, text=f"{i+1}. {icon}", bg="white",
+                               font=("Segoe UI", 12, "bold"), fg="#6366f1")
+            indicator.grid(row=0, column=0, padx=(10, 5), pady=10, sticky="w")
+
+            # Step name
+            name_label = tk.Label(step_frame, text=name, bg="white",
+                                font=("Segoe UI", 10), fg="#374151")
+            name_label.grid(row=0, column=1, padx=(0, 10), pady=10, sticky="w")
+
+            # Status
+            status_label = tk.Label(step_frame, text="⏳ Pending", bg="white",
+                                  font=("Segoe UI", 9), fg="#6b7280")
+            status_label.grid(row=0, column=2, padx=10, pady=10, sticky="e")
+
+            self.step_indicators.append((indicator, name_label, status_label))
+
+        # Action buttons for current step
+        actions_frame = ttk.Frame(left, style="Card.TFrame")
+        actions_frame.pack(fill="x", padx=15, pady=20)
+
+        self.step_action_button = ttk.Button(actions_frame, text="🔍 Check Prerequisites",
+                                           command=self.execute_current_step)
+        self.step_action_button.pack(fill="x", padx=15, pady=15)
+
+        # Create step content areas on right
+        self.step_content_frames = []
+
+        # Step 0: Prerequisites
+        prereq_frame = ttk.Frame(right, style="Card.TFrame")
+        prereq_frame.grid(row=0, column=0, sticky="ew", padx=10, pady=(10, 5))
+        tk.Label(prereq_frame, text="Check system prerequisites before proceeding",
+                font=("Segoe UI", 14, "bold"), bg="white", fg="#1f2937").pack(pady=20)
+        tk.Label(prereq_frame, text="This step verifies that Python, Node.js, Docker, and other\nrequired components are installed and properly configured.",
+                bg="white", fg="#6b7280", font=("Segoe UI", 10)).pack(pady=(0, 20))
+        self.step_content_frames.append(prereq_frame)
+
+        # Step 1: PostgreSQL Setup
+        pg_frame = ttk.Frame(right, style="Card.TFrame")
+        pg_frame.grid(row=0, column=0, sticky="ew", padx=10, pady=(10, 5))
+        tk.Label(pg_frame, text="Setup PostgreSQL Database",
+                font=("Segoe UI", 14, "bold"), bg="white", fg="#1f2937").pack(pady=20)
+        tk.Label(pg_frame, text="Install and configure PostgreSQL database with the required\nschema and user accounts for the SysLogger application.",
+                bg="white", fg="#6b7280", font=("Segoe UI", 10)).pack(pady=(0, 20))
+        self.step_content_frames.append(pg_frame)
+
+        # Step 2: Domain Configuration
+        dom_frame = ttk.Frame(right, style="Card.TFrame")
+        dom_frame.grid(row=0, column=0, sticky="ew", padx=10, pady=(10, 5))
+        tk.Label(dom_frame, text="Configure Domain Settings",
+                font=("Segoe UI", 14, "bold"), bg="white", fg="#1f2937").pack(pady=20)
+
+        # Backend domain
+        backend_frame = ttk.Frame(dom_frame, style="Card.TFrame")
+        backend_frame.pack(fill="x", padx=20, pady=5)
+        tk.Label(backend_frame, text="Backend Domain:", bg="white",
+                font=("Segoe UI", 10, "bold")).pack(anchor="w", pady=(10, 2))
+        self.backend_domain = tk.Entry(backend_frame, font=("Segoe UI", 10))
         self.backend_domain.insert(0, "http://localhost:8000")
-        self.backend_domain.pack(fill="x", padx=10, pady=2)
+        self.backend_domain.pack(fill="x", padx=10, pady=(0, 10))
+        self.backend_validation = tk.Label(backend_frame, text="", bg="white",
+                                         fg="#dc2626", font=("Segoe UI", 9))
+        self.backend_validation.pack(anchor="w", padx=10)
 
-        tk.Label(dom_frame, text="Frontend Domain:", bg="white").pack(
-            anchor="w", padx=10, pady=(8, 0))
-        self.frontend_domain = tk.Entry(dom_frame)
+        # Frontend domain
+        frontend_frame = ttk.Frame(dom_frame, style="Card.TFrame")
+        frontend_frame.pack(fill="x", padx=20, pady=5)
+        tk.Label(frontend_frame, text="Frontend Domain:", bg="white",
+                font=("Segoe UI", 10, "bold")).pack(anchor="w", pady=(10, 2))
+        self.frontend_domain = tk.Entry(frontend_frame, font=("Segoe UI", 10))
         self.frontend_domain.insert(0, "http://localhost:3000")
-        self.frontend_domain.pack(fill="x", padx=10, pady=2)
+        self.frontend_domain.pack(fill="x", padx=10, pady=(0, 10))
+        self.frontend_validation = tk.Label(frontend_frame, text="", bg="white",
+                                          fg="#dc2626", font=("Segoe UI", 9))
+        self.frontend_validation.pack(anchor="w", padx=10)
 
-        self.buttons['domain'] = ttk.Button(
-            dom_frame,
-            text="🔗 Apply Domain Config",
-            command=self.run_domain_config,
-            state="disabled"
-        )
-        self.buttons['domain'].pack(fill="x", padx=10, pady=10)
+        # Bind validation
+        self.backend_domain.bind('<FocusOut>', lambda e: self.validate_domain('backend'))
+        self.frontend_domain.bind('<FocusOut>', lambda e: self.validate_domain('frontend'))
 
-        # Startup configuration
-        startup_frame = ttk.Labelframe(
-            left, text="Startup Configuration", style="Card.TLabelframe")
-        startup_frame.grid(row=3, column=0, sticky="we", pady=5)
-        ttk.Button(
-            startup_frame,
-            text="Configure Startup",
-            command=self.run_startup_config
-        ).pack(fill="x", padx=10, pady=10)
+        self.step_content_frames.append(dom_frame)
 
-        # Protection
-        prot_frame = ttk.Labelframe(
-            left, text="Protection", style="Card.TLabelframe")
-        prot_frame.grid(row=4, column=0, sticky="we", pady=5)
-        ttk.Button(
-            prot_frame,
-            text="Setup Protection",
-            command=self.run_protection_setup
-        ).pack(fill="x", padx=10, pady=10)
+        # Step 3: Startup Configuration
+        startup_frame = ttk.Frame(right, style="Card.TFrame")
+        startup_frame.grid(row=0, column=0, sticky="ew", padx=10, pady=(10, 5))
+        tk.Label(startup_frame, text="Configure Automatic Startup",
+                font=("Segoe UI", 14, "bold"), bg="white", fg="#1f2937").pack(pady=20)
+        tk.Label(startup_frame, text="Setup the SysLogger server to start automatically when the\nsystem boots, ensuring continuous monitoring.",
+                bg="white", fg="#6b7280", font=("Segoe UI", 10)).pack(pady=(0, 20))
+        self.step_content_frames.append(startup_frame)
 
-        # Run server_setup.py
-        run_frame = ttk.Labelframe(
-            left, text="Server Setup Script", style="Card.TLabelframe")
-        run_frame.grid(row=5, column=0, sticky="we", pady=5)
-        ttk.Button(
-            run_frame,
-            text="Run server_setup.py",
-            command=self.run_server_setup
-        ).pack(fill="x", padx=10, pady=10)
+        # Step 4: Protection
+        prot_frame = ttk.Frame(right, style="Card.TFrame")
+        prot_frame.grid(row=0, column=0, sticky="ew", padx=10, pady=(10, 5))
+        tk.Label(prot_frame, text="Setup Service Protection",
+                font=("Segoe UI", 14, "bold"), bg="white", fg="#1f2937").pack(pady=20)
+        tk.Label(prot_frame, text="Configure automatic restart mechanisms and protection\nfeatures to ensure service reliability.",
+                bg="white", fg="#6b7280", font=("Segoe UI", 10)).pack(pady=(0, 20))
+        self.step_content_frames.append(prot_frame)
 
-        # Start Server
-        start_frame = ttk.Labelframe(
-            left, text="Start Server", style="Card.TLabelframe")
-        start_frame.grid(row=6, column=0, sticky="we", pady=5)
-        ttk.Button(
-            start_frame,
-            text="Start Server (Service Mode)",
-            command=self.run_start_server
-        ).pack(fill="x", padx=10, pady=10)
+        # Step 5: Run Setup
+        run_frame = ttk.Frame(right, style="Card.TFrame")
+        run_frame.grid(row=0, column=0, sticky="ew", padx=10, pady=(10, 5))
+        tk.Label(run_frame, text="Execute Server Setup Script",
+                font=("Segoe UI", 14, "bold"), bg="white", fg="#1f2937").pack(pady=20)
+        tk.Label(run_frame, text="Run the server_setup.py script to initialize the SysLogger\nbackend services and prepare the environment.",
+                bg="white", fg="#6b7280", font=("Segoe UI", 10)).pack(pady=(0, 20))
+        self.step_content_frames.append(run_frame)
+
+        # Step 6: Start Server
+        start_frame = ttk.Frame(right, style="Card.TFrame")
+        start_frame.grid(row=0, column=0, sticky="ew", padx=10, pady=(10, 5))
+        tk.Label(start_frame, text="Start SysLogger Server",
+                font=("Segoe UI", 14, "bold"), bg="white", fg="#1f2937").pack(pady=20)
+        tk.Label(start_frame, text="Launch the SysLogger server in service mode for\nproduction deployment.",
+                bg="white", fg="#6b7280", font=("Segoe UI", 10)).pack(pady=(0, 20))
+        self.step_content_frames.append(start_frame)
+
+        # Initialize wizard state
+        self.current_step = 0
+        self.steps_completed = [False] * len(self.step_content_frames)
+        self.show_step(0)
 
         # ----------------- RIGHT: Progress + Log -----------------
 
@@ -241,23 +373,139 @@ class ServerInstallerApp(tk.Tk):
         footer.grid(row=2, column=0, pady=(5, 0))
 
     # ----------------------------------------------------------------------
+    # Wizard navigation methods
+    # ----------------------------------------------------------------------
+    def show_step(self, step_index):
+        # Hide all step frames
+        for frame in self.step_content_frames:
+            frame.grid_remove()
+
+        # Show selected step
+        if 0 <= step_index < len(self.step_content_frames):
+            self.step_content_frames[step_index].grid(row=0, column=0, sticky="ew", padx=10, pady=(10, 5))
+            self.current_step = step_index
+
+        # Update navigation buttons
+        self.back_button.config(state="normal" if step_index > 0 else "disabled")
+        self.next_button.config(state="normal" if step_index < len(self.step_content_frames) - 1 else "disabled")
+        self.finish_button.config(state="normal" if all(self.steps_completed) else "disabled")
+
+    def wizard_back(self):
+        if self.current_step > 0:
+            self.show_step(self.current_step - 1)
+
+    def wizard_next(self):
+        if self.current_step < len(self.step_content_frames) - 1:
+            # Validate current step before proceeding
+            if self.validate_current_step():
+                self.steps_completed[self.current_step] = True
+                self.show_step(self.current_step + 1)
+            else:
+                messagebox.showwarning("Validation Error", "Please correct the errors before proceeding.")
+
+    def wizard_finish(self):
+        if all(self.steps_completed):
+            messagebox.showinfo("Installation Complete", "All steps have been completed successfully!")
+        else:
+            messagebox.showwarning("Incomplete Installation", "Please complete all steps before finishing.")
+
+    def validate_current_step(self):
+        if self.current_step == 2:  # Domain configuration step
+            return self.validate_domain('backend') and self.validate_domain('frontend')
+        return True
+
+    def validate_domain(self, domain_type):
+        domain = self.backend_domain.get().strip() if domain_type == 'backend' else self.frontend_domain.get().strip()
+        validation_label = self.backend_validation if domain_type == 'backend' else self.frontend_validation
+
+        if not domain:
+            validation_label.config(text="Domain cannot be empty")
+            return False
+
+        # Basic URL validation
+        if not re.match(r'^https?://', domain):
+            validation_label.config(text="Must start with http:// or https://")
+            return False
+
+        # Check for localhost or valid hostname/IP
+        url_part = domain[8:] if domain.startswith('https://') else domain[7:]
+        if not url_part or '/' in url_part:
+            validation_label.config(text="Invalid domain format")
+            return False
+
+        validation_label.config(text="")
+        return True
+
+    # ----------------------------------------------------------------------
     # Helper UI methods
     # ----------------------------------------------------------------------
-    def log(self, msg: str):
+    def log(self, msg: str, color=None):
         print(msg)
         self.logger.info(msg)
+
+        # Colorize log messages
+        if color:
+            colored_msg = f"[{color}]{msg}[/{color}]"
+        else:
+            colored_msg = msg
+
+        self.log_widget.insert("end", msg + "\n")
+        self.log_widget.see("end")
 
     def progress(self, value: int, msg: str):
         # schedule UI updates on main thread
         def _update():
             self.progress_var.set(value)
-            self.log(msg)
+            self.current_op_label.config(text=msg)
+            if value > 0:
+                self.start_spinner()
+            elif value >= 100:
+                self.stop_spinner()
+            self.log(msg, "green" if value == 100 else "blue")
         self.after(0, _update)
+
+    def start_spinner(self):
+        if not self.is_spinning:
+            self.is_spinning = True
+            self.animate_spinner()
+
+    def stop_spinner(self):
+        self.is_spinning = False
+        self.spinner_label.config(text="✅")
+
+    def animate_spinner(self):
+        if not self.is_spinning:
+            return
+        spinner_chars = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
+        current = getattr(self, 'spinner_index', 0)
+        self.spinner_label.config(text=spinner_chars[current])
+        self.spinner_index = (current + 1) % len(spinner_chars)
+        self.after(100, self.animate_spinner)
 
     def show_error(self, msg: str):
         def _show():
             messagebox.showerror("Error", msg)
+            self.stop_spinner()
         self.after(0, _show)
+
+    def show_tooltip(self, widget, text):
+        def enter(event):
+            tooltip = tk.Toplevel(widget)
+            tooltip.wm_overrideredirect(True)
+            tooltip.wm_geometry(f"+{event.x_root+10}+{event.y_root+10}")
+
+            label = tk.Label(tooltip, text=text, bg="#ffffe0", relief="solid", borderwidth=1)
+            label.pack()
+
+            self.tooltip_labels[widget] = tooltip
+
+        def leave(event):
+            if widget in self.tooltip_labels:
+                self.tooltip_labels[widget].destroy()
+                del self.tooltip_labels[widget]
+
+        widget.bind("<Enter>", enter)
+        widget.bind("<Leave>", leave)
 
     # ----------------------------------------------------------------------
     # Worker start helpers

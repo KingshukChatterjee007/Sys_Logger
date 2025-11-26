@@ -80,8 +80,8 @@ class InstallerGUI(tk.Tk):
         super().__init__()
 
         self.title("SysLogger Client Installer")
-        self.geometry("1100x700")
-        self.configure(bg="#f8fafc")
+        self.geometry("1200x800")
+        self.configure(bg="#e0f2fe")
 
         # Status tracking for steps
         self.step_statuses = {
@@ -120,18 +120,23 @@ class InstallerGUI(tk.Tk):
         style = ttk.Style(self)
         style.theme_use("clam")
 
+        # Modern button styling
         style.configure(
             "TButton",
-            font=("Segoe UI", 11, "bold"),
-            padding=8,
-            background="#3b82f6",
-            foreground="white"
+            font=("Segoe UI", 12, "bold"),
+            padding=(12, 8),
+            background="#6366f1",
+            foreground="white",
+            relief="flat",
+            borderwidth=0
         )
 
         style.map("TButton",
-                  background=[("active", "#2563eb")])
+                  background=[("active", "#4f46e5"), ("pressed", "#4338ca")],
+                  relief=[("pressed", "sunken")])
 
-        style.configure("Card.TFrame", background="white", relief="groove", borderwidth=2)
+        # Enhanced card frames with subtle shadow effect
+        style.configure("Card.TFrame", background="#ffffff", relief="raised", borderwidth=3)
 
     # -------------------------------------------------------------------
     # MAIN UI LAYOUT (LEFT PANEL + RIGHT PANEL)
@@ -176,30 +181,31 @@ class InstallerGUI(tk.Tk):
 
         # Right Panel
         right = ttk.Frame(self, style="Card.TFrame")
-        right.grid(row=0, column=1, sticky="nswe", padx=15, pady=15)
+        right.grid(row=0, column=1, sticky="nswe", padx=20, pady=20)
 
-        progress_title = tk.Label(right, text="📊 Installation Progress",
-                                  font=("Segoe UI", 18, "bold"),
-                                  bg="white", fg="#1f2937")
-        progress_title.pack(pady=10)
+        progress_title = tk.Label(right, text="📈 Installation Progress",
+                                  font=("Segoe UI", 20, "bold"),
+                                  bg="white", fg="#1e293b")
+        progress_title.pack(pady=15)
 
         self.progress_var = tk.IntVar()
         progress_frame = ttk.Frame(right, style="Card.TFrame")
-        progress_frame.pack(pady=10, padx=20, fill="x")
-        ttk.Progressbar(progress_frame, variable=self.progress_var, length=600).pack(pady=10, padx=20, fill="x")
+        progress_frame.pack(pady=10, padx=25, fill="x")
+        ttk.Progressbar(progress_frame, variable=self.progress_var, length=700,
+                        style="TProgressbar").pack(pady=10, padx=25, fill="x")
 
-        log_title = tk.Label(right, text="📝 Activity Log",
-                             font=("Segoe UI", 16, "bold"),
+        log_title = tk.Label(right, text="📋 Activity Log",
+                             font=("Segoe UI", 18, "bold"),
                              bg="white", fg="#374151")
         log_title.pack(pady=5)
 
-        self.log_box = tk.Text(right, bg="#f8fafc", fg="#1f2937", font=("Consolas", 10),
-                               height=25, relief="flat", borderwidth=1)
-        self.log_box.pack(padx=20, pady=5, fill="both", expand=True)
+        self.log_box = tk.Text(right, bg="#f8fafc", fg="#1e293b", font=("Consolas", 11),
+                               height=28, relief="sunken", borderwidth=2)
+        self.log_box.pack(padx=25, pady=5, fill="both", expand=True)
 
-        footer = tk.Label(right, text=FOOTER_TEXT, bg="white", fg="#6b7280",
-                          font=("Segoe UI", 9))
-        footer.pack(pady=10)
+        footer = tk.Label(right, text=FOOTER_TEXT, bg="white", fg="#64748b",
+                          font=("Segoe UI", 10, "italic"))
+        footer.pack(pady=15)
 
     # -------------------------------------------------------------------
     # Logging

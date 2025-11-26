@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """
-Unified Server Setup Script for Sys_Logger
+Unified Server Setup GUI for Sys_Logger
+- GUI with options for PostgreSQL or SQLite setup
 - Prefer PostgreSQL (full schema with partitions + functions)
-- Fallback to SQLite automatically if PostgreSQL is unavailable
+- Fallback to SQLite
 """
 
 import os
@@ -13,6 +14,9 @@ import sqlite3
 from pathlib import Path
 import requests
 import time
+import threading
+import tkinter as tk
+from tkinter import ttk, messagebox
 
 # Optional PostgreSQL
 try:
@@ -31,6 +35,19 @@ POSTGRES_DBNAME = "sys_logger"
 POSTGRES_USER = "syslogger"
 POSTGRES_PASS = "syslogger123"
 POSTGRES_HOST = "localhost"
+
+FOOTER_TEXT = "Product of NIELIT Bhubaneswar - Made by Krishi Sahayogi Team"
+
+ASCII_ART = """
+   _____                 _       _____ _                _____       _ _      _
+  / ____|               | |     / ____| |              / ____|     (_) |    | |
+ | (___  _   _ _ __   ___| |_   | (___ | | __ _ ___ ___| |  __ _ __  _| | ___| |_ ___
+  \___ \| | | | '_ \ / _ \ __|   \___ \| |/ _` / __/ __| | |_ | '_ \| | |/ _ \ __/ __|
+  ____) | |_| | | | |  __/ |_    ____) | | (_| \__ \__ \ |__| | | | | | |  __/ |_\__ \
+ |_____/ \__, |_| |_|\___|\__|  |_____/|_|\__,_|___/___/\_____|_| |_|_|_|\___|\__|___/
+          __/ |
+         |___/
+"""
 
 
 # -----------------------------------------------------------
@@ -352,23 +369,231 @@ def setup_sqlite():
 
 
 # -----------------------------------------------------------
+# GUI CLASS
+# -----------------------------------------------------------
+class ServerSetupGUI(tk.Tk):
+    def __init__(self):
+        super().__init__()
+        self.title("SysLogger Server Setup")
+        self.geometry("900x700")
+        self.configure(bg="#e0f2fe")
+
+        # Database selection
+        self.db_choice = tk.StringVar(value="postgresql")
+
+        # PostgreSQL config
+        self.pg_host = tk.StringVar(value=POSTGRES_HOST)
+        self.pg_dbname = tk.StringVar(value=POSTGRES_DBNAME)
+        self.pg_user = tk.StringVar(value=POSTGRES_USER)
+        self.pg_pass = tk.StringVar(value=POSTGRES_PASS)
+
+        # Setup thread
+        self.setup_thread = None
+
+        self._init_style()
+        self._init_ui()
+
+    def _init_style(self):
+        style = ttk.Style(self)
+        style.theme_use("clam")
+
+        style.configure("TButton", font=("Segoe UI", 12, "bold"),
+                       padding=(12, 8), background="#6366f1", foreground="white",
+                       relief="flat", borderwidth=0)
+        style.map("TButton", background=[("active", "#4f46e5"), ("pressed", "#4338ca")],
+                 relief=[("pressed", "sunken")])
+
+        style.configure("Card.TFrame", background="#ffffff", relief="raised", borderwidth=3)
+        style.configure("TLabel", font=("Segoe UI", 10), background="#e0f2fe")
+        style.configure("TEntry", font=("Segoe UI", 10))
+
+    def _init_ui(self):
+        self.grid_columnconfigure(0, weight=1)
+        self.grid_rowconfigure(0, weight=1)
+
+        main_frame = ttk.Frame(self, style="Card.TFrame")
+        main_frame.grid(row=0, column=0, sticky="nsew", padx=20, pady=20)
+        main_frame.grid_columnconfigure(0, weight=1)
+
+        # ASCII Art Header
+        art_frame = ttk.Frame(main_frame, style="Card.TFrame")
+        art_frame.pack(fill="x", padx=20, pady=20)
+        art_label = tk.Label(art_frame, text=ASCII_ART, font=("Courier", 8),
+                            bg="white", fg="#1e40af", justify="center")
+        art_label.pack(pady=10)
+
+        title = tk.Label(main_frame, text="🛠️ Server Setup Configuration",
+                        font=("Segoe UI", 20, "bold"), bg="white", fg="#1f2937")
+        title.pack(pady=15)
+
+        # Database Selection
+        db_frame = ttk.Frame(main_frame, style="Card.TFrame")
+        db_frame.pack(fill="x", padx=20, pady=10)
+
+        ttk.Label(db_frame, text="Database Type:", font=("Segoe UI", 12, "bold"),
+                 background="white").grid(row=0, column=0, sticky="w", padx=10, pady=5)
+
+        pg_radio = ttk.Radiobutton(db_frame, text="PostgreSQL (Recommended)", variable=self.db_choice,
+                                  value="postgresql", command=self._toggle_db_config)
+        pg_radio.grid(row=1, column=0, sticky="w", padx=30, pady=2)
+
+        sqlite_radio = ttk.Radiobutton(db_frame, text="SQLite (Fallback)", variable=self.db_choice,
+                                      value="sqlite", command=self._toggle_db_config)
+        sqlite_radio.grid(row=2, column=0, sticky="w", padx=30, pady=2)
+
+        # PostgreSQL Config Frame
+        self.pg_config_frame = ttk.Frame(db_frame, style="Card.TFrame")
+        self.pg_config_frame.grid(row=3, column=0, columnspan=2, sticky="ew", padx=30, pady=10)
+
+        ttk.Label(self.pg_config_frame, text="PostgreSQL Configuration:",
+                 font=("Segoe UI", 11, "bold"), background="white").grid(row=0, column=0, columnspan=2, pady=5)
+
+        ttk.Label(self.pg_config_frame, text="Host:", background="white").grid(row=1, column=0, sticky="w", padx=5, pady=2)
+        ttk.Entry(self.pg_config_frame, textvariable=self.pg_host, width=30).grid(row=1, column=1, padx=5, pady=2)
+
+        ttk.Label(self.pg_config_frame, text="Database:", background="white").grid(row=2, column=0, sticky="w", padx=5, pady=2)
+        ttk.Entry(self.pg_config_frame, textvariable=self.pg_dbname, width=30).grid(row=2, column=1, padx=5, pady=2)
+
+        ttk.Label(self.pg_config_frame, text="Username:", background="white").grid(row=3, column=0, sticky="w", padx=5, pady=2)
+        ttk.Entry(self.pg_config_frame, textvariable=self.pg_user, width=30).grid(row=3, column=1, padx=5, pady=2)
+
+        ttk.Label(self.pg_config_frame, text="Password:", background="white").grid(row=4, column=0, sticky="w", padx=5, pady=2)
+        ttk.Entry(self.pg_config_frame, textvariable=self.pg_pass, show="*", width=30).grid(row=4, column=1, padx=5, pady=2)
+
+        # Progress and Log Area
+        progress_frame = ttk.Frame(main_frame, style="Card.TFrame")
+        progress_frame.pack(fill="both", expand=True, padx=20, pady=10)
+
+        ttk.Label(progress_frame, text="📈 Setup Progress", font=("Segoe UI", 16, "bold"),
+                 background="white").pack(pady=10)
+
+        self.progress_var = tk.IntVar()
+        ttk.Progressbar(progress_frame, variable=self.progress_var, length=700).pack(pady=5)
+
+        log_label = ttk.Label(progress_frame, text="📋 Activity Log", font=("Segoe UI", 14, "bold"), background="white")
+        log_label.pack(pady=5)
+
+        log_frame = ttk.Frame(progress_frame)
+        log_frame.pack(fill="both", expand=True, padx=10, pady=5)
+
+        self.log_text = tk.Text(log_frame, bg="#f8fafc", fg="#1e293b", font=("Consolas", 9),
+                               height=15, wrap=tk.WORD, relief="sunken", borderwidth=2)
+        scrollbar = ttk.Scrollbar(log_frame, orient="vertical", command=self.log_text.yview)
+        self.log_text.configure(yscrollcommand=scrollbar.set)
+
+        self.log_text.pack(side="left", fill="both", expand=True)
+        scrollbar.pack(side="right", fill="y")
+
+        # Buttons
+        button_frame = ttk.Frame(main_frame, style="Card.TFrame")
+        button_frame.pack(fill="x", padx=20, pady=20)
+
+        ttk.Button(button_frame, text="🚀 Start Setup", command=self.start_setup).pack(side="left", padx=10)
+        ttk.Button(button_frame, text="❌ Exit", command=self.quit).pack(side="right", padx=10)
+
+        # Footer
+        footer = tk.Label(main_frame, text=FOOTER_TEXT, bg="white", fg="#64748b",
+                         font=("Segoe UI", 9, "italic"))
+        footer.pack(pady=10)
+
+        # Initialize UI state
+        self._toggle_db_config()
+
+    def _toggle_db_config(self):
+        if self.db_choice.get() == "postgresql":
+            self.pg_config_frame.grid()
+        else:
+            self.pg_config_frame.grid_remove()
+
+    def log(self, msg, color="#1e293b"):
+        self.log_text.insert("end", msg + "\n", ("tag_" + color))
+        self.log_text.tag_config("tag_" + color, foreground=color)
+        self.log_text.see("end")
+
+    def start_setup(self):
+        if self.setup_thread and self.setup_thread.is_alive():
+            messagebox.showwarning("Warning", "Setup is already running!")
+            return
+
+        self.progress_var.set(0)
+        self.log_text.delete(1.0, "end")
+
+        self.setup_thread = threading.Thread(target=self._run_setup)
+        self.setup_thread.start()
+
+    def _run_setup(self):
+        try:
+            if self.db_choice.get() == "postgresql":
+                self.log("🔍 Checking PostgreSQL availability...", "#2563eb")
+                self.progress_var.set(10)
+
+                if not PG_AVAILABLE:
+                    raise Exception("psycopg2 not installed")
+
+                if not postgres_running():
+                    raise Exception("PostgreSQL server is not running")
+
+                global POSTGRES_HOST, POSTGRES_DBNAME, POSTGRES_USER, POSTGRES_PASS
+                POSTGRES_HOST = self.pg_host.get()
+                POSTGRES_DBNAME = self.pg_dbname.get()
+                POSTGRES_USER = self.pg_user.get()
+                POSTGRES_PASS = self.pg_pass.get()
+
+                self.log("✅ PostgreSQL detected. Setting up database...", "#16a34a")
+                self.progress_var.set(30)
+
+                if setup_postgres_database():
+                    self.log("✅ Database and user created", "#16a34a")
+                    self.progress_var.set(60)
+
+                    if apply_postgres_schema():
+                        self.log("✅ PostgreSQL schema applied successfully!", "#16a34a")
+                        self.progress_var.set(100)
+                        messagebox.showinfo("Success", "PostgreSQL setup completed successfully!")
+                    else:
+                        raise Exception("Failed to apply PostgreSQL schema")
+                else:
+                    raise Exception("Failed to setup PostgreSQL database")
+
+            else:
+                self.log("🔄 Using SQLite fallback...", "#2563eb")
+                self.progress_var.set(50)
+
+                setup_sqlite()
+                self.log("✅ SQLite database ready", "#16a34a")
+                self.progress_var.set(100)
+                messagebox.showinfo("Success", "SQLite setup completed successfully!")
+
+        except Exception as e:
+            self.log(f"❌ ERROR: {str(e)}", "#dc2626")
+            self.progress_var.set(0)
+            messagebox.showerror("Setup Failed", f"Setup failed: {str(e)}")
+
+
+# -----------------------------------------------------------
 # MAIN LOGIC
 # -----------------------------------------------------------
 def main():
-    print("\n=== Sys_Logger Server Setup ===\n")
+    # Check if GUI mode or console mode
+    if len(sys.argv) > 1 and sys.argv[1] == "--console":
+        print("\n=== Sys_Logger Server Setup (Console Mode) ===\n")
 
-    # Prefer PostgreSQL
-    if PG_AVAILABLE and postgres_running() and setup_postgres_database():
-        if apply_postgres_schema():
-            print("🎉 Using PostgreSQL mode")
+        # Prefer PostgreSQL
+        if PG_AVAILABLE and postgres_running() and setup_postgres_database():
+            if apply_postgres_schema():
+                print("🎉 Using PostgreSQL mode")
+            else:
+                print("⚠ PostgreSQL schema failed → switching to SQLite")
+                setup_sqlite()
         else:
-            print("⚠ PostgreSQL schema failed → switching to SQLite")
+            print("⚠ PostgreSQL not available → using SQLite")
             setup_sqlite()
-    else:
-        print("⚠ PostgreSQL not available → using SQLite")
-        setup_sqlite()
 
-    print("\nSetup complete.\n")
+        print("\nSetup complete.\n")
+    else:
+        # GUI mode
+        app = ServerSetupGUI()
+        app.mainloop()
 
 
 if __name__ == "__main__":
