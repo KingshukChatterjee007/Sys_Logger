@@ -40,14 +40,17 @@ class ClientManagerGUI(tk.Tk):
         style = ttk.Style(self)
         style.theme_use("clam")
 
-        # Enhanced button styling with larger fonts and padding
-        style.configure("TButton", font=("Segoe UI", 14, "bold"), padding=(15, 8))
-        style.map("TButton", background=[("active", "#e2e8f0")])
+        # Enhanced button styling with modern gradient-like appearance
+        style.configure("TButton", font=("Segoe UI", 14, "bold"), padding=(15, 10),
+                        background="#4f46e5", foreground="white", relief="flat", borderwidth=0)
+        style.map("TButton",
+                  background=[("active", "#4338ca"), ("pressed", "#3730a3")],
+                  relief=[("pressed", "sunken")])
 
         # Enhanced label styling with larger fonts and varied weights
-        style.configure("TLabel", font=("Segoe UI", 12))
-        style.configure("Title.TLabel", font=("Segoe UI", 16, "bold"))
-        style.configure("Subtitle.TLabel", font=("Segoe UI", 14, "bold"))
+        style.configure("TLabel", font=("Segoe UI", 12), background="#ffffff")
+        style.configure("Title.TLabel", font=("Segoe UI", 18, "bold"), background="#ffffff")
+        style.configure("Subtitle.TLabel", font=("Segoe UI", 15, "bold"), background="#ffffff")
 
         # Enhanced frame styling with consistent color scheme
         style.configure("Card.TFrame", background="#ffffff", relief="raised", borderwidth=2, lightcolor="#cbd5e1")

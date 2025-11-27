@@ -539,38 +539,64 @@ class ServerSetupGUI(tk.Tk):
         style = ttk.Style(self)
         style.theme_use("clam")
 
-        # Enhanced button styling with larger fonts and padding
+        # Enhanced button styling with modern look
         style.configure("TButton", font=("Segoe UI", 14, "bold"),
-                       padding=(15, 8), background="#6366f1", foreground="white",
-                       relief="flat", borderwidth=0)
-        style.map("TButton", background=[("active", "#4f46e5"), ("pressed", "#4338ca")],
-                 relief=[("pressed", "sunken")])
+                        padding=(15, 10), background="#4f46e5", foreground="white",
+                        relief="flat", borderwidth=0, borderwidth=2, borderradius=8)
+        style.map("TButton",
+                  background=[("active", "#4338ca"), ("pressed", "#3730a3")],
+                  relief=[("pressed", "sunken")])
 
-        # Enhanced frame styling
-        style.configure("Card.TFrame", background="#ffffff", relief="raised", borderwidth=3, lightcolor="#cbd5e1")
+        # Enhanced frame styling with subtle shadows
+        style.configure("Card.TFrame", background="#ffffff", relief="raised", borderwidth=2,
+                        lightcolor="#e2e8f0", darkcolor="#f1f5f9", borderwidth=2)
 
-        # Enhanced label and entry styling
-        style.configure("TLabel", font=("Segoe UI", 12), background="#e0f2fe")
-        style.configure("TEntry", font=("Segoe UI", 12))
+        # Enhanced label styling with better fonts
+        style.configure("TLabel", font=("Segoe UI", 12), background="#ffffff")
+        style.configure("Title.TLabel", font=("Segoe UI", 20, "bold"), background="#ffffff")
+
+        # Enhanced entry styling with rounded corners effect
+        style.configure("TEntry", font=("Segoe UI", 12), relief="flat", borderwidth=2,
+                        fieldbackground="#f8fafc")
 
     def _init_ui(self):
         self.grid_columnconfigure(0, weight=1)
         self.grid_rowconfigure(0, weight=1)
 
-        main_frame = ttk.Frame(self, style="Card.TFrame")
-        main_frame.grid(row=0, column=0, sticky="nsew", padx=20, pady=20)
+        # Create scrollable canvas
+        self.main_canvas = tk.Canvas(self, bg="#f8fafc", highlightthickness=0)
+        self.main_canvas.grid(row=0, column=0, sticky="nsew")
+
+        # Add scrollbar
+        scrollbar = ttk.Scrollbar(self, orient="vertical", command=self.main_canvas.yview)
+        scrollbar.grid(row=0, column=1, sticky="ns")
+
+        self.main_canvas.configure(yscrollcommand=scrollbar.set)
+
+        # Create main frame inside canvas
+        main_frame = ttk.Frame(self.main_canvas, style="Card.TFrame")
+        self.main_canvas.create_window((0, 0), window=main_frame, anchor="nw")
+
+        # Configure scrolling
+        main_frame.bind('<Configure>', lambda e: self.main_canvas.configure(scrollregion=self.main_canvas.bbox("all")))
+
+        # Enable mouse wheel scrolling
+        def _on_mousewheel(event):
+            self.main_canvas.yview_scroll(int(-1*(event.delta/120)), "units")
+        self.main_canvas.bind_all("<MouseWheel>", _on_mousewheel)
+
         main_frame.grid_columnconfigure(0, weight=1)
 
-        # ASCII Art Header
+        # ASCII Art Header with better styling
         art_frame = ttk.Frame(main_frame, style="Card.TFrame")
-        art_frame.pack(fill="x", padx=20, pady=20)
-        art_label = tk.Label(art_frame, text=ASCII_ART, font=("Courier", 8),
-                            bg="white", fg="#1e40af", justify="center")
-        art_label.pack(pady=10)
+        art_frame.pack(fill="x", padx=20, pady=30)
+        art_label = tk.Label(art_frame, text=ASCII_ART, font=("Courier New", 9, "bold"),
+                            bg="white", fg="#1e40af", justify="center", relief="flat")
+        art_label.pack(pady=15)
 
         title = tk.Label(main_frame, text="🛠️ Server Setup Configuration",
-                        font=("Segoe UI", 20, "bold"), bg="white", fg="#1f2937")
-        title.pack(pady=15)
+                        font=("Segoe UI", 24, "bold"), bg="white", fg="#0f172a")
+        title.pack(pady=20)
 
         # Database Selection
         db_frame = ttk.Frame(main_frame, style="Card.TFrame")
