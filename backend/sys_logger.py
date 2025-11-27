@@ -12,6 +12,7 @@ import socket
 import threading
 import uuid
 import pickle
+import subprocess
 from flask import Flask, jsonify, request
 from flask_cors import CORS
 from flask_socketio import SocketIO, emit
@@ -41,6 +42,8 @@ app = Flask(__name__)
 units = {}  # Dictionary to store registered units
 unit_usage = {}  # Dictionary to store usage data per unit
 alerts = []  # List to store all alerts
+ngrok_url = None  # Store ngrok tunnel URL
+ngrok_process = None  # Store ngrok process handle
 
 # Load Flask debug flag early for use in functions
 FLASK_DEBUG = os.getenv('FLASK_DEBUG', 'False').lower() == 'true'
@@ -372,20 +375,46 @@ def get_gist_logs():
 @app.route('/api/health', methods=['GET'])
 def health_check():
     """Health check endpoint for monitoring"""
-    return jsonify({
+    global ngrok_url, ngrok_process
+    health_data = {
         'status': 'healthy',
         'timestamp': datetime.now().isoformat(),
-        'service': 'system-logger'
-    })
+        'service': 'system-logger',
+        'version': '1.0.0',
+        'uptime': time.time() - _start_time if '_start_time' in globals() else 0,
+        'units_count': len(units),
+        'alerts_count': len(alerts),
+        'service_mode': len(sys.argv) > 1 and sys.argv[1] == '--service'
+    }
+
+    # Add ngrok status if available
+    if ngrok_process:
+        health_data['ngrok'] = {
+            'active': ngrok_process.poll() is None,
+            'url': ngrok_url
+        }
+
+    return jsonify(health_data)
 
 @app.route('/api/config', methods=['GET'])
 def get_config():
     """Get server configuration"""
-    return jsonify({
+    global ngrok_url
+    config = {
         'host': HOST,
         'port': PORT,
         'cors_origins': CORS_ORIGINS_STR if CORS_ORIGINS_STR.strip() != '*' else '*'
-    })
+    }
+
+    # Add ngrok URL if available
+    if ngrok_url:
+        config['ngrok_url'] = ngrok_url
+        config['public_url'] = ngrok_url
+    else:
+        # Fallback to local URL
+        config['public_url'] = f"http://{HOST}:{PORT}"
+
+    return jsonify(config)
 
 @app.route('/api/register_unit', methods=['POST'])
 def register_unit():
@@ -806,6 +835,7 @@ def cleanup_old_logs():
 
 def on_exit():
     logging.info("Session ended")
+    stop_ngrok()  # Ensure ngrok is stopped on exit
 
 def upload_to_gist():
     if not GITHUB_TOKEN:

@@ -17,6 +17,12 @@ import time
 import threading
 import tkinter as tk
 from tkinter import ttk, messagebox
+import zipfile
+import tempfile
+import urllib.request
+import urllib.error
+import tarfile
+import shutil
 
 # Optional PostgreSQL
 try:
@@ -36,7 +42,135 @@ POSTGRES_USER = "syslogger"
 POSTGRES_PASS = "syslogger123"
 POSTGRES_HOST = "localhost"
 
+# Ngrok configuration
+NGROK_AUTH_TOKEN = ""
+NGROK_PORT = 8000  # Default port for the server
+NGROK_EXE_PATH = PROJECT_ROOT / "ngrok"  # Path to ngrok executable
+
 FOOTER_TEXT = "Product of NIELIT Bhubaneswar - Made by Krishi Sahayogi Team"
+
+# -----------------------------------------------------------
+# NGROK UTILITIES
+# -----------------------------------------------------------
+
+
+def check_ngrok_installed():
+    """Check if ngrok is installed and accessible."""
+    try:
+        result = subprocess.run([str(NGROK_EXE_PATH), "version"], capture_output=True, text=True)
+        return result.returncode == 0
+    except (FileNotFoundError, subprocess.SubprocessError):
+        return False
+
+
+def download_ngrok():
+    """Download and install ngrok binary for the current platform."""
+    system = platform.system().lower()
+    machine = platform.machine().lower()
+
+    # Determine ngrok download URL based on platform
+    if system == "windows":
+        if "64" in machine or "amd64" in machine:
+            ngrok_url = "https://bin.equinox.io/c/bNyj1mQVY4c/ngrok-v3-stable-windows-amd64.zip"
+        else:
+            ngrok_url = "https://bin.equinox.io/c/bNyj1mQVY4c/ngrok-v3-stable-windows-386.zip"
+        exe_name = "ngrok.exe"
+    elif system == "linux":
+        if "arm64" in machine or "aarch64" in machine:
+            ngrok_url = "https://bin.equinox.io/c/bNyj1mQVY4c/ngrok-v3-stable-linux-arm64.tgz"
+        elif "64" in machine or "amd64" in machine:
+            ngrok_url = "https://bin.equinox.io/c/bNyj1mQVY4c/ngrok-v3-stable-linux-amd64.tgz"
+        else:
+            ngrok_url = "https://bin.equinox.io/c/bNyj1mQVY4c/ngrok-v3-stable-linux-386.tgz"
+        exe_name = "ngrok"
+    elif system == "darwin":  # macOS
+        if "arm64" in machine:
+            ngrok_url = "https://bin.equinox.io/c/bNyj1mQVY4c/ngrok-v3-stable-darwin-arm64.zip"
+        else:
+            ngrok_url = "https://bin.equinox.io/c/bNyj1mQVY4c/ngrok-v3-stable-darwin-amd64.zip"
+        exe_name = "ngrok"
+    else:
+        raise Exception(f"Unsupported platform: {system} {machine}")
+
+    try:
+        print(f"📥 Downloading ngrok from {ngrok_url}...")
+        response = requests.get(ngrok_url, stream=True)
+        response.raise_for_status()
+
+        # Create temporary file for download
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".zip" if ngrok_url.endswith(".zip") else ".tgz") as temp_file:
+            for chunk in response.iter_content(chunk_size=8192):
+                temp_file.write(chunk)
+            temp_path = temp_file.name
+
+        # Extract the archive
+        print("📦 Extracting ngrok...")
+        if ngrok_url.endswith(".zip"):
+            with zipfile.ZipFile(temp_path, 'r') as zip_ref:
+                zip_ref.extractall(PROJECT_ROOT)
+        else:  # .tgz
+            import tarfile
+            with tarfile.open(temp_path, 'r:gz') as tar_ref:
+                tar_ref.extractall(PROJECT_ROOT)
+
+        # Move the executable to the expected location
+        extracted_exe = PROJECT_ROOT / exe_name
+        if extracted_exe.exists():
+            extracted_exe.replace(NGROK_EXE_PATH)
+        else:
+            # Look for it in subdirectories
+            for file in PROJECT_ROOT.rglob(exe_name):
+                file.replace(NGROK_EXE_PATH)
+                break
+
+        # Make executable on Unix systems
+        if system != "windows":
+            NGROK_EXE_PATH.chmod(0o755)
+
+        # Clean up temp file
+        Path(temp_path).unlink(missing_ok=True)
+
+        print(f"✅ Ngrok installed successfully at {NGROK_EXE_PATH}")
+        return True
+
+    except Exception as e:
+        print(f"❌ Failed to download/install ngrok: {e}")
+        return False
+
+
+def set_ngrok_auth_token(token):
+    """Set ngrok authentication token."""
+    global NGROK_AUTH_TOKEN
+    NGROK_AUTH_TOKEN = token
+    try:
+        result = subprocess.run([str(NGROK_EXE_PATH), "config", "add-authtoken", token],
+                               capture_output=True, text=True)
+        return result.returncode == 0
+    except subprocess.SubprocessError:
+        return False
+
+
+def start_ngrok_tunnel(port=8000):
+    """Start ngrok tunnel for the specified port."""
+    try:
+        # Start ngrok in background
+        cmd = [str(NGROK_EXE_PATH), "http", str(port)]
+        process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        time.sleep(3)  # Wait for tunnel to establish
+
+        # Get tunnel URL
+        result = subprocess.run([str(NGROK_EXE_PATH), "api", "tunnels"], capture_output=True, text=True)
+        if result.returncode == 0:
+            import json
+            tunnels = json.loads(result.stdout)
+            if tunnels.get("tunnels"):
+                tunnel_url = tunnels["tunnels"][0]["public_url"]
+                return process, tunnel_url
+
+        return process, None
+    except Exception:
+        return None, None
+
 
 # -----------------------------------------------------------
 # UTILITY
@@ -448,6 +582,30 @@ class ServerSetupGUI(tk.Tk):
         ttk.Label(self.pg_config_frame, text="Password:", background="white").grid(row=4, column=0, sticky="w", padx=5, pady=2)
         ttk.Entry(self.pg_config_frame, textvariable=self.pg_pass, show="*", width=30).grid(row=4, column=1, padx=5, pady=2)
 
+        # Port Forwarding (Ngrok) Section
+        ngrok_frame = ttk.Frame(main_frame, style="Card.TFrame")
+        ngrok_frame.pack(fill="x", padx=20, pady=10)
+
+        ttk.Label(ngrok_frame, text="Port Forwarding (Ngrok):", font=("Segoe UI", 12, "bold"),
+                 background="white").grid(row=0, column=0, sticky="w", padx=10, pady=5)
+
+        ngrok_checkbox = ttk.Checkbutton(ngrok_frame, text="Enable ngrok tunnel for remote access",
+                                        variable=self.enable_ngrok, command=self._toggle_ngrok_config)
+        ngrok_checkbox.grid(row=1, column=0, sticky="w", padx=30, pady=5)
+
+        # Ngrok Config Frame
+        self.ngrok_config_frame = ttk.Frame(ngrok_frame, style="Card.TFrame")
+        self.ngrok_config_frame.grid(row=2, column=0, columnspan=2, sticky="ew", padx=30, pady=10)
+
+        ttk.Label(self.ngrok_config_frame, text="Ngrok Configuration:",
+                 font=("Segoe UI", 11, "bold"), background="white").grid(row=0, column=0, columnspan=2, pady=5)
+
+        ttk.Label(self.ngrok_config_frame, text="Auth Token:", background="white").grid(row=1, column=0, sticky="w", padx=5, pady=2)
+        ttk.Entry(self.ngrok_config_frame, textvariable=self.ngrok_token, show="*", width=50).grid(row=1, column=1, padx=5, pady=2)
+
+        ttk.Label(self.ngrok_config_frame, text="(Get token from https://dashboard.ngrok.com/get-started/your-authtoken)",
+                 font=("Segoe UI", 8), background="white").grid(row=2, column=0, columnspan=2, sticky="w", padx=5, pady=2)
+
         # Progress and Log Area
         progress_frame = ttk.Frame(main_frame, style="Card.TFrame")
         progress_frame.pack(fill="both", expand=True, padx=20, pady=10)
@@ -486,12 +644,19 @@ class ServerSetupGUI(tk.Tk):
 
         # Initialize UI state
         self._toggle_db_config()
+        self._toggle_ngrok_config()
 
     def _toggle_db_config(self):
         if self.db_choice.get() == "postgresql":
             self.pg_config_frame.grid()
         else:
             self.pg_config_frame.grid_remove()
+
+    def _toggle_ngrok_config(self):
+        if self.enable_ngrok.get():
+            self.ngrok_config_frame.grid()
+        else:
+            self.ngrok_config_frame.grid_remove()
 
     def log(self, msg, color="#1e293b"):
         self.log_text.insert("end", msg + "\n", ("tag_" + color))
@@ -536,8 +701,38 @@ class ServerSetupGUI(tk.Tk):
 
                     if apply_postgres_schema():
                         self.log("✅ PostgreSQL schema applied successfully!", "#16a34a")
+                        self.progress_var.set(70)
+
+                        # Handle ngrok setup if enabled
+                        if self.enable_ngrok.get():
+                            self.log("🔧 Setting up ngrok for port forwarding...", "#2563eb")
+                            self.progress_var.set(80)
+
+                            if not check_ngrok_installed():
+                                self.log("📥 Installing ngrok...", "#2563eb")
+                                if not download_ngrok():
+                                    raise Exception("Failed to install ngrok")
+
+                            token = self.ngrok_token.get().strip()
+                            if not token:
+                                raise Exception("Ngrok auth token is required")
+
+                            if not set_ngrok_auth_token(token):
+                                raise Exception("Failed to set ngrok auth token")
+
+                            self.log("✅ Ngrok configured successfully!", "#16a34a")
+                            self.log(f"🚀 Starting ngrok tunnel on port {NGROK_PORT}...", "#2563eb")
+
+                            process, tunnel_url = start_ngrok_tunnel(NGROK_PORT)
+                            if process and tunnel_url:
+                                self.log(f"✅ Ngrok tunnel active: {tunnel_url}", "#16a34a")
+                                self.log("💡 Save this URL for remote access", "#16a34a")
+                            else:
+                                raise Exception("Failed to start ngrok tunnel")
+
                         self.progress_var.set(100)
                         messagebox.showinfo("Success", "PostgreSQL setup completed successfully!")
+
                     else:
                         raise Exception("Failed to apply PostgreSQL schema")
                 else:
@@ -549,6 +744,35 @@ class ServerSetupGUI(tk.Tk):
 
                 setup_sqlite()
                 self.log("✅ SQLite database ready", "#16a34a")
+                self.progress_var.set(70)
+
+                # Handle ngrok setup if enabled
+                if self.enable_ngrok.get():
+                    self.log("🔧 Setting up ngrok for port forwarding...", "#2563eb")
+                    self.progress_var.set(80)
+
+                    if not check_ngrok_installed():
+                        self.log("📥 Installing ngrok...", "#2563eb")
+                        if not download_ngrok():
+                            raise Exception("Failed to install ngrok")
+
+                    token = self.ngrok_token.get().strip()
+                    if not token:
+                        raise Exception("Ngrok auth token is required")
+
+                    if not set_ngrok_auth_token(token):
+                        raise Exception("Failed to set ngrok auth token")
+
+                    self.log("✅ Ngrok configured successfully!", "#16a34a")
+                    self.log(f"🚀 Starting ngrok tunnel on port {NGROK_PORT}...", "#2563eb")
+
+                    process, tunnel_url = start_ngrok_tunnel(NGROK_PORT)
+                    if process and tunnel_url:
+                        self.log(f"✅ Ngrok tunnel active: {tunnel_url}", "#16a34a")
+                        self.log("💡 Save this URL for remote access", "#16a34a")
+                    else:
+                        raise Exception("Failed to start ngrok tunnel")
+
                 self.progress_var.set(100)
                 messagebox.showinfo("Success", "SQLite setup completed successfully!")
 
