@@ -49,6 +49,22 @@ NGROK_EXE_PATH = PROJECT_ROOT / "ngrok"  # Path to ngrok executable
 
 FOOTER_TEXT = "Product of NIELIT Bhubaneswar - Made by Krishi Sahayogi Team"
 
+ASCII_ART = """
+╔══════════════════════════════════════════════════════════════╗
+║                                                              ║
+║                    SysLogger Server Setup                    ║
+║                                                              ║
+║                 🖥️ Database Configuration Tool               ║
+║                                                              ║
+║  Choose your database:                                       ║
+║  • PostgreSQL (Full-featured, recommended)                   ║
+║  • SQLite (Simple, no installation required)                 ║
+║                                                              ║
+║  Optional: Enable ngrok for remote access                    ║
+║                                                              ║
+╚══════════════════════════════════════════════════════════════╝
+"""
+
 # -----------------------------------------------------------
 # NGROK UTILITIES
 # -----------------------------------------------------------
@@ -509,6 +525,10 @@ class ServerSetupGUI(tk.Tk):
         self.pg_user = tk.StringVar(value=POSTGRES_USER)
         self.pg_pass = tk.StringVar(value=POSTGRES_PASS)
 
+        # Ngrok config
+        self.enable_ngrok = tk.BooleanVar(value=False)
+        self.ngrok_token = tk.StringVar(value="")
+
         # Setup thread
         self.setup_thread = None
 
@@ -519,15 +539,19 @@ class ServerSetupGUI(tk.Tk):
         style = ttk.Style(self)
         style.theme_use("clam")
 
-        style.configure("TButton", font=("Segoe UI", 12, "bold"),
-                       padding=(12, 8), background="#6366f1", foreground="white",
+        # Enhanced button styling with larger fonts and padding
+        style.configure("TButton", font=("Segoe UI", 14, "bold"),
+                       padding=(15, 8), background="#6366f1", foreground="white",
                        relief="flat", borderwidth=0)
         style.map("TButton", background=[("active", "#4f46e5"), ("pressed", "#4338ca")],
                  relief=[("pressed", "sunken")])
 
-        style.configure("Card.TFrame", background="#ffffff", relief="raised", borderwidth=3)
-        style.configure("TLabel", font=("Segoe UI", 10), background="#e0f2fe")
-        style.configure("TEntry", font=("Segoe UI", 10))
+        # Enhanced frame styling
+        style.configure("Card.TFrame", background="#ffffff", relief="raised", borderwidth=3, lightcolor="#cbd5e1")
+
+        # Enhanced label and entry styling
+        style.configure("TLabel", font=("Segoe UI", 12), background="#e0f2fe")
+        style.configure("TEntry", font=("Segoe UI", 12))
 
     def _init_ui(self):
         self.grid_columnconfigure(0, weight=1)
@@ -552,16 +576,16 @@ class ServerSetupGUI(tk.Tk):
         db_frame = ttk.Frame(main_frame, style="Card.TFrame")
         db_frame.pack(fill="x", padx=20, pady=10)
 
-        ttk.Label(db_frame, text="Database Type:", font=("Segoe UI", 12, "bold"),
-                 background="white").grid(row=0, column=0, sticky="w", padx=10, pady=5)
+        ttk.Label(db_frame, text="Database Type:", font=("Segoe UI", 14, "bold"),
+                 background="white").grid(row=0, column=0, sticky="w", padx=15, pady=10)
 
         pg_radio = ttk.Radiobutton(db_frame, text="PostgreSQL (Recommended)", variable=self.db_choice,
                                   value="postgresql", command=self._toggle_db_config)
-        pg_radio.grid(row=1, column=0, sticky="w", padx=30, pady=2)
+        pg_radio.grid(row=1, column=0, sticky="w", padx=35, pady=5)
 
         sqlite_radio = ttk.Radiobutton(db_frame, text="SQLite (Fallback)", variable=self.db_choice,
                                       value="sqlite", command=self._toggle_db_config)
-        sqlite_radio.grid(row=2, column=0, sticky="w", padx=30, pady=2)
+        sqlite_radio.grid(row=2, column=0, sticky="w", padx=35, pady=5)
 
         # PostgreSQL Config Frame
         self.pg_config_frame = ttk.Frame(db_frame, style="Card.TFrame")
@@ -586,12 +610,12 @@ class ServerSetupGUI(tk.Tk):
         ngrok_frame = ttk.Frame(main_frame, style="Card.TFrame")
         ngrok_frame.pack(fill="x", padx=20, pady=10)
 
-        ttk.Label(ngrok_frame, text="Port Forwarding (Ngrok):", font=("Segoe UI", 12, "bold"),
-                 background="white").grid(row=0, column=0, sticky="w", padx=10, pady=5)
+        ttk.Label(ngrok_frame, text="Port Forwarding (Ngrok):", font=("Segoe UI", 14, "bold"),
+                 background="white").grid(row=0, column=0, sticky="w", padx=15, pady=10)
 
-        ngrok_checkbox = ttk.Checkbutton(ngrok_frame, text="Enable ngrok tunnel for remote access",
-                                        variable=self.enable_ngrok, command=self._toggle_ngrok_config)
-        ngrok_checkbox.grid(row=1, column=0, sticky="w", padx=30, pady=5)
+        self.ngrok_checkbox = ttk.Checkbutton(ngrok_frame, text="Enable ngrok tunnel for remote access",
+                                             variable=self.enable_ngrok, command=self._toggle_ngrok_config)
+        self.ngrok_checkbox.grid(row=1, column=0, sticky="w", padx=35, pady=10)
 
         # Ngrok Config Frame
         self.ngrok_config_frame = ttk.Frame(ngrok_frame, style="Card.TFrame")

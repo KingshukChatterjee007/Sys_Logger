@@ -1,4 +1,5 @@
 {
-    "system_id": "89d6f4ce-82c2-4a35-9398-ca49be4c1542",
-    "server_url": "http://localhost:5000"
+    "server_url": "http://localhost:5000",
+    "server_host": "localhost",
+    "server_port": "5000"
 }

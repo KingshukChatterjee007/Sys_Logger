@@ -16,12 +16,10 @@ a = Analysis(
 
     datas=[
         (str(project_root / 'unit_client.py'), '.'),
-        (str(project_root / 'client_watchdog.sh'), '.')
-            if (project_root / 'client_watchdog.sh').exists() else (),
-        (str(project_root / 'domain_updater.py'), '.')
-            if (project_root / 'domain_updater.py').exists() else (),
-        (str(project_root / 'README.txt'), '.')
-            if (project_root / 'README.txt').exists() else (),
+    ] + [
+        (str(project_root / file), '.')
+        for file in ['client_watchdog.sh', 'domain_updater.py', 'README.txt']
+        if (project_root / file).exists()
     ],
 
     # NO PyQt6 imports because GUI is now Tkinter

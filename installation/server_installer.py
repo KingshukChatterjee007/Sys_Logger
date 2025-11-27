@@ -217,12 +217,9 @@ class ServerInstallerApp(tk.Tk):
         self.step_indicators = []
         step_names = [
             ("Prerequisites Check", "🔍"),
-            ("PostgreSQL Setup", "🐘"),
+            ("Database Setup", "🐘"),
             ("Domain Configuration", "🔗"),
-            ("Startup Configuration", "⚡"),
-            ("Protection Setup", "🛡️"),
-            ("Run Setup Script", "⚙️"),
-            ("Start Server", "🚀")
+            ("Installation Progress", "⚙️")
         ]
 
         for i, (name, icon) in enumerate(step_names):
@@ -251,8 +248,18 @@ class ServerInstallerApp(tk.Tk):
         actions_frame = ttk.Frame(left, style="Card.TFrame")
         actions_frame.pack(fill="x", padx=15, pady=20)
 
-        self.step_action_button = ttk.Button(actions_frame, text="🔍 Check Prerequisites",
-                                           command=self.execute_current_step)
+        self.step_action_buttons = {
+            0: ttk.Button(actions_frame, text="🔍 Check Prerequisites", command=self.execute_current_step),
+            1: ttk.Button(actions_frame, text="🐘 Configure Database", command=self.execute_current_step),
+            2: ttk.Button(actions_frame, text="🔗 Configure Domain", command=self.execute_current_step),
+            3: ttk.Button(actions_frame, text="⚙️ Start Installation", command=self.execute_current_step)
+        }
+
+        for btn in self.step_action_buttons.values():
+            btn.pack(fill="x", padx=15, pady=15)
+            btn.pack_forget()  # Hide all initially
+
+        self.step_action_button = self.step_action_buttons[0]  # Default to first
         self.step_action_button.pack(fill="x", padx=15, pady=15)
 
         # Create step content areas on right
@@ -267,14 +274,28 @@ class ServerInstallerApp(tk.Tk):
                 bg="white", fg="#6b7280", font=("Segoe UI", 10)).pack(pady=(0, 20))
         self.step_content_frames.append(prereq_frame)
 
-        # Step 1: PostgreSQL Setup
-        pg_frame = ttk.Frame(right, style="Card.TFrame")
-        pg_frame.grid(row=0, column=0, sticky="ew", padx=10, pady=(10, 5))
-        tk.Label(pg_frame, text="Setup PostgreSQL Database",
+        # Step 1: Database Setup
+        db_frame = ttk.Frame(right, style="Card.TFrame")
+        db_frame.grid(row=0, column=0, sticky="ew", padx=10, pady=(10, 5))
+        tk.Label(db_frame, text="Database Configuration",
                 font=("Segoe UI", 14, "bold"), bg="white", fg="#1f2937").pack(pady=20)
-        tk.Label(pg_frame, text="Install and configure PostgreSQL database with the required\nschema and user accounts for the SysLogger application.",
-                bg="white", fg="#6b7280", font=("Segoe UI", 10)).pack(pady=(0, 20))
-        self.step_content_frames.append(pg_frame)
+
+        # PostgreSQL toggle
+        toggle_frame = ttk.Frame(db_frame, style="Card.TFrame")
+        toggle_frame.pack(fill="x", padx=20, pady=5)
+        tk.Label(toggle_frame, text="Use PostgreSQL Database:", bg="white",
+                font=("Segoe UI", 10, "bold")).pack(anchor="w", pady=(10, 5))
+
+        self.use_postgres = tk.BooleanVar(value=False)
+        postgres_check = ttk.Checkbutton(toggle_frame, text="Enable PostgreSQL (requires installation)",
+                                         variable=self.use_postgres, command=self.toggle_db_mode)
+        postgres_check.pack(anchor="w", padx=10, pady=(0, 10))
+
+        self.db_description = tk.Label(toggle_frame, text="Using SQLite database (no additional setup required).",
+                                      bg="white", fg="#6b7280", font=("Segoe UI", 10), justify="left")
+        self.db_description.pack(anchor="w", padx=10, pady=(0, 10))
+
+        self.step_content_frames.append(db_frame)
 
         # Step 2: Domain Configuration
         dom_frame = ttk.Frame(right, style="Card.TFrame")
@@ -312,41 +333,14 @@ class ServerInstallerApp(tk.Tk):
 
         self.step_content_frames.append(dom_frame)
 
-        # Step 3: Startup Configuration
-        startup_frame = ttk.Frame(right, style="Card.TFrame")
-        startup_frame.grid(row=0, column=0, sticky="ew", padx=10, pady=(10, 5))
-        tk.Label(startup_frame, text="Configure Automatic Startup",
+        # Step 3: Installation Progress
+        install_frame = ttk.Frame(right, style="Card.TFrame")
+        install_frame.grid(row=0, column=0, sticky="ew", padx=10, pady=(10, 5))
+        tk.Label(install_frame, text="Installation Progress",
                 font=("Segoe UI", 14, "bold"), bg="white", fg="#1f2937").pack(pady=20)
-        tk.Label(startup_frame, text="Setup the SysLogger server to start automatically when the\nsystem boots, ensuring continuous monitoring.",
-                bg="white", fg="#6b7280", font=("Segoe UI", 10)).pack(pady=(0, 20))
-        self.step_content_frames.append(startup_frame)
-
-        # Step 4: Protection
-        prot_frame = ttk.Frame(right, style="Card.TFrame")
-        prot_frame.grid(row=0, column=0, sticky="ew", padx=10, pady=(10, 5))
-        tk.Label(prot_frame, text="Setup Service Protection",
-                font=("Segoe UI", 14, "bold"), bg="white", fg="#1f2937").pack(pady=20)
-        tk.Label(prot_frame, text="Configure automatic restart mechanisms and protection\nfeatures to ensure service reliability.",
-                bg="white", fg="#6b7280", font=("Segoe UI", 10)).pack(pady=(0, 20))
-        self.step_content_frames.append(prot_frame)
-
-        # Step 5: Run Setup
-        run_frame = ttk.Frame(right, style="Card.TFrame")
-        run_frame.grid(row=0, column=0, sticky="ew", padx=10, pady=(10, 5))
-        tk.Label(run_frame, text="Execute Server Setup Script",
-                font=("Segoe UI", 14, "bold"), bg="white", fg="#1f2937").pack(pady=20)
-        tk.Label(run_frame, text="Run the server_setup.py script to initialize the SysLogger\nbackend services and prepare the environment.",
-                bg="white", fg="#6b7280", font=("Segoe UI", 10)).pack(pady=(0, 20))
-        self.step_content_frames.append(run_frame)
-
-        # Step 6: Start Server
-        start_frame = ttk.Frame(right, style="Card.TFrame")
-        start_frame.grid(row=0, column=0, sticky="ew", padx=10, pady=(10, 5))
-        tk.Label(start_frame, text="Start SysLogger Server",
-                font=("Segoe UI", 14, "bold"), bg="white", fg="#1f2937").pack(pady=20)
-        tk.Label(start_frame, text="Launch the SysLogger server in service mode for\nproduction deployment.",
-                bg="white", fg="#6b7280", font=("Segoe UI", 10)).pack(pady=(0, 20))
-        self.step_content_frames.append(start_frame)
+        tk.Label(install_frame, text="Execute the full installation process including database setup\n(if selected), startup configuration, protection setup,\nserver setup script, and server startup.",
+                bg="white", fg="#6b7280", font=("Segoe UI", 10), justify="left").pack(pady=(0, 20))
+        self.step_content_frames.append(install_frame)
 
         # Initialize wizard state
         self.current_step = 0
@@ -380,10 +374,18 @@ class ServerInstallerApp(tk.Tk):
         for frame in self.step_content_frames:
             frame.grid_remove()
 
+        # Hide all action buttons
+        for btn in self.step_action_buttons.values():
+            btn.pack_forget()
+
         # Show selected step
         if 0 <= step_index < len(self.step_content_frames):
             self.step_content_frames[step_index].grid(row=0, column=0, sticky="ew", padx=10, pady=(10, 5))
             self.current_step = step_index
+
+            # Show appropriate action button
+            if step_index in self.step_action_buttons:
+                self.step_action_buttons[step_index].pack(fill="x", padx=15, pady=15)
 
         # Update navigation buttons
         self.back_button.config(state="normal" if step_index > 0 else "disabled")
@@ -413,6 +415,13 @@ class ServerInstallerApp(tk.Tk):
         if self.current_step == 2:  # Domain configuration step
             return self.validate_domain('backend') and self.validate_domain('frontend')
         return True
+
+    def toggle_db_mode(self):
+        """Update description based on PostgreSQL toggle"""
+        if self.use_postgres.get():
+            self.db_description.config(text="Using PostgreSQL database (requires PostgreSQL installation and psycopg2).")
+        else:
+            self.db_description.config(text="Using SQLite database (no additional setup required).")
 
     def validate_domain(self, domain_type):
         domain = self.backend_domain.get().strip() if domain_type == 'backend' else self.frontend_domain.get().strip()
@@ -626,17 +635,48 @@ class ServerInstallerApp(tk.Tk):
     def _check_choco(self):
         try:
             subprocess.run(["choco", "--version"],
-                           capture_output=True, check=True)
+                            capture_output=True, check=True)
             return True
         except:
             return False
 
+    def _install_package(self, package_name):
+        """Install a Python package using pip."""
+        try:
+            self.log(f"Installing {package_name}...")
+            result = subprocess.run([sys.executable, "-m", "pip", "install", package_name],
+                                    capture_output=True, text=True, check=True)
+            self.log(f"✓ {package_name} installed successfully")
+            return True
+        except subprocess.CalledProcessError as e:
+            self.log(f"❌ Failed to install {package_name}: {e.stderr}")
+            return False
+
+    def _check_and_install_dep(self, package_name, optional=False):
+        """Check if package is available, install if not."""
+        if package_name == "psycopg2":
+            if PSYCOPG_AVAILABLE:
+                return True
+            else:
+                return self._install_package("psycopg2")
+
     # ---------------------- PostgreSQL setup ----------------------
     def op_postgres_setup(self):
         if not PSYCOPG_AVAILABLE:
-            raise Exception("psycopg2 is not installed")
+            self.log("Installing psycopg2...")
+            self._install_package("psycopg2")
+            global PSYCOPG_AVAILABLE
+            try:
+                import psycopg2
+                from psycopg2.extensions import ISOLATION_LEVEL_AUTOCOMMIT
+                PSYCOPG_AVAILABLE = True
+            except ImportError:
+                raise Exception("Failed to install psycopg2")
 
         self.progress(10, "Checking PostgreSQL installation...")
+
+        system = platform.system()
+        psql_available = False
 
         try:
             subprocess.run(
@@ -644,19 +684,55 @@ class ServerInstallerApp(tk.Tk):
                 check=True,
                 capture_output=True
             )
+            psql_available = True
         except:
-            raise Exception("PostgreSQL not installed. Please install manually.")
+            self.log("PostgreSQL not found, installing automatically...")
 
-        # Start service
-        system = platform.system()
+        if not psql_available:
+            # Auto-install PostgreSQL
+            if system == "Windows":
+                self.progress(15, "Installing PostgreSQL on Windows...")
+                # Try Chocolatey first
+                try:
+                    subprocess.run(["choco", "install", "postgresql", "-y"], check=True)
+                except:
+                    # Fallback to manual download
+                    self.log("Chocolatey failed, trying manual installation...")
+                    self._install_postgres_windows()
+            elif system == "Linux":
+                self.progress(15, "Installing PostgreSQL on Linux...")
+                # Try apt (Ubuntu/Debian)
+                try:
+                    subprocess.run(["sudo", "apt", "update"], check=True)
+                    subprocess.run(["sudo", "apt", "install", "-y", "postgresql", "postgresql-contrib"], check=True)
+                except:
+                    # Try yum (CentOS/RHEL)
+                    try:
+                        subprocess.run(["sudo", "yum", "install", "-y", "postgresql-server", "postgresql-contrib"], check=True)
+                        subprocess.run(["sudo", "postgresql-setup", "initdb"], check=True)
+                    except:
+                        raise Exception("Failed to install PostgreSQL. Please install manually.")
+            elif system == "Darwin":
+                self.progress(15, "Installing PostgreSQL on macOS...")
+                try:
+                    subprocess.run(["brew", "install", "postgresql"], check=True)
+                except:
+                    raise Exception("Failed to install PostgreSQL. Please install Homebrew and PostgreSQL manually.")
+
+        # Verify installation
+        try:
+            subprocess.run(
+                ["psql", "--version"],
+                check=True,
+                capture_output=True
+            )
+            self.log("PostgreSQL installed successfully")
+        except:
+            raise Exception("PostgreSQL installation failed")
+
+        # Start service and enable on boot
         self.progress(20, "Starting PostgreSQL service...")
-
-        if system == "Windows":
-            subprocess.run(["net", "start", "postgresql"], check=False)
-        elif system == "Linux":
-            subprocess.run(["sudo", "systemctl", "start", "postgresql"])
-        elif system == "Darwin":
-            subprocess.run(["brew", "services", "start", "postgresql"])
+        self._start_postgres_service()
 
         # Create DB, user, schema
         self.progress(40, "Creating database and user...")
@@ -702,6 +778,49 @@ class ServerInstallerApp(tk.Tk):
 
         self.progress(100, "PostgreSQL setup completed successfully")
 
+    # ---------------------- Full installation ----------------------
+    def op_full_installation(self, backend_domain, frontend_domain, use_postgres):
+        total_steps = 6 if use_postgres else 5  # postgres_setup adds one step
+        current_step = 0
+
+        def update_progress(step_name, step_pct):
+            nonlocal current_step
+            overall_pct = int((current_step * 100 + step_pct) / total_steps)
+            self.progress(overall_pct, f"{step_name}: {step_pct}%")
+
+        # Step 1: Domain configuration
+        update_progress("Domain config", 10)
+        self.op_domain_config(backend_domain, frontend_domain)
+        current_step += 1
+
+        # Step 2: Startup configuration
+        update_progress("Startup config", 20)
+        self.op_startup_config()
+        current_step += 1
+
+        # Step 3: Protection setup
+        update_progress("Protection setup", 40)
+        self.op_protection_setup()
+        current_step += 1
+
+        # Step 4: PostgreSQL setup (if selected)
+        if use_postgres:
+            update_progress("PostgreSQL setup", 60)
+            self.op_postgres_setup()
+            current_step += 1
+
+        # Step 5: Run server setup
+        update_progress("Server setup", 80)
+        self.op_run_server_setup()
+        current_step += 1
+
+        # Step 6: Start server
+        update_progress("Starting server", 100)
+        self.op_start_server()
+        current_step += 1
+
+        self.progress(100, "Installation completed successfully!")
+
     # ---------------------- Domain configuration ----------------------
     def op_domain_config(self, backend_domain, frontend_domain):
         self.progress(20, "Updating backend .env...")
@@ -736,9 +855,10 @@ class ServerInstallerApp(tk.Tk):
 
         if system == "Windows":
             task_name = "SysLoggerServer"
+            # Start both backend and PostgreSQL on startup
             cmd = (
-                f'cmd /c "cd /d {PROJECT_ROOT} && '
-                f'"{sys.executable}" server_setup.py"'
+                f'cmd /c "net start postgresql && cd /d {PROJECT_ROOT} && '
+                f'"{sys.executable}" backend/sys_logger.py --service"'
             )
 
             subprocess.run(

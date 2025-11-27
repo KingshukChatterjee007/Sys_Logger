@@ -11,7 +11,7 @@ import uuid
 from pathlib import Path
 
 import tkinter as tk
-from tkinter import ttk, messagebox
+from tkinter import ttk, messagebox, filedialog
 
 # Optional deps
 try:
@@ -82,12 +82,22 @@ class InstallerGUI(tk.Tk):
         self.title("SysLogger Client Installer")
         self.geometry("1200x800")
         self.configure(bg="#e0f2fe")
+        self.resizable(True, True)  # Make window resizable
+
+        # Configuration variables
+        self.server_url = tk.StringVar(value="http://localhost:5000")
+        self.install_dir = tk.StringVar(value=str(Path(__file__).parent))
+
+        # Dynamic path variables
+        self.project_root = Path(self.install_dir.get())
+        self.unit_client_script = self.project_root / "unit_client.py"
+        self.client_config_file = self.project_root / "unit_client_config.json"
 
         # Status tracking for steps
         self.step_statuses = {
             "prereq_check": "⏳ Pending",
             "generate_id": "⏳ Pending",
-            "discover_server": "⏳ Pending",
+            "configure_server": "⏳ Pending",
             "register_client": "⏳ Pending",
             "start_monitoring": "⏳ Pending",
             "configure_startup": "⏳ Pending",
@@ -101,7 +111,7 @@ class InstallerGUI(tk.Tk):
         self.full_install_steps = [
             "prereq_check",
             "generate_id",
-            "discover_server",
+            "configure_server",
             "register_client",
             "start_monitoring",
             "configure_startup",
@@ -145,9 +155,30 @@ class InstallerGUI(tk.Tk):
         self.grid_columnconfigure(0, weight=1)
         self.grid_columnconfigure(1, weight=2)
 
+        # Configuration Section
+        config_frame = ttk.Frame(self, style="Card.TFrame")
+        config_frame.grid(row=0, column=0, columnspan=2, sticky="ew", padx=20, pady=10)
+
+        config_title = tk.Label(config_frame, text="⚙️ Configuration",
+                               font=("Segoe UI", 16, "bold"), bg="white", fg="#1f2937")
+        config_title.pack(pady=10)
+
+        # Server URL input
+        url_frame = ttk.Frame(config_frame, style="Card.TFrame")
+        url_frame.pack(fill="x", padx=15, pady=5)
+        tk.Label(url_frame, text="Server URL:", bg="white", font=("Segoe UI", 12)).pack(side="left")
+        ttk.Entry(url_frame, textvariable=self.server_url, font=("Segoe UI", 12)).pack(side="left", fill="x", expand=True, padx=(10,0))
+
+        # Installation Directory selector
+        dir_frame = ttk.Frame(config_frame, style="Card.TFrame")
+        dir_frame.pack(fill="x", padx=20, pady=10)
+        tk.Label(dir_frame, text="Install Directory:", bg="white", font=("Segoe UI", 14)).pack(side="left")
+        ttk.Entry(dir_frame, textvariable=self.install_dir, font=("Segoe UI", 14)).pack(side="left", fill="x", expand=True, padx=(15,0))
+        ttk.Button(dir_frame, text="Browse", command=self._browse_directory).pack(side="right", padx=(15,0))
+
         # Left Panel
         left = ttk.Frame(self, style="Card.TFrame")
-        left.grid(row=0, column=0, sticky="nswe", padx=15, pady=15)
+        left.grid(row=1, column=0, sticky="nswe", padx=15, pady=15)
 
         title = tk.Label(left, text="📋 Installation Steps",
                          font=("Segoe UI", 22, "bold"),
@@ -157,7 +188,7 @@ class InstallerGUI(tk.Tk):
         steps = [
             ("Check Prerequisites", "prereq_check"),
             ("Generate System ID", "generate_id"),
-            ("Discover Server", "discover_server"),
+            ("Configure Server", "configure_server"),
             ("Register Client", "register_client"),
             ("Start Monitoring Service", "start_monitoring"),
             ("Configure Auto-Startup", "configure_startup"),
@@ -172,20 +203,32 @@ class InstallerGUI(tk.Tk):
                              command=lambda o=op: self.start_worker(o))
             btn.pack(side="left", fill="x", expand=True)
             status_label = tk.Label(frame, text=self.step_statuses[op],
-                                    bg="white", fg="#6b7280", font=("Segoe UI", 9))
-            status_label.pack(side="right", padx=10)
+                                    bg="white", fg="#6b7280", font=("Segoe UI", 12))
+            status_label.pack(side="right", padx=15)
             self.step_labels[op] = status_label
 
         ttk.Button(left, text="Run Full Installation",
                    command=self.run_full_install).pack(fill="x", padx=20, pady=30)
 
+        def _update_paths(self):
+            """Update path variables when install directory changes"""
+            self.project_root = Path(self.install_dir.get())
+            self.unit_client_script = self.project_root / "unit_client.py"
+            self.client_config_file = self.project_root / "unit_client_config.json"
+
+        def _browse_directory(self):
+            directory = filedialog.askdirectory(initialdir=self.install_dir.get())
+            if directory:
+                self.install_dir.set(directory)
+                self._update_paths()
+
         # Right Panel
         right = ttk.Frame(self, style="Card.TFrame")
-        right.grid(row=0, column=1, sticky="nswe", padx=20, pady=20)
+        right.grid(row=1, column=1, sticky="nswe", padx=20, pady=20)
 
         progress_title = tk.Label(right, text="📈 Installation Progress",
-                                  font=("Segoe UI", 20, "bold"),
-                                  bg="white", fg="#1e293b")
+                               font=("Segoe UI", 20, "bold"),
+                               bg="white", fg="#1e293b")
         progress_title.pack(pady=15)
 
         self.progress_var = tk.IntVar()
@@ -199,9 +242,17 @@ class InstallerGUI(tk.Tk):
                              bg="white", fg="#374151")
         log_title.pack(pady=5)
 
-        self.log_box = tk.Text(right, bg="#f8fafc", fg="#1e293b", font=("Consolas", 11),
+        log_frame = ttk.Frame(right)
+        log_frame.pack(padx=25, pady=5, fill="both", expand=True)
+
+        self.log_box = tk.Text(log_frame, bg="#f8fafc", fg="#1e293b", font=("Consolas", 11),
                                height=28, relief="sunken", borderwidth=2)
-        self.log_box.pack(padx=25, pady=5, fill="both", expand=True)
+        self.log_box.pack(side="left", fill="both", expand=True)
+
+        log_scrollbar = ttk.Scrollbar(log_frame, orient="vertical", command=self.log_box.yview)
+        log_scrollbar.pack(side="right", fill="y")
+
+        self.log_box.config(yscrollcommand=log_scrollbar.set)
 
         footer = tk.Label(right, text=FOOTER_TEXT, bg="white", fg="#64748b",
                           font=("Segoe UI", 10, "italic"))
@@ -293,18 +344,45 @@ class InstallerGUI(tk.Tk):
     def op_prereq_check(self):
         checks = [
             ("Python Version", lambda: sys.version_info >= REQUIRED_PYTHON_VERSION),
-            ("psutil Installed", lambda: PSUTIL_AVAILABLE),
-            ("requests Installed", lambda: REQUESTS_AVAILABLE),
-            ("GPUtil (Optional)", lambda: GPUUTIL_AVAILABLE),
+            ("psutil Installed", lambda: self._check_and_install_dep("psutil")),
+            ("requests Installed", lambda: self._check_and_install_dep("requests")),
+            ("GPUtil (Optional)", lambda: self._check_and_install_dep("GPUtil", optional=True)),
         ]
 
         for idx, (name, func) in enumerate(checks):
             self.progress(int(idx / len(checks) * 100), f"Checking {name}...")
-            if not func() and "Optional" not in name:
-                raise Exception(f"Missing: {name}")
-            self.log(f"✓ {name} OK")
+            if not func():
+                if "Optional" in name:
+                    self.log(f"⚠ {name} not available, but optional")
+                else:
+                    raise Exception(f"Missing: {name}")
+            else:
+                self.log(f"✓ {name} OK")
 
         self.progress(100, "Prerequisite check complete")
+
+    def _check_and_install_dep(self, package_name, optional=False):
+        """Check if package is available, install if not."""
+        if package_name == "psutil":
+            if PSUTIL_AVAILABLE:
+                return True
+            else:
+                return self._install_package("psutil")
+        elif package_name == "requests":
+            if REQUESTS_AVAILABLE:
+                return True
+            else:
+                return self._install_package("requests")
+        elif package_name == "GPUtil":
+            if GPUUTIL_AVAILABLE:
+                return True
+            else:
+                if optional:
+                    # Try to install but don't fail
+                    return self._install_package("GPUtil") or True  # Return True even if install fails for optional
+                else:
+                    return self._install_package("GPUtil")
+        return False
 
     # -------------------------
     # Generate System ID
@@ -312,9 +390,9 @@ class InstallerGUI(tk.Tk):
     def op_generate_id(self):
         self.progress(10, "Checking existing ID...")
 
-        if CLIENT_CONFIG_FILE.exists():
+        if self.client_config_file.exists():
             try:
-                config = json.loads(CLIENT_CONFIG_FILE.read_text())
+                config = json.loads(self.client_config_file.read_text())
                 sid = config.get("system_id")
                 if sid:
                     self.progress(100, f"Existing ID found: {sid[:8]}...")
@@ -324,8 +402,8 @@ class InstallerGUI(tk.Tk):
 
         self.progress(50, "Generating new ID...")
         sid = str(uuid.uuid4())
-        json.dump({"system_id": sid, "server_url": "http://localhost:5000"},
-                  open(CLIENT_CONFIG_FILE, "w"), indent=4)
+        json.dump({"system_id": sid, "server_url": self.server_url.get()},
+                  open(self.client_config_file, "w"), indent=4)
 
         self.progress(100, f"Generated new ID: {sid[:8]}...")
 
@@ -397,13 +475,13 @@ class InstallerGUI(tk.Tk):
     # Start Monitoring
     # -------------------------
     def op_start_monitoring(self):
-        if not UNIT_CLIENT_SCRIPT.exists():
+        if not self.unit_client_script.exists():
             raise Exception("unit_client.py missing!")
 
         self.progress(20, "Launching background monitoring...")
 
         subprocess.Popen([sys.executable,
-                          str(UNIT_CLIENT_SCRIPT),
+                          str(self.unit_client_script),
                           "--start"])
 
         self.progress(100, "Monitoring active")
@@ -473,7 +551,7 @@ WantedBy=multi-user.target
         self.progress(20, f"Setting up protection for {system}...")
 
         python = sys.executable
-        client_script = UNIT_CLIENT_SCRIPT
+        client_script = self.unit_client_script
 
         #
         # -------------------------------------------------------
@@ -611,7 +689,7 @@ WantedBy=multi-user.target
 
         watchdog_script = f"""#!/usr/bin/env bash
     # SysLogger Watchdog
-    CLIENT_COMMAND="{python} {client_script} --start"
+    CLIENT_COMMAND="{python} {self.unit_client_script} --start"
 
     while true; do
         if ! pgrep -f "$CLIENT_COMMAND" > /dev/null; then
@@ -672,7 +750,7 @@ while True:
     time.sleep(3600)
 """
 
-        path = PROJECT_ROOT / "domain_updater.py"
+        path = self.project_root / "domain_updater.py"
         path.write_text(updater_script)
 
         subprocess.Popen([sys.executable, str(path)])
@@ -683,16 +761,28 @@ while True:
     # Helpers
     # ===================================================================
     def _load_cfg(self):
-        if CLIENT_CONFIG_FILE.exists():
-            return json.loads(CLIENT_CONFIG_FILE.read_text())
+        if self.client_config_file.exists():
+            return json.loads(self.client_config_file.read_text())
         return {}
 
     def _save_cfg(self, cfg):
-        json.dump(cfg, open(CLIENT_CONFIG_FILE, "w"), indent=4)
+        json.dump(cfg, open(self.client_config_file, "w"), indent=4)
+
+    def _update_paths(self):
+        """Update path variables when install directory changes"""
+        self.project_root = Path(self.install_dir.get())
+        self.unit_client_script = self.project_root / "unit_client.py"
+        self.client_config_file = self.project_root / "unit_client_config.json"
+
+    def _browse_directory(self):
+        directory = filedialog.askdirectory(initialdir=self.install_dir.get())
+        if directory:
+            self.install_dir.set(directory)
+            self._update_paths()
 
     def _check_write_permissions(self):
         try:
-            test_file = PROJECT_ROOT / "test_write.tmp"
+            test_file = self.project_root / "test_write.tmp"
             test_file.write_text("test")
             test_file.unlink()
             return True
@@ -704,6 +794,28 @@ while True:
             socket.create_connection(("8.8.8.8", 53), timeout=5)
             return True
         except:
+            return False
+
+    def _install_package(self, package_name):
+        """Install a Python package using pip."""
+        try:
+            self.log(f"Installing {package_name}...")
+            result = subprocess.run([sys.executable, "-m", "pip", "install", package_name],
+                                    capture_output=True, text=True, check=True)
+            self.log(f"✓ {package_name} installed successfully")
+            return True
+        except subprocess.CalledProcessError as e:
+            self.log(f"❌ Failed to install {package_name}: {e.stderr}")
+            return False
+
+    def _try_import(self, module_name, package_name=None):
+        """Try to import a module, return True if successful."""
+        if package_name is None:
+            package_name = module_name
+        try:
+            __import__(module_name)
+            return True
+        except ImportError:
             return False
 
     def _collect_system_info(self, sid):
