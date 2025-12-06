@@ -1,4 +1,4 @@
-import tkinter as tk
+dimport tkinter as tk
 from tkinter import ttk, messagebox, filedialog
 import threading
 import json
