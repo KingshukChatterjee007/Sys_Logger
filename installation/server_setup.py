@@ -542,13 +542,13 @@ class ServerSetupGUI(tk.Tk):
         # Enhanced button styling with modern look
         style.configure("TButton", font=("Segoe UI", 14, "bold"),
                         padding=(15, 10), background="#4f46e5", foreground="white",
-                        relief="flat", borderwidth=0, borderwidth=2, borderradius=8)
+                        relief="flat", borderwidth=2, borderradius=8)
         style.map("TButton",
                   background=[("active", "#4338ca"), ("pressed", "#3730a3")],
                   relief=[("pressed", "sunken")])
 
         # Enhanced frame styling with subtle shadows
-        style.configure("Card.TFrame", background="#ffffff", relief="raised", borderwidth=2,
+        style.configure("Card.TFrame", background="#ffffff", relief="raised",
                         lightcolor="#e2e8f0", darkcolor="#f1f5f9", borderwidth=2)
 
         # Enhanced label styling with better fonts
