@@ -12,6 +12,10 @@ import socket
 import threading
 import uuid
 import pickle
+try:
+    import redis
+except ImportError:
+    redis = None
 import subprocess
 from flask import Flask, jsonify, request
 from flask_cors import CORS
@@ -39,11 +43,100 @@ else:
 app = Flask(__name__)
 
 # Global data structures for units, usage, and alerts
-units = {}  # Dictionary to store registered units
-unit_usage = {}  # Dictionary to store usage data per unit
-alerts = []  # List to store all alerts
+# Global data structures for units, usage, and alerts
+units = {}  # Dictionary to store registered units (Local Fallback)
+unit_usage = {}  # Dictionary to store usage data per unit (Local Fallback)
+alerts = []  # List to store all alerts (Local Fallback)
 ngrok_url = None  # Store ngrok tunnel URL
 ngrok_process = None  # Store ngrok process handle
+
+# Redis Configuration
+USE_REDIS = os.getenv('USE_REDIS', 'false').lower() == 'true'
+REDIS_URL = os.getenv('REDIS_URL', 'redis://localhost:6379/0')
+redis_client = None
+
+if USE_REDIS and redis:
+    try:
+        redis_client = redis.from_url(REDIS_URL)
+        redis_client.ping()
+        print(f"Connected to Redis at {REDIS_URL}")
+    except Exception as e:
+        print(f"Failed to connect to Redis: {e}. Falling back to in-memory storage.")
+        USE_REDIS = False
+elif USE_REDIS and not redis:
+    print("Redis enabled but 'redis' library not installed. Falling back to in-memory storage.")
+    USE_REDIS = False
+
+class UnitStore:
+    """Abstract store for units and usage to switch between Memory and Redis"""
+    
+    @staticmethod
+    def get_unit(unit_id):
+        if USE_REDIS:
+            data = redis_client.hget('units', unit_id)
+            return json.loads(data) if data else None
+        return units.get(unit_id)
+
+    @staticmethod
+    def save_unit(unit_id, unit_data):
+        if USE_REDIS:
+            redis_client.hset('units', unit_id, json.dumps(unit_data))
+        else:
+            units[unit_id] = unit_data
+
+    @staticmethod
+    def delete_unit(unit_id):
+        if USE_REDIS:
+            redis_client.hdel('units', unit_id)
+            redis_client.delete(f'usage:{unit_id}')
+        else:
+            if unit_id in units: del units[unit_id]
+            if unit_id in unit_usage: del unit_usage[unit_id]
+
+    @staticmethod
+    def get_all_units():
+        if USE_REDIS:
+            raw_units = redis_client.hgetall('units')
+            return [json.loads(u) for u in raw_units.values()]
+        return list(units.values())
+
+    @staticmethod
+    def add_usage(unit_id, usage_data):
+        if USE_REDIS:
+            # Store as list in Redis, capped at 100
+            key = f'usage:{unit_id}'
+            redis_client.rpush(key, json.dumps(usage_data))
+            redis_client.ltrim(key, -100, -1)
+        else:
+            if unit_id not in unit_usage:
+                unit_usage[unit_id] = []
+            unit_usage[unit_id].append(usage_data)
+            if len(unit_usage[unit_id]) > 100:
+                unit_usage[unit_id] = unit_usage[unit_id][-100:]
+
+    @staticmethod
+    def get_usage(unit_id, limit=50):
+        if USE_REDIS:
+            raw_data = redis_client.lrange(f'usage:{unit_id}', -limit, -1)
+            return [json.loads(d) for d in raw_data]
+        return unit_usage.get(unit_id, [])[-limit:]
+
+    @staticmethod
+    def get_all_usage_grouped():
+        """Helper to get all usage for aggregation"""
+        if USE_REDIS:
+            all_usage = {}
+            # This is inefficient in Redis too without a time-series module, 
+            # but mimics the Python logic for Phase 2 compatibility.
+            # Phase 3 will replace this with SQL.
+            keys = redis_client.keys('usage:*')
+            for key in keys:
+                unit_id = key.decode().split(':')[1]
+                raw = redis_client.lrange(key, -100, -1)
+                all_usage[unit_id] = [json.loads(d) for d in raw]
+            return all_usage
+        return unit_usage
+
 
 # Load Flask debug flag early for use in functions
 FLASK_DEBUG = os.getenv('FLASK_DEBUG', 'False').lower() == 'true'
@@ -382,7 +475,8 @@ def health_check():
         'service': 'system-logger',
         'version': '1.0.0',
         'uptime': time.time() - _start_time if '_start_time' in globals() else 0,
-        'units_count': len(units),
+        #'units_count': len(units),
+        'units_count': len(UnitStore.get_all_units()),
         'alerts_count': len(alerts),
         'service_mode': len(sys.argv) > 1 and sys.argv[1] == '--service'
     }

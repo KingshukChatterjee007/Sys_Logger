@@ -1,3 +1,4 @@
+redis
 psutil
 requests
 GPUtil
