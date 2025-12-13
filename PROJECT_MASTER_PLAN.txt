@@ -1,0 +1,89 @@
+=============================================================================
+             SYS_LOGGER - PROJECT MASTER PLAN & ROADMAP
+=============================================================================
+
+1. THE "ZERO TO HERO" DEPLOYMENT STRATEGY
+-----------------------------------------------------------------------------
+We avoid rewriting code by scaling infrastructure in 3 phases.
+
+[PHASE 1: SINGLE SERVER (The MVP)]  <-- WE ARE HERE
+- Infrastructure: Your current Windows Desktop.
+- Action: Run `deploy_windows.ps1` (I created this).
+- Setup: Python Backend running as a Windows Service + Cloudflare Tunnel.
+- Storage: Local RAM and Files.
+
+[PHASE 2: DUAL SERVER (The Split)]
+- Infrastructure: Two computers (e.g., PC #1 + PC #2).
+- Action: Copy the exact code folder to PC #2.
+- The "Brain": Install REDIS on PC #1 (or a Raspberry Pi).
+- Load Balancer: Nginx pointing to both IPs (upstream backend { server 1; server 2; }).
+- Key Change: Backend code must use Redis for state, not Python RAM.
+
+[PHASE 3: THE RACK (Date Center)]
+- Infrastructure: Rack Server with Proxmox (Virtualization).
+- Action: Spin up 10+ VMs. Copy-paste Phase 2 setup.
+- Scale: Nginx points to all 10 IPs. Database moves to a dedicated server.
+
+=============================================================================
+2. DISTRIBUTED ARCHITECTURE ("Why simple servers fail")
+=============================================================================
+When scaling to 1,000+ units, a simple app crashes because:
+1. RAM: Storing 1,000 units in a Python dictionary (`units = {}`) fills memory.
+2. CPU: Looping through 1,000 units to calculate averages freezes the server.
+3. Disk: Writing logs to C:\Usage_Logs doesn't work across multiple servers.
+
+THE SOLUTION:
+1. REDIS (The Fast Brain):
+   - Replaces `units = {}`.
+   - Shared "live" state across all 10 servers.
+   - Handles real-time Pub/Sub for the Dashboard.
+
+2. POSTGRESQL (The Deep Memory):
+   - Replaces local .log files.
+   - Stores historical data permanently.
+   - Uses "Partitioning" (Splitting tables by month) to stay fast.
+
+3. WORKERS (The Muscle):
+   - Background processes (Celery) that do the heavy math so the API stays fast.
+
+=============================================================================
+3. DATA FLOW: "THE JOURNEY OF A METRIC"
+=============================================================================
+How we handle the firehose of data without crashing:
+
+1. INGESTION (The "Catch"):
+   - 1,000 Units send data to the API.
+   - API Server does NOT write to disk. 
+   - API Server dumps data into Redis (Memory) -> 5ms response time.
+
+2. PROCESSING (The "Filter"):
+   - Worker Server wakes up.
+   - Pulls 100 records from Redis at once.
+   - Checks Alerts (CPU > 90%).
+   - Batch Inserts 100 records into Postgres (1 write query instead of 100).
+
+3. VISUALIZATION (The "View"):
+   - Redis "broadcasts" the update to all connected Dashboards instantly.
+   - Dashboard queries Postgres only when asking for long-term history.
+
+=============================================================================
+4. CAMERA & VIDEO STRATEGY (For Krishi Sahayak Integration)
+=============================================================================
+Video is heavy. Do not send raw video to the server.
+
+STRATEGY A: EDGE AI (Recommended)
+- The Unit (Laptop/Pi) processes the video locally.
+- It detects the issue (e.g., "Disease Found").
+- It sends ONLY the text alert to the Server.
+- Bandwidth Cost: Near Zero.
+
+STRATEGY B: STREAMING
+- The Unit runs a mini video server (MJPEG/WebRTC).
+- The Dashboard connects DIRECTLY to the Unit's IP to view the feed.
+- The Main Server only acts as a directory ("Unit 5 is at 192.168.1.55").
+
+=============================================================================
+NEXT STEPS
+=============================================================================
+1. Run `deploy_windows.ps1` to finish Phase 1.
+2. When ready for Phase 2, install Redis and tell me to "Upgrade Backend for Redis".
