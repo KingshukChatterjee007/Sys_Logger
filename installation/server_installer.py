@@ -9,6 +9,7 @@ import json
 import re
 from pathlib import Path
 import threading
+import shutil
 
 import tkinter as tk
 from tkinter import ttk, messagebox
@@ -67,7 +68,7 @@ class ServerInstallerApp(tk.Tk):
     def __init__(self):
         super().__init__()
 
-        self.title("Server Installer - Krishi Sahayogi")
+        self.title("Server Installer - Sys Logger")
         self.geometry("1400x850")
         self.configure(bg="#e0f2fe")
         self.prereq_passed = False
@@ -598,8 +599,9 @@ class ServerInstallerApp(tk.Tk):
         if not SERVER_SETUP_FILE.exists():
             raise Exception("server_setup.py not found")
 
+        python_exe = self._get_python_executable()
         result = subprocess.run(
-            [sys.executable, str(SERVER_SETUP_FILE)],
+            [python_exe, str(SERVER_SETUP_FILE)],
             cwd=PROJECT_ROOT,
             capture_output=True,
             text=True
@@ -618,8 +620,9 @@ class ServerInstallerApp(tk.Tk):
         if not sys_logger_path.exists():
             raise Exception("sys_logger.py not found")
 
+        python_exe = self._get_python_executable()
         result = subprocess.run(
-            [sys.executable, str(sys_logger_path), "--service"],
+            [python_exe, str(sys_logger_path), "--service"],
             cwd=PROJECT_ROOT,
             capture_output=False,
             text=True
@@ -649,10 +652,30 @@ class ServerInstallerApp(tk.Tk):
 
     def _check_python(self):
         try:
-            version = tuple(map(int, platform.python_version_tuple()[:2]))
+            # Check system python version via subprocess, not internal frozen version
+            python_exe = self._get_python_executable() or "python"
+            result = subprocess.run([python_exe, "--version"], capture_output=True, text=True)
+            # Output format: "Python 3.x.y"
+            version_str = result.stdout.strip().split()[-1]
+            version = tuple(map(int, version_str.split(".")[:2]))
             return version >= REQUIRED_PYTHON_VERSION
-        except:
+        except Exception as e:
+            self.log(f"Python check failed: {e}")
             return False
+
+    def _get_python_executable(self):
+        """Resolve system python executable, handling frozen state."""
+        # If frozen, we can't use sys.executable (it's the installer EXE)
+        # We must find the system python.
+        if getattr(sys, 'frozen', False) and hasattr(sys, '_MEIPASS'):
+             # Try standard names
+             if platform.system() == "Windows":
+                 return shutil.which("python") or shutil.which("py")
+             else:
+                 return shutil.which("python3") or shutil.which("python")
+        
+        # If not frozen, sys.executable is the correct python interpreter
+        return sys.executable
 
     def _check_node(self):
         try:
@@ -684,7 +707,8 @@ class ServerInstallerApp(tk.Tk):
         """Install a Python package using pip."""
         try:
             self.log(f"Installing {package_name}...")
-            result = subprocess.run([sys.executable, "-m", "pip", "install", package_name],
+            python_exe = self._get_python_executable()
+            result = subprocess.run([python_exe, "-m", "pip", "install", package_name],
                                     capture_output=True, text=True, check=True)
             self.log(f"✓ {package_name} installed successfully")
             return True
@@ -898,9 +922,10 @@ class ServerInstallerApp(tk.Tk):
         if system == "Windows":
             task_name = "SysLoggerServer"
             # Start both backend and PostgreSQL on startup
+            python_exe = self._get_python_executable()
             cmd = (
                 f'cmd /c "net start postgresql && cd /d {PROJECT_ROOT} && '
-                f'"{sys.executable}" backend/sys_logger.py --service"'
+                f'"{python_exe}" backend/sys_logger.py --service"'
             )
 
             subprocess.run(
