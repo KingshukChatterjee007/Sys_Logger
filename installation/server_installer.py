@@ -321,11 +321,29 @@ class ServerInstallerApp(tk.Tk):
         tk.Label(frontend_frame, text="Frontend Domain:", bg="white",
                 font=("Segoe UI", 10, "bold")).pack(anchor="w", pady=(10, 2))
         self.frontend_domain = tk.Entry(frontend_frame, font=("Segoe UI", 10))
-        self.frontend_domain.insert(0, "http://localhost:3000")
+        self.frontend_domain.insert(0, "http://localhost:5000")
         self.frontend_domain.pack(fill="x", padx=10, pady=(0, 10))
         self.frontend_validation = tk.Label(frontend_frame, text="", bg="white",
                                           fg="#dc2626", font=("Segoe UI", 9))
         self.frontend_validation.pack(anchor="w", padx=10)
+
+        # Server Host
+        host_frame = ttk.Frame(dom_frame, style="Card.TFrame")
+        host_frame.pack(fill="x", padx=20, pady=5)
+        tk.Label(host_frame, text="Server Host (IP to bind to):", bg="white",
+                font=("Segoe UI", 10, "bold")).pack(anchor="w", pady=(10, 2))
+        self.server_host = tk.Entry(host_frame, font=("Segoe UI", 10))
+        self.server_host.insert(0, "0.0.0.0")
+        self.server_host.pack(fill="x", padx=10, pady=(0, 10))
+
+        # Server Port
+        port_frame = ttk.Frame(dom_frame, style="Card.TFrame")
+        port_frame.pack(fill="x", padx=20, pady=5)
+        tk.Label(port_frame, text="Server Port:", bg="white",
+                font=("Segoe UI", 10, "bold")).pack(anchor="w", pady=(10, 2))
+        self.server_port = tk.Entry(port_frame, font=("Segoe UI", 10))
+        self.server_port.insert(0, "8000")
+        self.server_port.pack(fill="x", padx=10, pady=(0, 10))
 
         # Bind validation
         self.backend_domain.bind('<FocusOut>', lambda e: self.validate_domain('backend'))
@@ -415,6 +433,26 @@ class ServerInstallerApp(tk.Tk):
         if self.current_step == 2:  # Domain configuration step
             return self.validate_domain('backend') and self.validate_domain('frontend')
         return True
+
+    def execute_current_step(self):
+        """Execute the action for the current step."""
+        if self.current_step == 0:
+            self.run_prereq_check()
+        elif self.current_step == 1:
+            if self.use_postgres.get():
+                self.run_postgres_setup()
+            else:
+                self.log("Using SQLite - No configuration needed.")
+                self.progress(100, "Database configuration complete")
+        elif self.current_step == 2:
+            self.run_domain_config()
+        elif self.current_step == 3:
+            backend = self.backend_domain.get().strip()
+            frontend = self.frontend_domain.get().strip()
+            host = self.server_host.get().strip()
+            port = self.server_port.get().strip()
+            use_pg = self.use_postgres.get()
+            self.start_worker("full_installation", backend, frontend, use_pg, host, port)
 
     def toggle_db_mode(self):
         """Update description based on PostgreSQL toggle"""
@@ -533,7 +571,9 @@ class ServerInstallerApp(tk.Tk):
     def run_domain_config(self):
         backend = self.backend_domain.get().strip()
         frontend = self.frontend_domain.get().strip()
-        self.start_worker("domain_config", backend, frontend)
+        host = self.server_host.get().strip()
+        port = self.server_port.get().strip()
+        self.start_worker("domain_config", backend, frontend, host, port)
 
     def run_startup_config(self):
         self.start_worker("startup_config")
@@ -662,10 +702,10 @@ class ServerInstallerApp(tk.Tk):
 
     # ---------------------- PostgreSQL setup ----------------------
     def op_postgres_setup(self):
+        global PSYCOPG_AVAILABLE
         if not PSYCOPG_AVAILABLE:
             self.log("Installing psycopg2...")
             self._install_package("psycopg2")
-            global PSYCOPG_AVAILABLE
             try:
                 import psycopg2
                 from psycopg2.extensions import ISOLATION_LEVEL_AUTOCOMMIT
@@ -779,7 +819,7 @@ class ServerInstallerApp(tk.Tk):
         self.progress(100, "PostgreSQL setup completed successfully")
 
     # ---------------------- Full installation ----------------------
-    def op_full_installation(self, backend_domain, frontend_domain, use_postgres):
+    def op_full_installation(self, backend_domain, frontend_domain, use_postgres, host, port):
         total_steps = 6 if use_postgres else 5  # postgres_setup adds one step
         current_step = 0
 
@@ -790,7 +830,8 @@ class ServerInstallerApp(tk.Tk):
 
         # Step 1: Domain configuration
         update_progress("Domain config", 10)
-        self.op_domain_config(backend_domain, frontend_domain)
+        
+        self.op_domain_config(backend_domain, frontend_domain, host, port)
         current_step += 1
 
         # Step 2: Startup configuration
@@ -822,7 +863,7 @@ class ServerInstallerApp(tk.Tk):
         self.progress(100, "Installation completed successfully!")
 
     # ---------------------- Domain configuration ----------------------
-    def op_domain_config(self, backend_domain, frontend_domain):
+    def op_domain_config(self, backend_domain, frontend_domain, host, port):
         self.progress(20, "Updating backend .env...")
 
         backend_env = PROJECT_ROOT / "backend" / ".env"
@@ -831,7 +872,8 @@ class ServerInstallerApp(tk.Tk):
         with open(backend_env, "w") as f:
             f.write(
                 "FLASK_ENV=production\n"
-                "PORT=8000\n"
+                f"PORT={port}\n"
+                f"HOST={host}\n"
                 f"CORS_ORIGINS={frontend_domain}\n"
             )
 
