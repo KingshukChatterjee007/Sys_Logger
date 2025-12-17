@@ -18,8 +18,8 @@ a = Analysis(
         # Include database schema if present
         ("database_schema.sql", "database_schema.sql"),
         ("../server_setup.py", "server_setup.py"),
-        (str(Path(spec_dir) / "backend"), "backend"),
-        (str(Path(spec_dir) / "frontend"), "frontend"),
+        (str(project_root / "backend"), "backend"),
+        (str(project_root / "frontend"), "frontend"),
         ("docker-compose.yml", "docker-compose.yml"),
     ],
 
@@ -31,6 +31,7 @@ a = Analysis(
         "psutil",
         "requests",
         "GPUtil",
+        "webbrowser",
 
         "uuid",
         "json",

@@ -9,6 +9,8 @@ import json
 import re
 from pathlib import Path
 import threading
+import socket
+import webbrowser
 
 import tkinter as tk
 from tkinter import ttk, messagebox
@@ -67,7 +69,7 @@ class ServerInstallerApp(tk.Tk):
     def __init__(self):
         super().__init__()
 
-        self.title("Server Installer - Krishi Sahayogi")
+        self.title("Server Installer - Sys Logger")
         self.geometry("1400x850")
         self.configure(bg="#e0f2fe")
         self.prereq_passed = False
@@ -86,34 +88,58 @@ class ServerInstallerApp(tk.Tk):
         style = ttk.Style(self)
         style.theme_use("clam")
 
-        # Purple/indigo themed buttons matching client_installer.py
+        # Modern color palette
+        self.colors = {
+            "primary": "#4f46e5",       # Indigo 600
+            "primary_hover": "#4338ca", # Indigo 700
+            "bg_main": "#f8fafc",       # Slate 50
+            "bg_sidebar": "#ffffff",    # White
+            "text_main": "#1e293b",     # Slate 800
+            "text_light": "#64748b",    # Slate 500
+            "success": "#10b981",       # Emerald 500
+            "error": "#ef4444",         # Red 500
+            "border": "#e2e8f0"         # Slate 200
+        }
+        
+        self.configure(bg=self.colors["bg_main"])
+
+        # Button styles
         style.configure(
             "TButton",
-            font=("Segoe UI", 12, "bold"),
-            padding=(12, 8),
-            background="#6366f1",
+            font=("Segoe UI", 11, "bold"),
+            padding=(16, 10),
+            background=self.colors["primary"],
             foreground="white",
             relief="flat",
             borderwidth=0
         )
         style.map("TButton",
-                  background=[("active", "#4f46e5"), ("pressed", "#4338ca")],
+                  background=[("active", self.colors["primary_hover"]), ("pressed", "#3730a3")],
                   relief=[("pressed", "sunken")])
 
-        # Card frames with subtle shadow
+        # Card frames
+        style.configure("Card.TFrame", background="white")
         style.configure("Card.TLabelframe",
                         background="white",
-                        borderwidth=3,
-                        relief="raised")
+                        borderwidth=1,
+                        relief="solid")
         style.configure("Card.TLabelframe.Label",
-                        font=("Segoe UI", 11, "bold"))
+                        font=("Segoe UI", 11, "bold"),
+                        foreground=self.colors["text_main"],
+                        background="white")
 
         # Wizard navigation buttons
         style.configure("Wizard.TButton",
                         font=("Segoe UI", 10, "bold"),
-                        padding=(8, 4))
-        style.map("Wizard.TButton",
-                  background=[("active", "#e0e7ff"), ("pressed", "#c7d2fe")])
+                        padding=(12, 8))
+        
+        # Link button
+        style.configure("Link.TButton",
+                        font=("Segoe UI", 10),
+                        foreground=self.colors["primary"],
+                        background=self.colors["bg_main"],
+                        relief="flat")
+        style.map("Link.TButton", foreground=[("active", self.colors["primary_hover"])])
 
         # Loading spinner style
         style.configure("Spinner.TLabel",
@@ -163,35 +189,47 @@ class ServerInstallerApp(tk.Tk):
         self.grid_rowconfigure(2, weight=0)
 
         # Top title
+        header_frame = tk.Frame(self, bg=self.colors["bg_main"])
+        header_frame.grid(row=0, column=0, sticky="ew", padx=30, pady=(25, 15))
+        
         title = tk.Label(
-            self,
-            text="📋 Krishi Sahayogi Server Installer",
-            font=("Segoe UI", 24, "bold"),
-            bg="#e0f2fe",
-            fg="#1f2937"
+            header_frame,
+            text="SysLogger Server Installer",
+            font=("Segoe UI", 26, "bold"),
+            bg=self.colors["bg_main"],
+            fg=self.colors["text_main"]
         )
-        title.grid(row=0, column=0, pady=(20, 10))
+        title.pack(side="left")
+        
+        subtitle = tk.Label(
+            header_frame,
+            text=" |  Enterprise Edition",
+            font=("Segoe UI", 16),
+            bg=self.colors["bg_main"],
+            fg=self.colors["text_light"]
+        )
+        subtitle.pack(side="left", padx=10, pady=(8,0))
 
         # Main frame
-        main = tk.Frame(self, bg="#e0f2fe")
-        main.grid(row=1, column=0, sticky="nsew", padx=20, pady=10)
+        main = tk.Frame(self, bg=self.colors["bg_main"])
+        main.grid(row=1, column=0, sticky="nsew", padx=30, pady=10)
         main.grid_columnconfigure(0, weight=1)
-        main.grid_columnconfigure(1, weight=2)
+        main.grid_columnconfigure(1, weight=3)  # Use 3 to give content more space
         main.grid_rowconfigure(0, weight=1)
 
         # Left column (wizard steps)
-        left = tk.Frame(main, bg="#ffffff", relief="raised", borderwidth=2)
-        left.grid(row=0, column=0, sticky="nwe", padx=(0, 15))
+        left = tk.Frame(main, bg=self.colors["bg_sidebar"], relief="flat", borderwidth=0)
+        left.grid(row=0, column=0, sticky="nwe", padx=(0, 20))
         left.grid_columnconfigure(0, weight=1)
 
         # Right column (step content + progress + log)
-        right = tk.Frame(main, bg="#e0f2fe")
+        right = tk.Frame(main, bg=self.colors["bg_main"])
         right.grid(row=0, column=1, sticky="nsew")
         right.grid_rowconfigure(2, weight=1)
         right.grid_columnconfigure(0, weight=1)
 
         # Wizard navigation
-        nav_frame = tk.Frame(self, bg="#e0f2fe")
+        nav_frame = tk.Frame(self, bg=self.colors["bg_main"])
         nav_frame.grid(row=2, column=0, pady=(10, 20))
         nav_frame.grid_columnconfigure(1, weight=1)
 
@@ -303,33 +341,63 @@ class ServerInstallerApp(tk.Tk):
         tk.Label(dom_frame, text="Configure Domain Settings",
                 font=("Segoe UI", 14, "bold"), bg="white", fg="#1f2937").pack(pady=20)
 
+        # Port configuration
+        port_frame = ttk.Frame(dom_frame, style="Card.TFrame")
+        port_frame.pack(fill="x", padx=20, pady=10)
+        
+        tk.Label(port_frame, text="Server Port:", bg="white", 
+                font=("Segoe UI", 10, "bold")).pack(anchor="w", pady=(0, 5))
+        
+        port_input_frame = tk.Frame(port_frame, bg="white")
+        port_input_frame.pack(fill="x")
+        
+        self.server_port = tk.Entry(port_input_frame, font=("Segoe UI", 10), width=10)
+        self.server_port.insert(0, "8000")
+        self.server_port.pack(side="left")
+        
+        tk.Label(port_input_frame, text="(Default: 8000)", bg="white", fg="#64748b",
+                font=("Segoe UI", 9)).pack(side="left", padx=10)
+        
+        # IP Auto-detection
+        ip_frame = ttk.Frame(dom_frame, style="Card.TFrame")
+        ip_frame.pack(fill="x", padx=20, pady=10)
+        
+        local_ip = self.get_local_ip()
+        
+        tk.Button(ip_frame, text=f"📍 Use Local IP ({local_ip})", 
+                 command=lambda: self.fill_domains(local_ip),
+                 bg="#e0e7ff", fg="#4338ca", font=("Segoe UI", 9, "bold"),
+                 relief="flat", padx=10, pady=4).pack(anchor="w")
+
         # Backend domain
         backend_frame = ttk.Frame(dom_frame, style="Card.TFrame")
-        backend_frame.pack(fill="x", padx=20, pady=5)
-        tk.Label(backend_frame, text="Backend Domain:", bg="white",
-                font=("Segoe UI", 10, "bold")).pack(anchor="w", pady=(10, 2))
+        backend_frame.pack(fill="x", padx=20, pady=(15, 5))
+        tk.Label(backend_frame, text="Backend URL (API):", bg="white",
+                font=("Segoe UI", 10, "bold")).pack(anchor="w", pady=(5, 2))
         self.backend_domain = tk.Entry(backend_frame, font=("Segoe UI", 10))
-        self.backend_domain.insert(0, "http://localhost:8000")
-        self.backend_domain.pack(fill="x", padx=10, pady=(0, 10))
+        self.backend_domain.pack(fill="x", padx=0, pady=(0, 5))
         self.backend_validation = tk.Label(backend_frame, text="", bg="white",
                                          fg="#dc2626", font=("Segoe UI", 9))
-        self.backend_validation.pack(anchor="w", padx=10)
+        self.backend_validation.pack(anchor="w")
 
         # Frontend domain
         frontend_frame = ttk.Frame(dom_frame, style="Card.TFrame")
         frontend_frame.pack(fill="x", padx=20, pady=5)
-        tk.Label(frontend_frame, text="Frontend Domain:", bg="white",
-                font=("Segoe UI", 10, "bold")).pack(anchor="w", pady=(10, 2))
+        tk.Label(frontend_frame, text="Frontend URL (Web App):", bg="white",
+                font=("Segoe UI", 10, "bold")).pack(anchor="w", pady=(5, 2))
         self.frontend_domain = tk.Entry(frontend_frame, font=("Segoe UI", 10))
-        self.frontend_domain.insert(0, "http://localhost:3000")
-        self.frontend_domain.pack(fill="x", padx=10, pady=(0, 10))
+        self.frontend_domain.pack(fill="x", padx=0, pady=(0, 5))
         self.frontend_validation = tk.Label(frontend_frame, text="", bg="white",
                                           fg="#dc2626", font=("Segoe UI", 9))
-        self.frontend_validation.pack(anchor="w", padx=10)
+        self.frontend_validation.pack(anchor="w")
 
         # Bind validation
+        self.server_port.bind('<KeyRelease>', lambda e: self.update_backend_port())
         self.backend_domain.bind('<FocusOut>', lambda e: self.validate_domain('backend'))
         self.frontend_domain.bind('<FocusOut>', lambda e: self.validate_domain('frontend'))
+        
+        # Initial fill
+        self.fill_domains(local_ip)
 
         self.step_content_frames.append(dom_frame)
 
@@ -416,6 +484,22 @@ class ServerInstallerApp(tk.Tk):
             return self.validate_domain('backend') and self.validate_domain('frontend')
         return True
 
+    def execute_current_step(self):
+        """Execute the action associated with the current step."""
+        if self.current_step == 0:
+            self.run_prereq_check()
+        elif self.current_step == 1:
+            if self.use_postgres.get():
+                self.run_postgres_setup()
+            else:
+                self.log("Using SQLite - no additional configuration needed.", "green")
+                self.progress(100, "Database setup complete (SQLite)")
+                self.steps_completed[1] = True
+        elif self.current_step == 2:
+            self.run_domain_config()
+        elif self.current_step == 3:
+            self.run_full_installation()
+
     def toggle_db_mode(self):
         """Update description based on PostgreSQL toggle"""
         if self.use_postgres.get():
@@ -445,9 +529,43 @@ class ServerInstallerApp(tk.Tk):
         validation_label.config(text="")
         return True
 
-    # ----------------------------------------------------------------------
-    # Helper UI methods
-    # ----------------------------------------------------------------------
+    def get_local_ip(self):
+        try:
+            # Connect to an external server (doesn't actually send data) to get the route
+            s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            s.connect(("8.8.8.8", 80))
+            local_ip = s.getsockname()[0]
+            s.close()
+            return local_ip
+        except Exception:
+            return "127.0.0.1"
+
+    def fill_domains(self, ip):
+        port = self.server_port.get().strip() or "8000"
+        self.backend_domain.delete(0, tk.END)
+        self.backend_domain.insert(0, f"http://{ip}:{port}")
+        
+        self.frontend_domain.delete(0, tk.END)
+        self.frontend_domain.insert(0, f"http://{ip}:3000")
+        
+    def update_backend_port(self):
+        # If user types in port, update backend URL if it looks like we're just changing port
+        try:
+            port = self.server_port.get().strip()
+            if not port.isdigit(): return
+            
+            current_url = self.backend_domain.get()
+            if not current_url: return
+            
+            # Simple regex to replace port in http://IP:PORT format
+            # This is a basic convenience, not perfect
+            if current_url.count(':') == 2:
+                prefix = current_url.rsplit(':', 1)[0]
+                self.backend_domain.delete(0, tk.END)
+                self.backend_domain.insert(0, f"{prefix}:{port}")
+        except:
+            pass
+
     def log(self, msg: str, color=None):
         print(msg)
         self.logger.info(msg)
@@ -533,7 +651,8 @@ class ServerInstallerApp(tk.Tk):
     def run_domain_config(self):
         backend = self.backend_domain.get().strip()
         frontend = self.frontend_domain.get().strip()
-        self.start_worker("domain_config", backend, frontend)
+        port = self.server_port.get().strip()
+        self.start_worker("domain_config", backend, frontend, port)
 
     def run_startup_config(self):
         self.start_worker("startup_config")
@@ -546,6 +665,13 @@ class ServerInstallerApp(tk.Tk):
 
     def run_start_server(self):
         self.start_worker("start_server")
+
+    def run_full_installation(self):
+        backend = self.backend_domain.get().strip()
+        frontend = self.frontend_domain.get().strip()
+        use_pg = self.use_postgres.get()
+        port = self.server_port.get().strip() or "8000"
+        self.start_worker("full_installation", backend, frontend, use_pg, port)
 
     # =========================================================================
     # BACKEND OPERATIONS (PyQt → Tkinter refactor)
@@ -662,10 +788,10 @@ class ServerInstallerApp(tk.Tk):
 
     # ---------------------- PostgreSQL setup ----------------------
     def op_postgres_setup(self):
+        global PSYCOPG_AVAILABLE
         if not PSYCOPG_AVAILABLE:
             self.log("Installing psycopg2...")
             self._install_package("psycopg2")
-            global PSYCOPG_AVAILABLE
             try:
                 import psycopg2
                 from psycopg2.extensions import ISOLATION_LEVEL_AUTOCOMMIT
@@ -779,7 +905,7 @@ class ServerInstallerApp(tk.Tk):
         self.progress(100, "PostgreSQL setup completed successfully")
 
     # ---------------------- Full installation ----------------------
-    def op_full_installation(self, backend_domain, frontend_domain, use_postgres):
+    def op_full_installation(self, backend_domain, frontend_domain, use_postgres, port="8000"):
         total_steps = 6 if use_postgres else 5  # postgres_setup adds one step
         current_step = 0
 
@@ -790,7 +916,18 @@ class ServerInstallerApp(tk.Tk):
 
         # Step 1: Domain configuration
         update_progress("Domain config", 10)
-        self.op_domain_config(backend_domain, frontend_domain)
+        # Extract port from backend_domain if possible, otherwise default to 8000 for safety,
+        # but in full installation we haven't exposed port field cleanly to this method args if driven
+        # by automatic defaults. For now, we assume simple extraction or default.
+        # Actually, let's grab it from the instance if running in GUI mode, which we are.
+        try:
+            port = self.server_port.get().strip()
+        except:
+            port = "8000"
+            
+        # Step 1: Domain configuration
+        update_progress("Domain config", 10)
+        self.op_domain_config(backend_domain, frontend_domain, port)
         current_step += 1
 
         # Step 2: Startup configuration
@@ -822,7 +959,7 @@ class ServerInstallerApp(tk.Tk):
         self.progress(100, "Installation completed successfully!")
 
     # ---------------------- Domain configuration ----------------------
-    def op_domain_config(self, backend_domain, frontend_domain):
+    def op_domain_config(self, backend_domain, frontend_domain, port="8000"):
         self.progress(20, "Updating backend .env...")
 
         backend_env = PROJECT_ROOT / "backend" / ".env"
@@ -831,7 +968,7 @@ class ServerInstallerApp(tk.Tk):
         with open(backend_env, "w") as f:
             f.write(
                 "FLASK_ENV=production\n"
-                "PORT=8000\n"
+                f"PORT={port}\n"
                 f"CORS_ORIGINS={frontend_domain}\n"
             )
 
