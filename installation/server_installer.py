@@ -11,6 +11,7 @@ from pathlib import Path
 import threading
 import shutil
 import socket
+import ctypes
 
 import tkinter as tk
 from tkinter import ttk, messagebox
@@ -79,8 +80,22 @@ class ServerInstallerApp(tk.Tk):
         self._init_style()
         self._init_icons()
         self._init_tooltips()
+        self._init_tooltips()
         self._init_logging()
         self._init_ui()
+
+        if not self.is_admin():
+            self.after(100, lambda: messagebox.showwarning(
+                "Administrator Rights Recommended",
+                "This installer performs system changes (services, scheduled tasks).\n"
+                "Please run as Administrator for best results."
+            ))
+
+    def is_admin(self):
+        try:
+            return ctypes.windll.shell32.IsUserAnAdmin()
+        except:
+            return False
 
     # ----------------------------------------------------------------------
     # Styles & logging
@@ -800,7 +815,13 @@ class ServerInstallerApp(tk.Tk):
                 self.progress(15, "Installing PostgreSQL on Windows...")
                 # Try Chocolatey first
                 try:
-                    subprocess.run(["choco", "install", "postgresql", "-y"], check=True)
+                    # Pass 'y' for non-elevated prompt if it occurs
+                    subprocess.run(
+                        ["choco", "install", "postgresql", "-y"],
+                        check=True,
+                        input="y\n",
+                        text=True
+                    )
                 except:
                     # Fallback to manual download
                     self.log("Chocolatey failed, trying manual installation...")
@@ -826,15 +847,48 @@ class ServerInstallerApp(tk.Tk):
                     raise Exception("Failed to install PostgreSQL. Please install Homebrew and PostgreSQL manually.")
 
         # Verify installation
+        # Note: Chocolatey updates PATH, but this process won't see it until restart.
+        # We try to find psql manually in standard locations.
+        psql_cmd = "psql"
+        if not shutil.which("psql"):
+             self.log("psql not found in PATH, searching standard directories...")
+             found_psql = self._find_postgres_binary()
+             if found_psql:
+                 self.log(f"Found psql at: {found_psql}")
+                 psql_cmd = str(found_psql)
+                 # Add to PATH for subsequent commands/subprocess calls
+                 os.environ["PATH"] += os.pathsep + str(found_psql.parent)
+             else:
+                 self.log("Could not find psql binary automatically.")
+
         try:
             subprocess.run(
-                ["psql", "--version"],
+                [psql_cmd, "--version"],
                 check=True,
                 capture_output=True
             )
             self.log("PostgreSQL installed successfully")
         except:
-            raise Exception("PostgreSQL installation failed")
+            raise Exception("PostgreSQL installation failed - Please restart the installer to refresh PATH")
+
+    def _find_postgres_binary(self):
+        """Search for psql.exe in Program Files."""
+        search_paths = [
+            Path(os.environ.get("ProgramFiles", "C:\\Program Files")) / "PostgreSQL",
+            Path(os.environ.get("ProgramFiles(x86)", "C:\\Program Files (x86)")) / "PostgreSQL"
+        ]
+        
+        for base_path in search_paths:
+            if base_path.exists():
+                # Look for highest version number folder
+                versions = sorted([d for d in base_path.iterdir() if d.is_dir()], 
+                                key=lambda x: x.name, reverse=True)
+                for v_dir in versions:
+                    bin_dir = v_dir / "bin"
+                    psql_exe = bin_dir / "psql.exe"
+                    if psql_exe.exists():
+                        return psql_exe
+        return None
 
         # Start service and enable on boot
         self.progress(20, "Starting PostgreSQL service...")
