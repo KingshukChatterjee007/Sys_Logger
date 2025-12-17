@@ -10,6 +10,7 @@ import re
 from pathlib import Path
 import threading
 import shutil
+import socket
 
 import tkinter as tk
 from tkinter import ttk, messagebox
@@ -73,6 +74,7 @@ class ServerInstallerApp(tk.Tk):
         self.configure(bg="#e0f2fe")
         self.prereq_passed = False
         self.buttons = {}
+        self.is_spinning = False
 
         self._init_style()
         self._init_icons()
@@ -310,7 +312,9 @@ class ServerInstallerApp(tk.Tk):
         tk.Label(backend_frame, text="Backend Domain:", bg="white",
                 font=("Segoe UI", 10, "bold")).pack(anchor="w", pady=(10, 2))
         self.backend_domain = tk.Entry(backend_frame, font=("Segoe UI", 10))
-        self.backend_domain.insert(0, "http://localhost:8000")
+        
+        local_ip = self.get_local_ip()
+        self.backend_domain.insert(0, f"http://{local_ip}:8000")
         self.backend_domain.pack(fill="x", padx=10, pady=(0, 10))
         self.backend_validation = tk.Label(backend_frame, text="", bg="white",
                                          fg="#dc2626", font=("Segoe UI", 9))
@@ -322,7 +326,7 @@ class ServerInstallerApp(tk.Tk):
         tk.Label(frontend_frame, text="Frontend Domain:", bg="white",
                 font=("Segoe UI", 10, "bold")).pack(anchor="w", pady=(10, 2))
         self.frontend_domain = tk.Entry(frontend_frame, font=("Segoe UI", 10))
-        self.frontend_domain.insert(0, "http://localhost:5000")
+        self.frontend_domain.insert(0, f"http://{local_ip}:5000")
         self.frontend_domain.pack(fill="x", padx=10, pady=(0, 10))
         self.frontend_validation = tk.Label(frontend_frame, text="", bg="white",
                                           fg="#dc2626", font=("Segoe UI", 9))
@@ -368,13 +372,36 @@ class ServerInstallerApp(tk.Tk):
 
         # ----------------- RIGHT: Progress + Log -----------------
 
+        # ----------------- RIGHT: Progress + Log -----------------
+        
+        # Status area (Row 0) replaced by scrollable log/content in Row 1?
+        # Actually right frame has: 0=content, 1=log, 2=footer?
+        # Let's clean up grid.
+        
+        # We need a status frame for the spinner and current op label
+        status_frame = tk.Frame(right, bg="#e0f2fe")
+        status_frame.grid(row=1, column=0, sticky="ew", padx=10, pady=5)
+        
+        self.spinner_label = tk.Label(status_frame, text="⚡", font=("Segoe UI", 14), bg="#e0f2fe", fg="#6366f1")
+        self.spinner_label.pack(side="left", padx=5)
+        
+        self.current_op_label = tk.Label(status_frame, text="Ready", font=("Segoe UI", 10), bg="#e0f2fe", fg="#374151")
+        self.current_op_label.pack(side="left", padx=5)
+
         self.progress_var = tk.IntVar()
         self.progress_bar = ttk.Progressbar(
             right, variable=self.progress_var, maximum=100)
-        self.progress_bar.grid(row=0, column=0, sticky="we", padx=5, pady=(5, 10))
+        self.progress_bar.grid(row=2, column=0, sticky="we", padx=5, pady=(5, 10))
 
-        self.log_widget = tk.Text(right, bg="#f5f5f5", wrap="word")
-        self.log_widget.grid(row=1, column=0, sticky="nsew", padx=5, pady=5)
+        self.log_widget = tk.Text(right, bg="#f5f5f5", wrap="word", height=10)
+        self.log_widget.grid(row=3, column=0, sticky="nsew", padx=5, pady=5)
+        
+        # Right row config needs update
+        right.grid_rowconfigure(0, weight=0) # content
+        right.grid_rowconfigure(1, weight=0) # status
+        right.grid_rowconfigure(2, weight=0) # progress
+        right.grid_rowconfigure(3, weight=1) # log
+        right.grid_rowconfigure(4, weight=0) # footer
 
         footer = tk.Label(
             right,
@@ -383,7 +410,7 @@ class ServerInstallerApp(tk.Tk):
             fg="gray",
             font=("Segoe UI", 9)
         )
-        footer.grid(row=2, column=0, pady=(5, 0))
+        footer.grid(row=4, column=0, pady=(5, 0))
 
     # ----------------------------------------------------------------------
     # Wizard navigation methods
@@ -483,6 +510,16 @@ class ServerInstallerApp(tk.Tk):
 
         validation_label.config(text="")
         return True
+
+    def get_local_ip(self):
+        try:
+            s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            s.connect(("8.8.8.8", 80))
+            ip = s.getsockname()[0]
+            s.close()
+            return ip
+        except:
+            return "127.0.0.1"
 
     # ----------------------------------------------------------------------
     # Helper UI methods
@@ -638,6 +675,7 @@ class ServerInstallerApp(tk.Tk):
             ("Node.js", self._check_node),
             ("Docker", self._check_docker),
             ("Chocolatey (optional)", self._check_choco),
+            ("Dependencies", self._check_dependencies),
         ]
 
         for i, (name, fn) in enumerate(checks):
@@ -648,7 +686,7 @@ class ServerInstallerApp(tk.Tk):
             self.log(f"✓ {name} OK")
 
         self.progress(100, "All prerequisites OK")
-        self.buttons['domain'].config(state="normal")
+
 
     def _check_python(self):
         try:
@@ -702,6 +740,10 @@ class ServerInstallerApp(tk.Tk):
             return True
         except:
             return False
+
+    def _check_dependencies(self):
+        """Ensure required python packages are installed."""
+        return self._install_package("requests")
 
     def _install_package(self, package_name):
         """Install a Python package using pip."""
@@ -928,14 +970,25 @@ class ServerInstallerApp(tk.Tk):
                 f'"{python_exe}" backend/sys_logger.py --service"'
             )
 
-            subprocess.run(
-                [
-                    "schtasks", "/create", "/tn", task_name,
-                    "/tr", cmd, "/sc", "onlogon",
-                    "/rl", "highest", "/f"
-                ],
-                check=True
+            python_exe = self._get_python_executable()
+            cmd = (
+                f'cmd /c "net start postgresql && cd /d {PROJECT_ROOT} && '
+                f'"{python_exe}" backend/sys_logger.py --service"'
             )
+
+            try:
+                subprocess.run(
+                    [
+                        "schtasks", "/create", "/tn", task_name,
+                        "/tr", cmd, "/sc", "onlogon",
+                        "/rl", "highest", "/f"
+                    ],
+                    check=True
+                )
+            except subprocess.CalledProcessError as e:
+                self.log(f"WARNING: Failed to create startup task (requires Admin): {e}")
+            except Exception as e:
+                self.log(f"WARNING: Startup task creation failed: {e}")
 
         elif system == "Linux":
             service = f"""[Unit]
@@ -990,7 +1043,7 @@ WantedBy=multi-user.target
                     "sc.exe", "failure", "SysLoggerServer",
                     "reset=", "86400",
                     "actions=", "restart/5000/restart/5000/restart/5000"
-                ])
+                ], check=False) # Don't crash if this fails
 
             elif system == "Linux":
                 subprocess.run(["sudo", "systemctl", "restart", "syslogger.service"])
@@ -1006,9 +1059,18 @@ WantedBy=multi-user.target
         self.progress(100, "Protection configured successfully")
 
 
+    def _install_postgres_windows(self):
+        """Fallback for manual PostgreSQL installation on Windows."""
+        import webbrowser
+        messagebox.showinfo("Manual Installation Required", 
+            "Automated installation failed. Opening PostgreSQL download page.\n"
+            "Please install PostgreSQL manually and then click OK to continue.")
+        webbrowser.open("https://www.postgresql.org/download/windows/")
+
 # ============================================================================
 # MAIN
 # ============================================================================
 if __name__ == "__main__":
     app = ServerInstallerApp()
     app.mainloop()
+
