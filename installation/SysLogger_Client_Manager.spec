@@ -13,7 +13,12 @@ a = Analysis(
     [str(client_manager)],
     pathex=[str(project_root), str(spec_dir)],
     binaries=[],
-    datas=[],
+    datas=[
+        (str(project_root / 'unit_client.py'), '.'),
+        (str(project_root / 'unit_client_config.json'), '.'),
+        (str(spec_dir / 'SysLogger_Client_Installer.spec'), '.'),
+        (str(spec_dir / 'client_installer.py'), '.'),
+    ],
     hiddenimports=[
         "tkinter",
         "tkinter.ttk",

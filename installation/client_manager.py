@@ -230,14 +230,7 @@ class ClientManagerGUI(tk.Tk):
         # Start server status monitoring
         self.after(1000, self.check_server_status)
 
-    def load_config(self):
-        if CONFIG_FILE.exists():
-            try:
-                with open(CONFIG_FILE, 'r') as f:
-                    config = json.load(f)
-                    self.server_url.set(config.get("server_url", "http://localhost:5000"))
-            except Exception as e:
-                self.log(f"Warning: Could not load config: {e}")
+
 
     def save_config(self):
         try:
@@ -309,83 +302,9 @@ class ClientManagerGUI(tk.Tk):
         finally:
             self.build_running = False
 
-    def start_server(self):
-        if self.server_running:
-            messagebox.showwarning("Warning", "Server is already running!")
-            return
 
-        try:
-            import sys
-            sys.path.insert(0, str(PROJECT_ROOT.parent / "backend"))
-            from sys_logger import app, socketio
 
-            # Update server configuration
-            import os
-            os.environ['HOST'] = self.server_host.get()
-            os.environ['PORT'] = self.server_port.get()
 
-            # Start server in separate thread
-            def run_server():
-                socketio.run(app, host=self.server_host.get(), port=int(self.server_port.get()), debug=False)
-
-            import threading
-            server_thread = threading.Thread(target=run_server, daemon=True)
-            server_thread.start()
-
-            self.server_running = True
-            self.server_status_label.config(text="🟢 Server Status: Running", fg="#16a34a")
-            self.start_server_btn.config(state="disabled")
-            self.stop_server_btn.config(state="normal")
-            self.log("Server started successfully")
-
-        except Exception as e:
-            self.log(f"Failed to start server: {str(e)}")
-            messagebox.showerror("Error", f"Failed to start server: {str(e)}")
-
-    def stop_server(self):
-        if not self.server_running:
-            messagebox.showwarning("Warning", "Server is not running!")
-            return
-
-        try:
-            # Note: Gracefully stopping Flask-SocketIO server requires more complex implementation
-            # For now, we'll just update the UI state
-            self.server_running = False
-            self.server_status_label.config(text="🔴 Server Status: Stopped", fg="#dc2626")
-            self.start_server_btn.config(state="normal")
-            self.stop_server_btn.config(state="disabled")
-            self.log("Server stopped")
-
-        except Exception as e:
-            self.log(f"Error stopping server: {str(e)}")
-
-    def check_server_status(self):
-        """Check server status periodically"""
-        try:
-            import requests
-            url = f"http://{self.server_host.get()}:{self.server_port.get()}/api/health"
-            response = requests.get(url, timeout=2)
-            if response.status_code == 200:
-                if not self.server_running:
-                    self.server_running = True
-                    self.server_status_label.config(text="🟢 Server Status: Running", fg="#16a34a")
-                    self.start_server_btn.config(state="disabled")
-                    self.stop_server_btn.config(state="normal")
-            else:
-                if self.server_running:
-                    self.server_running = False
-                    self.server_status_label.config(text="🔴 Server Status: Stopped", fg="#dc2626")
-                    self.start_server_btn.config(state="normal")
-                    self.stop_server_btn.config(state="disabled")
-        except:
-            if self.server_running:
-                self.server_running = False
-                self.server_status_label.config(text="🔴 Server Status: Stopped", fg="#dc2626")
-                self.start_server_btn.config(state="normal")
-                self.stop_server_btn.config(state="disabled")
-
-        # Check again in 5 seconds
-        self.after(5000, self.check_server_status)
 
     def check_prerequisites(self):
         self.log("Checking prerequisites...")
@@ -423,7 +342,7 @@ class ClientManagerGUI(tk.Tk):
 
         # Determine output directory
         dist_dir = PROJECT_ROOT / "dist"
-        exe_name = f"SysLogger_Client_Installer{'exe' if target_platform == 'windows' else ''}"
+        exe_name = f"SysLogger_Client_Installer{'.exe' if target_platform == 'windows' else ''}"
         exe_path = dist_dir / exe_name
 
         if not exe_path.exists():

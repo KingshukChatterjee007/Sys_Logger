@@ -103,12 +103,23 @@ class UnitClient:
         return system_id
 
     def get_server_url(self):
-        """Get server URL from config or use default"""
+        """Get server URL from config or use default.
+        
+        Supports both 'server_url' field and separate 'server_host'/'server_port' fields.
+        """
         if os.path.exists(CONFIG_FILE):
             try:
                 with open(CONFIG_FILE, 'r') as f:
                     config = json.load(f)
-                    return config.get('server_url', DEFAULT_SERVER_URL)
+                    # First try direct server_url
+                    if 'server_url' in config and config['server_url']:
+                        return config.get('server_url')
+                    # Fallback: construct from server_host and server_port
+                    host = config.get('server_host', 'localhost')
+                    port = config.get('server_port', '5000')
+                    if host:
+                        return f"http://{host}:{port}"
+                    return DEFAULT_SERVER_URL
             except (json.JSONDecodeError, KeyError):
                 pass
         return DEFAULT_SERVER_URL
