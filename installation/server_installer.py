@@ -822,9 +822,25 @@ class ServerInstallerApp(tk.Tk):
                         input="y\n",
                         text=True
                     )
-                except:
+                    self.log("PostgreSQL installed via Chocolatey")
+                    
+                    # CRITICAL FIX: Immediately search for PostgreSQL binary after installation
+                    # Chocolatey updates system PATH, but this running process won't see it.
+                    # We must manually find psql.exe and update our process's PATH.
+                    self.progress(18, "Locating PostgreSQL binaries...")
+                    found_psql = self._find_postgres_binary()
+                    if found_psql:
+                        self.log(f"Found psql at: {found_psql}")
+                        # Update current process PATH so verification will work
+                        os.environ["PATH"] = str(found_psql.parent) + os.pathsep + os.environ["PATH"]
+                        psql_available = True
+                    else:
+                        self.log("WARNING: Could not locate PostgreSQL binaries automatically")
+                        
+                except subprocess.CalledProcessError as e:
                     # Fallback to manual download
-                    self.log("Chocolatey failed, trying manual installation...")
+                    self.log(f"Chocolatey installation failed: {e}")
+                    self.log("Trying manual installation...")
                     self._install_postgres_windows()
             elif system == "Linux":
                 self.progress(15, "Installing PostgreSQL on Linux...")
@@ -832,23 +848,25 @@ class ServerInstallerApp(tk.Tk):
                 try:
                     subprocess.run(["sudo", "apt", "update"], check=True)
                     subprocess.run(["sudo", "apt", "install", "-y", "postgresql", "postgresql-contrib"], check=True)
+                    psql_available = True
                 except:
                     # Try yum (CentOS/RHEL)
                     try:
                         subprocess.run(["sudo", "yum", "install", "-y", "postgresql-server", "postgresql-contrib"], check=True)
                         subprocess.run(["sudo", "postgresql-setup", "initdb"], check=True)
+                        psql_available = True
                     except:
                         raise Exception("Failed to install PostgreSQL. Please install manually.")
             elif system == "Darwin":
                 self.progress(15, "Installing PostgreSQL on macOS...")
                 try:
                     subprocess.run(["brew", "install", "postgresql"], check=True)
+                    psql_available = True
                 except:
                     raise Exception("Failed to install PostgreSQL. Please install Homebrew and PostgreSQL manually.")
 
         # Verify installation
-        # Note: Chocolatey updates PATH, but this process won't see it until restart.
-        # We try to find psql manually in standard locations.
+        # If we haven't found psql yet, do a final search
         psql_cmd = "psql"
         if not shutil.which("psql"):
              self.log("psql not found in PATH, searching standard directories...")
@@ -857,19 +875,24 @@ class ServerInstallerApp(tk.Tk):
                  self.log(f"Found psql at: {found_psql}")
                  psql_cmd = str(found_psql)
                  # Add to PATH for subsequent commands/subprocess calls
-                 os.environ["PATH"] += os.pathsep + str(found_psql.parent)
+                 os.environ["PATH"] = str(found_psql.parent) + os.pathsep + os.environ["PATH"]
              else:
-                 self.log("Could not find psql binary automatically.")
+                 self.log("ERROR: Could not find psql binary automatically.")
+                 raise Exception("PostgreSQL verification failed - psql not found. Please ensure PostgreSQL is installed.")
 
+        # Final verification
+        self.progress(19, "Verifying PostgreSQL installation...")
         try:
-            subprocess.run(
+            result = subprocess.run(
                 [psql_cmd, "--version"],
                 check=True,
-                capture_output=True
+                capture_output=True,
+                text=True
             )
-            self.log("PostgreSQL installed successfully")
-        except:
-            raise Exception("PostgreSQL installation failed - Please restart the installer to refresh PATH")
+            version_info = result.stdout.strip()
+            self.log(f"✓ PostgreSQL verified: {version_info}")
+        except Exception as e:
+            raise Exception(f"PostgreSQL verification failed: {e}")
 
     def _find_postgres_binary(self):
         """Search for psql.exe in Program Files."""
@@ -889,54 +912,6 @@ class ServerInstallerApp(tk.Tk):
                     if psql_exe.exists():
                         return psql_exe
         return None
-
-        # Start service and enable on boot
-        self.progress(20, "Starting PostgreSQL service...")
-        self._start_postgres_service()
-
-        # Create DB, user, schema
-        self.progress(40, "Creating database and user...")
-
-        conn = psycopg2.connect("user=postgres host=localhost")
-        conn.set_isolation_level(ISOLATION_LEVEL_AUTOCOMMIT)
-        cur = conn.cursor()
-
-        # Create DB if not exists
-        cur.execute("SELECT 1 FROM pg_database WHERE datname='sys_logger'")
-        if not cur.fetchone():
-            cur.execute("CREATE DATABASE sys_logger")
-
-        # Create role if not exists
-        cur.execute("""
-        DO $$
-        BEGIN
-            IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname='syslogger') THEN
-                CREATE ROLE syslogger LOGIN PASSWORD 'syslogger123';
-            END IF;
-        END$$;
-        """)
-        conn.close()
-
-        # Apply schema
-        self.progress(60, "Applying SQL schema...")
-
-        conn = psycopg2.connect(
-            "dbname=sys_logger user=syslogger password=syslogger123 host=localhost")
-        cur = conn.cursor()
-
-        schema_path = PROJECT_ROOT / "database_schema.sql"
-        if not schema_path.exists():
-            conn.close()
-            raise Exception("database_schema.sql missing")
-
-        with open(schema_path, "r") as f:
-            sql = f.read()
-            cur.execute(sql)
-
-        conn.commit()
-        conn.close()
-
-        self.progress(100, "PostgreSQL setup completed successfully")
 
     # ---------------------- Full installation ----------------------
     def op_full_installation(self, backend_domain, frontend_domain, use_postgres, host, port):
