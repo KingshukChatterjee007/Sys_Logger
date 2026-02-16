@@ -1,6 +1,4 @@
-'use client'
-
-import { useMemo, useState, useEffect } from 'react'
+import React, { useMemo, useState, useEffect } from 'react'
 import { Line } from 'react-chartjs-2'
 import { Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend, TooltipItem } from 'chart.js'
 import { UsageData } from './types'
@@ -63,7 +61,7 @@ export const UsageGraph: React.FC<UsageGraphProps> = ({
     }
 
     // Get the most recent timestamp from data
-    const latestTimestamp = sortedData.length > 0 
+    const latestTimestamp = sortedData.length > 0
       ? new Date(sortedData[sortedData.length - 1].timestamp).getTime()
       : currentTime
 
@@ -71,19 +69,19 @@ export const UsageGraph: React.FC<UsageGraphProps> = ({
     // This handles timezone differences and system clock issues
     const referenceTime = latestTimestamp > currentTime ? latestTimestamp : currentTime
     const cutoff = referenceTime - timeRanges[selectedTimeRange]
-    
+
     const filtered = sortedData.filter(log => {
       const logTime = new Date(log.timestamp).getTime()
       return logTime >= cutoff
     })
-    
+
     // If no data after filtering, show last N data points (fallback)
     // This ensures graphs always show something if data exists
     if (filtered.length === 0 && sortedData.length > 0) {
       const maxPoints = Math.min(sortedData.length, Math.ceil(timeRanges[selectedTimeRange] / 4000)) // 4s per point
       return sortedData.slice(-maxPoints)
     }
-    
+
     return filtered
   }, [data, selectedTimeRange, currentTime])
 
@@ -115,7 +113,7 @@ export const UsageGraph: React.FC<UsageGraphProps> = ({
       }
     })
 
-    let dataset: { label: string; data: number[]; borderColor: string; backgroundColor: string; fill: boolean; tension: number; pointRadius: number; pointHoverRadius: number; borderWidth?: number; pointHoverBorderWidth?: number }
+    let dataset: any
 
     switch (metric) {
       case 'cpu':
@@ -250,7 +248,9 @@ export const UsageGraph: React.FC<UsageGraphProps> = ({
           label: (context: TooltipItem<'line'>) => {
             const value = context.parsed.y
             if (value === null) return ''
-            return `${context.dataset.label || 'Usage'}: ${value.toFixed(1)}%`
+            const unit = (metric === 'cpu' || metric === 'ram' || metric === 'gpu') ? '%' :
+              (metric === 'temperature') ? '°C' : ' KB/s'
+            return `${context.dataset.label || 'Usage'}: ${value.toFixed(1)}${unit}`
           },
         },
       },
@@ -275,13 +275,18 @@ export const UsageGraph: React.FC<UsageGraphProps> = ({
           font: {
             size: 9,
           },
-          callback: (value: string | number) => `${value}%`,
+          callback: (value: string | number) => {
+            const numValue = typeof value === 'string' ? parseFloat(value) : value
+            if (metric === 'cpu' || metric === 'ram' || metric === 'gpu') return `${numValue}%`
+            if (metric === 'temperature') return `${numValue}°C`
+            return `${numValue} KB/s`
+          },
         },
         grid: {
           color: 'rgba(71, 85, 105, 0.3)',
         },
         min: 0,
-        max: 100,
+        max: (metric === 'cpu' || metric === 'ram' || metric === 'gpu') ? 100 : undefined,
       },
     },
     interaction: {
@@ -338,11 +343,10 @@ export const UsageGraph: React.FC<UsageGraphProps> = ({
           <button
             key={option.value}
             onClick={() => setSelectedTimeRange(option.value)}
-            className={`px-2 py-0.5 text-xs rounded transition-colors ${
-              selectedTimeRange === option.value
-                ? 'bg-blue-600 text-white'
-                : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
-            }`}
+            className={`px-2 py-0.5 text-xs rounded transition-colors ${selectedTimeRange === option.value
+              ? 'bg-blue-600 text-white'
+              : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+              }`}
           >
             {option.label}
           </button>

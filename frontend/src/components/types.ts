@@ -1,24 +1,28 @@
-interface UsageData {
+export interface UsageData {
   timestamp: string
   cpu: number
   ram: number
-  gpu: string
+  gpu: any
   gpu_load?: number
   temperature?: number
   network_rx?: number
   network_tx?: number
   unit_id: string
+  org_id?: string
+  comp_id?: string
 }
 
-interface Unit {
+export interface Unit {
   id: string
   name: string
+  org_id?: string
+  comp_id?: string
   status: 'online' | 'offline' | 'warning'
   last_seen: string
   alerts?: Alert[]
 }
 
-interface Alert {
+export interface Alert {
   id: string
   unit_id: string
   type: 'cpu' | 'ram' | 'gpu' | 'temperature' | 'network'
@@ -27,5 +31,3 @@ interface Alert {
   timestamp: string
   acknowledged: boolean
 }
-
-export type { UsageData, Unit, Alert }

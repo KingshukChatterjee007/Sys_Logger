@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { Unit, Alert } from '../types'
+import { apiFetch } from './apiUtils'
 
-export const useUnits = () => {
+export const useUnits = (orgId?: string) => {
   const [units, setUnits] = useState<Unit[]>([])
   const [alerts, setAlerts] = useState<Alert[]>([])
   const [loading, setLoading] = useState(true)
@@ -11,7 +12,8 @@ export const useUnits = () => {
 
   const fetchUnits = useCallback(async () => {
     try {
-      const response = await fetch('/api/units')
+      const endpoint = orgId ? `/api/orgs/${orgId}/units` : '/api/units'
+      const response = await apiFetch(endpoint)
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`)
       }
@@ -24,7 +26,7 @@ export const useUnits = () => {
 
   const fetchAlerts = useCallback(async () => {
     try {
-      const response = await fetch('/api/alerts')
+      const response = await apiFetch('/api/alerts')
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`)
       }
@@ -59,9 +61,9 @@ export const useUnits = () => {
 
   const acknowledgeAlert = useCallback(async (alertId: string) => {
     try {
-      const response = await fetch(`/api/alerts/${alertId}/acknowledge`, {
+      const response = await apiFetch(`/api/alerts/${alertId}/acknowledge`, {
         method: 'POST'
-      })
+      } as any)
       if (!response.ok) {
         throw new Error('Failed to acknowledge alert')
       }

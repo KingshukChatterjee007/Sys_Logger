@@ -61,10 +61,29 @@ def prompt_server_url():
             print("Using default server URL...")
             return DEFAULT_SERVER_URL
 
+def prompt_org_info():
+    """Prompt user for Organization ID and Computer ID"""
+    print("\nSys_Logger Unit Client - Unit Identification")
+    print("-" * 50)
+    
+    org_id = input("Enter Organization ID (e.g., org1): ").strip() or "default_org"
+    comp_id = input("Enter Computer ID (e.g., comp1): ").strip() or socket.gethostname()
+    
+    return org_id, comp_id
+
 class UnitClient:
     def __init__(self):
-        self.system_id = self.get_or_create_system_id()
-        self.server_url = self.get_server_url()
+        self.config = self.load_config()
+        self.system_id = self.config.get('system_id')
+        self.org_id = self.config.get('org_id')
+        self.comp_id = self.config.get('comp_id')
+        self.server_url = self.config.get('server_url', DEFAULT_SERVER_URL)
+        
+        # If org or comp info is missing, prompt user
+        if not self.org_id or not self.comp_id:
+            self.org_id, self.comp_id = prompt_org_info()
+            self.save_config()
+
         self.unit_id = None
         self.registered = False
         self.running = True
@@ -73,63 +92,53 @@ class UnitClient:
         self.restart_count = 0
         self.last_restart_time = time.time()
         self.shutdown_event = threading.Event()
-
+        
         # Set up signal handlers for graceful shutdown
         signal.signal(signal.SIGINT, self.signal_handler)
         signal.signal(signal.SIGTERM, self.signal_handler)
 
-        logging.info(f"Unit Client initialized with System ID: {self.system_id}")
-        print(f"Unit Client initialized with System ID: {self.system_id}")
+        logging.info(f"Unit Client initialized: {self.org_id}/{self.comp_id} (System ID: {self.system_id})")
+        print(f"Unit Client initialized: {self.org_id}/{self.comp_id} (System ID: {self.system_id})")
 
     def signal_handler(self, signum, frame):
         """Handle shutdown signals gracefully"""
         logging.info(f"Received signal {signum}, initiating graceful shutdown")
         self.stop()
 
-    def get_or_create_system_id(self):
-        """Generate and persist a unique system ID"""
+    def load_config(self):
+        """Load configuration from file or create default"""
+        config = {
+            'system_id': str(uuid.uuid4()),
+            'server_url': DEFAULT_SERVER_URL,
+            'org_id': None,
+            'comp_id': None
+        }
+        
         if os.path.exists(CONFIG_FILE):
             try:
                 with open(CONFIG_FILE, 'r') as f:
-                    config = json.load(f)
-                    return config.get('system_id')
+                    file_config = json.load(f)
+                    config.update(file_config)
             except (json.JSONDecodeError, KeyError):
                 pass
+        
+        return config
 
-        system_id = str(uuid.uuid4())
-        config = {'system_id': system_id, 'server_url': DEFAULT_SERVER_URL}
+    def save_config(self):
+        """Save current configuration to file"""
+        config = {
+            'system_id': self.system_id,
+            'server_url': self.server_url,
+            'org_id': self.org_id,
+            'comp_id': self.comp_id
+        }
         with open(CONFIG_FILE, 'w') as f:
             json.dump(config, f, indent=4)
-        return system_id
-
-    def get_server_url(self):
-        """Get server URL from config or use default.
-        
-        Supports both 'server_url' field and separate 'server_host'/'server_port' fields.
-        """
-        if os.path.exists(CONFIG_FILE):
-            try:
-                with open(CONFIG_FILE, 'r') as f:
-                    config = json.load(f)
-                    # First try direct server_url
-                    if 'server_url' in config and config['server_url']:
-                        return config.get('server_url')
-                    # Fallback: construct from server_host and server_port
-                    host = config.get('server_host', 'localhost')
-                    port = config.get('server_port', '5000')
-                    if host:
-                        return f"http://{host}:{port}"
-                    return DEFAULT_SERVER_URL
-            except (json.JSONDecodeError, KeyError):
-                pass
-        return DEFAULT_SERVER_URL
 
     def update_server_url(self, new_url):
         """Update server URL in config"""
-        config = {'system_id': self.system_id, 'server_url': new_url}
-        with open(CONFIG_FILE, 'w') as f:
-            json.dump(config, f, indent=4)
         self.server_url = new_url
+        self.save_config()
 
     def get_system_info(self):
         """Collect system information for registration"""
@@ -158,6 +167,8 @@ class UnitClient:
 
             return {
                 'system_id': self.system_id,
+                'org_id': self.org_id,
+                'comp_id': self.comp_id,
                 'hostname': hostname,
                 'os_info': os_info,
                 'cpu_info': cpu_info,
@@ -202,13 +213,51 @@ class UnitClient:
         return False
 
     def get_gpu_usage(self):
-        """Get GPU usage"""
+        """Get GPU usage (NVIDIA via GPUtil, or AMD/Generic via PowerShell)"""
         try:
+            # 1. Try NVIDIA first
             if NVIDIA_AVAILABLE:
                 gpus = GPUtil.getGPUs()
                 if gpus:
-                    return max(gpu.load * 100 for gpu in gpus)  # Max usage %
+                    return max(gpu.load * 100 for gpu in gpus)
         except:
+            pass
+
+        # 2. Try Windows Performance Counters (for AMD / Intel / any Windows GPU)
+        if platform.system() == 'Windows':
+            return self.get_windows_gpu_usage()
+            
+        return 0.0
+
+    def get_windows_gpu_usage(self):
+        """Get GPU usage via PowerShell counters (Works for AMD, NVIDIA, Intel on Windows)"""
+        try:
+            # PowerShell command to get the max utilization across 3D engines
+            # We broaden the filter slightly to catch variations
+            cmd = [
+                "powershell", 
+                "-Command", 
+                "(Get-Counter '\\GPU Engine(*)\\Utilization Percentage' -ErrorAction SilentlyContinue).CounterSamples | Where-Object {$_.InstanceName -like '*3d*' -or $_.InstanceName -like '*graphics*'} | Measure-Object -Property CookedValue -Max | Select-Object -ExpandProperty Max"
+            ]
+            
+            # Run the command with a timeout to avoid hanging
+            output = subprocess.check_output(cmd, stderr=subprocess.STDOUT, timeout=5).decode().strip()
+            
+            if output:
+                import re
+                match = re.search(r"(\d+[\.,]\d+|\d+)", output)
+                if match:
+                    val = match.group(1).replace(',', '.')
+                    usage = round(float(val), 2)
+                    print(f"DEBUG: Found GPU usage: {usage}% (Raw: {output})")
+                    return usage
+                else:
+                    print(f"DEBUG: No numeric match in GPU output: '{output}'")
+            else:
+                print("DEBUG: GPU PowerShell command returned no output")
+        except Exception as e:
+            # Silently fail to 0.0
+            logging.debug(f"Failed to get Windows GPU usage: {e}")
             pass
         return 0.0
 
@@ -261,6 +310,8 @@ class UnitClient:
 
             data = {
                 'system_id': self.system_id,
+                'org_id': self.org_id,
+                'comp_id': self.comp_id,
                 'timestamp': datetime.utcnow().isoformat(),
                 'cpu_usage': cpu_usage,
                 'ram_usage': ram_usage,

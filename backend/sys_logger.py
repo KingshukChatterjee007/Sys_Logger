@@ -78,6 +78,15 @@ class UnitStore:
         return units.get(unit_id)
 
     @staticmethod
+    def get_unit_by_org_comp(org_id, comp_id):
+        """Find a unit by its organization and computer ID"""
+        all_units = UnitStore.get_all_units()
+        for unit in all_units:
+            if unit.get('org_id') == org_id and unit.get('comp_id') == comp_id:
+                return unit
+        return None
+
+    @staticmethod
     def save_unit(unit_id, unit_data):
         if USE_REDIS:
             redis_client.hset('units', unit_id, json.dumps(unit_data))
@@ -99,6 +108,12 @@ class UnitStore:
             raw_units = redis_client.hgetall('units')
             return [json.loads(u) for u in raw_units.values()]
         return list(units.values())
+
+    @staticmethod
+    def get_units_by_org(org_id):
+        """Get all units for a specific organization"""
+        all_units = UnitStore.get_all_units()
+        return [unit for unit in all_units if unit.get('org_id') == org_id]
 
     @staticmethod
     def add_usage(unit_id, usage_data):
@@ -126,9 +141,6 @@ class UnitStore:
         """Helper to get all usage for aggregation"""
         if USE_REDIS:
             all_usage = {}
-            # This is inefficient in Redis too without a time-series module, 
-            # but mimics the Python logic for Phase 2 compatibility.
-            # Phase 3 will replace this with SQL.
             keys = redis_client.keys('usage:*')
             for key in keys:
                 unit_id = key.decode().split(':')[1]
@@ -512,13 +524,15 @@ def get_config():
 
 @app.route('/api/register_unit', methods=['POST'])
 def register_unit():
-    """Register a new unit with the system"""
+    """Register a new unit with the system (supports Org/Comp multi-tenancy)"""
     try:
         data = request.get_json()
         if not data or 'system_id' not in data:
             return jsonify({'error': 'system_id required'}), 400
 
         system_id = data['system_id']
+        org_id = data.get('org_id', 'default_org')
+        comp_id = data.get('comp_id', 'default_comp')
         hostname = data.get('hostname', 'Unknown')
         os_info = data.get('os_info', 'Unknown')
         cpu_info = data.get('cpu_info', 'Unknown')
@@ -526,37 +540,40 @@ def register_unit():
         gpu_info = data.get('gpu_info', '{}')
         network_interfaces = data.get('network_interfaces', '{}')
 
-        unit_id = str(uuid.uuid4())[:8]
-
-        # Check if already registered - use existing unit_id if found
+        # Check if already registered by system_id or org/comp pair
+        existing_unit = None
         all_units = UnitStore.get_all_units()
-        for existing_unit in all_units:
-            if existing_unit['system_id'] == system_id:
-                existing_unit_id = existing_unit['id']
-                existing_unit['last_seen'] = datetime.now().isoformat()
-                existing_unit['status'] = 'online'
-                # Update unit info if provided
-                if hostname != 'Unknown':
-                    existing_unit['hostname'] = hostname
-                if os_info != 'Unknown':
-                    existing_unit['os_info'] = os_info
-                if cpu_info != 'Unknown':
-                    existing_unit['cpu_info'] = cpu_info
-                if ram_total > 0:
-                    existing_unit['ram_total'] = ram_total
-                if gpu_info != '{}':
-                    existing_unit['gpu_info'] = gpu_info
-                if network_interfaces != '{}':
-                    existing_unit['network_interfaces'] = network_interfaces
-                
-                UnitStore.save_unit(existing_unit_id, existing_unit)
-                return jsonify({'unit_id': existing_unit_id}), 200
+        for unit in all_units:
+            if unit['system_id'] == system_id or (unit.get('org_id') == org_id and unit.get('comp_id') == comp_id):
+                existing_unit = unit
+                break
 
-        # Create new unit only if system_id not found
+        if existing_unit:
+            unit_id = existing_unit['id']
+            existing_unit['last_seen'] = datetime.now().isoformat()
+            existing_unit['status'] = 'online'
+            existing_unit['org_id'] = org_id
+            existing_unit['comp_id'] = comp_id
+            
+            # Update unit info if provided
+            if hostname != 'Unknown': existing_unit['hostname'] = hostname
+            if os_info != 'Unknown': existing_unit['os_info'] = os_info
+            if cpu_info != 'Unknown': existing_unit['cpu_info'] = cpu_info
+            if ram_total > 0: existing_unit['ram_total'] = ram_total
+            if gpu_info != '{}': existing_unit['gpu_info'] = gpu_info
+            if network_interfaces != '{}': existing_unit['network_interfaces'] = network_interfaces
+            
+            UnitStore.save_unit(unit_id, existing_unit)
+            return jsonify({'unit_id': unit_id, 'org_id': org_id, 'comp_id': comp_id}), 200
+
+        # Create new unit
+        unit_id = str(uuid.uuid4())[:8]
         unit = {
             'id': unit_id,
             'system_id': system_id,
-            'name': f"{hostname}-{unit_id}",
+            'org_id': org_id,
+            'comp_id': comp_id,
+            'name': f"{org_id}/{comp_id}",
             'status': 'online',
             'last_seen': datetime.now().isoformat(),
             'hostname': hostname,
@@ -569,14 +586,13 @@ def register_unit():
         }
 
         UnitStore.save_unit(unit_id, unit)
-        # unit_usage initialized via add_usage method
+        print(f"Unit registered: {org_id}/{comp_id} (ID: {unit_id})")
 
-        print(f"Unit registered: {unit_id} ({hostname})")
-
-        # Broadcast unit update via WebSocket
+        # Broadcast update (optionally join room)
         socketio.emit('units_update', UnitStore.get_all_units())
+        socketio.emit('org_units_update', UnitStore.get_units_by_org(org_id), room=org_id)
 
-        return jsonify({'unit_id': unit_id}), 201
+        return jsonify({'unit_id': unit_id, 'org_id': org_id, 'comp_id': comp_id}), 201
 
     except Exception as e:
         print(f"Error registering unit: {e}")
@@ -591,6 +607,7 @@ def submit_usage():
             return jsonify({'error': 'system_id required'}), 400
 
         system_id = data['system_id']
+        org_id = data.get('org_id', 'default_org')
         timestamp = data.get('timestamp', datetime.now().isoformat())
         cpu_usage = data.get('cpu_usage', 0)
         ram_usage = data.get('ram_usage', 0)
@@ -607,6 +624,7 @@ def submit_usage():
             if unit['system_id'] == system_id:
                 unit_id = unit['id']
                 current_unit = unit
+                org_id = unit.get('org_id', org_id)
                 break
 
         if not unit_id:
@@ -676,12 +694,15 @@ def submit_usage():
 
         alerts.extend(new_alerts)
 
-        # Broadcast updates via WebSocket
+        # Broadcast updates via WebSocket (segmented by org)
         socketio.emit('units_update', UnitStore.get_all_units())
+        socketio.emit('org_units_update', UnitStore.get_units_by_org(org_id), room=org_id)
+        socketio.emit('org_usage_update', usage_entry, room=org_id)
+        
         if new_alerts:
             socketio.emit('alerts_update', alerts)
 
-        print(f"Usage data received from unit {unit_id}: CPU={cpu_usage:.1f}%, RAM={ram_usage:.1f}%, GPU={gpu_usage:.1f}%")
+        print(f"Usage data received from {org_id}/{current_unit.get('comp_id')}: CPU={cpu_usage:.1f}%")
 
         return jsonify({'status': 'success'}), 200
 
@@ -702,6 +723,28 @@ def get_alerts():
     """Get all alerts"""
     try:
         return jsonify(alerts), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/orgs/<org_id>/units', methods=['GET'])
+def get_org_units(org_id):
+    """Get all units for an organization"""
+    try:
+        return jsonify(UnitStore.get_units_by_org(org_id)), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/orgs/<org_id>/usage', methods=['GET'])
+def get_org_usage(org_id):
+    """Get latest usage for all units in an organization"""
+    try:
+        units = UnitStore.get_units_by_org(org_id)
+        result = []
+        for unit in units:
+            usage = UnitStore.get_usage(unit['id'], limit=1)
+            if usage:
+                result.append(usage[0])
+        return jsonify(result), 200
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
@@ -883,6 +926,15 @@ def handle_connect():
     """Handle WebSocket connection"""
     print("Client connected to WebSocket")
 
+@socketio.on('join_org')
+def on_join(data):
+    """Join a WebSocket room for an organization"""
+    org_id = data.get('org_id')
+    if org_id:
+        import flask_socketio
+        flask_socketio.join_room(org_id)
+        print(f"Client joined room: {org_id}")
+
 @socketio.on('disconnect')
 def handle_disconnect():
     """Handle WebSocket disconnection"""
@@ -936,7 +988,6 @@ def cleanup_old_logs():
 
 def on_exit():
     logging.info("Session ended")
-    stop_ngrok()  # Ensure ngrok is stopped on exit
 
 def upload_to_gist():
     if not GITHUB_TOKEN:
