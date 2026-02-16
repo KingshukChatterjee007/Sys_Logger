@@ -301,7 +301,7 @@ class UnitClient:
                 'system_id': self.system_id,
                 'org_id': self.org_id,
                 'comp_id': self.comp_id,
-                'timestamp': datetime.utcnow().isoformat(),
+                'timestamp': datetime.utcnow().isoformat() + 'Z',
                 'cpu_usage': cpu_usage,
                 'ram_usage': ram_usage,
                 'gpu_usage': gpu_usage,
@@ -317,6 +317,8 @@ class UnitClient:
         """Submit usage data to the central server"""
         url = f"{self.server_url}/api/submit_usage"
         try:
+            if not self.silent:
+                print(f"DEBUG: Submitting data with timestamp: {data.get('timestamp')}")
             response = requests.post(url, json=data, timeout=30)
             if response.status_code != 200:
                  if not self.silent:

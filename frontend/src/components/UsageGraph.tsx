@@ -107,7 +107,7 @@ export const UsageGraph: React.FC<UsageGraphProps> = ({
 
     const labels = filteredData.map(log => {
       try {
-        return new Date(log.timestamp).toLocaleTimeString()
+        return new Date(log.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })
       } catch {
         return new Date(log.timestamp).toString()
       }
@@ -263,6 +263,10 @@ export const UsageGraph: React.FC<UsageGraphProps> = ({
           font: {
             size: 9,
           },
+          autoSkip: true,
+          autoSkipPadding: 20,
+          maxRotation: 0,
+          maxTicksLimit: 8
         },
         grid: {
           color: 'rgba(71, 85, 105, 0.3)',

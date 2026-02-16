@@ -20,7 +20,7 @@ export default function DashboardView({ orgId }: DashboardViewProps) {
 
     const formatTimestamp = (timestamp: string) => {
         try {
-            return new Date(timestamp).toLocaleTimeString()
+            return new Date(timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })
         } catch {
             return 'N/A'
         }
@@ -113,7 +113,9 @@ export default function DashboardView({ orgId }: DashboardViewProps) {
                                     }`}
                             >
                                 <div className={`w-2 h-2 rounded-full ${unit.status === 'online' ? 'bg-green-400' : 'bg-red-400'}`}></div>
-                                <span className="font-medium">{unit.comp_id || unit.name}</span>
+                                <span className="font-medium">
+                                    {unit.org_id && unit.comp_id ? `${unit.org_id}/${unit.comp_id}` : (unit.comp_id || unit.name)}
+                                </span>
                             </button>
                         ))}
                     </div>
@@ -179,7 +181,7 @@ export default function DashboardView({ orgId }: DashboardViewProps) {
                 <div className="bg-slate-800 border-b border-slate-700 sticky top-0 z-10">
                     <div className="px-6 py-4 flex justify-between items-center">
                         <h2 className="text-xl font-semibold text-white">
-                            {selectedUnit ? `System: ${selectedUnit.comp_id || selectedUnit.name}` : `Org Dashboard: ${orgId || 'All Units'}`}
+                            {selectedUnit ? `System: ${selectedUnit.org_id}/${selectedUnit.comp_id}` : `Org Dashboard: ${orgId || 'All Units'}`}
                         </h2>
                         <div className="text-xs text-slate-400">
                             {currentData ? `Last sync: ${formatTimestamp(currentData.timestamp)}` : 'Connecting...'}
