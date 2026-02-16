@@ -11,6 +11,7 @@ import platform
 import subprocess
 import signal
 import logging
+import queue
 from datetime import datetime, timedelta
 try:
     import GPUtil
@@ -20,11 +21,14 @@ except ImportError:
 
 # Configuration
 CONFIG_FILE = 'unit_client_config.json'
+CACHE_FILE = 'cached_usage.json'
 DEFAULT_SERVER_URL = 'http://localhost:5000'  # Change this to your central server URL
 COLLECTION_INTERVAL = 1  # seconds - updated for 1-second updates
 RECONNECT_INTERVAL = 300  # seconds (5 minutes)
 MAX_RETRIES = 3
 RETRY_DELAY = 10  # seconds
+MAX_CACHE_SIZE = 1000  # Max records to cache offline
+SYNC_BATCH_SIZE = 10   # Number of records to sync at once
 
 def prompt_server_url():
     """Prompt user for server URL/IP and validate connection"""
@@ -61,8 +65,11 @@ def prompt_server_url():
             print("Using default server URL...")
             return DEFAULT_SERVER_URL
 
-def prompt_org_info():
-    """Prompt user for Organization ID and Computer ID"""
+def prompt_org_info(silent=False):
+    """Prompt user for Organization ID and Computer ID or use defaults"""
+    if silent:
+        return "default_org", socket.gethostname()
+        
     print("\nSys_Logger Unit Client - Unit Identification")
     print("-" * 50)
     
@@ -72,33 +79,37 @@ def prompt_org_info():
     return org_id, comp_id
 
 class UnitClient:
-    def __init__(self):
+    def __init__(self, silent=False):
+        self.silent = silent
         self.config = self.load_config()
         self.system_id = self.config.get('system_id')
         self.org_id = self.config.get('org_id')
         self.comp_id = self.config.get('comp_id')
         self.server_url = self.config.get('server_url', DEFAULT_SERVER_URL)
         
-        # If org or comp info is missing, prompt user
         if not self.org_id or not self.comp_id:
-            self.org_id, self.comp_id = prompt_org_info()
+            self.org_id, self.comp_id = prompt_org_info(silent)
             self.save_config()
 
         self.unit_id = None
         self.registered = False
         self.running = True
-        self.thread = None
         self.last_network_counters = None
-        self.restart_count = 0
-        self.last_restart_time = time.time()
-        self.shutdown_event = threading.Event()
+        self.data_queue = queue.Queue()
         
-        # Set up signal handlers for graceful shutdown
+        # Load existing cache into queue
+        cached_data = self.load_cache()
+        for item in cached_data:
+            self.data_queue.put(item)
+            
+        self.sync_thread = None
+        
         signal.signal(signal.SIGINT, self.signal_handler)
         signal.signal(signal.SIGTERM, self.signal_handler)
 
-        logging.info(f"Unit Client initialized: {self.org_id}/{self.comp_id} (System ID: {self.system_id})")
-        print(f"Unit Client initialized: {self.org_id}/{self.comp_id} (System ID: {self.system_id})")
+        if not silent:
+            logging.info(f"Unit Client initialized: {self.org_id}/{self.comp_id}")
+            print(f"Unit Client initialized: {self.org_id}/{self.comp_id}")
 
     def signal_handler(self, signum, frame):
         """Handle shutdown signals gracefully"""
@@ -106,22 +117,13 @@ class UnitClient:
         self.stop()
 
     def load_config(self):
-        """Load configuration from file or create default"""
-        config = {
-            'system_id': str(uuid.uuid4()),
-            'server_url': DEFAULT_SERVER_URL,
-            'org_id': None,
-            'comp_id': None
-        }
-        
+        config = {'system_id': str(uuid.uuid4()), 'server_url': DEFAULT_SERVER_URL, 'org_id': None, 'comp_id': None}
         if os.path.exists(CONFIG_FILE):
             try:
                 with open(CONFIG_FILE, 'r') as f:
-                    file_config = json.load(f)
-                    config.update(file_config)
+                    config.update(json.load(f))
             except (json.JSONDecodeError, KeyError):
                 pass
-        
         return config
 
     def save_config(self):
@@ -134,6 +136,20 @@ class UnitClient:
         }
         with open(CONFIG_FILE, 'w') as f:
             json.dump(config, f, indent=4)
+
+    def load_cache(self):
+        if os.path.exists(CACHE_FILE):
+            try:
+                with open(CACHE_FILE, 'r') as f:
+                    return json.load(f)
+            except: pass
+        return []
+
+    def save_cache(self):
+        try:
+            with open(CACHE_FILE, 'w') as f:
+                json.dump(self.cache[-MAX_CACHE_SIZE:], f)
+        except: pass
 
     def update_server_url(self, new_url):
         """Update server URL in config"""
@@ -148,23 +164,6 @@ class UnitClient:
             cpu_info = platform.processor() or "Unknown CPU"
             ram_total = round(psutil.virtual_memory().total / (1024**3), 2)  # GB
 
-            # GPU info
-            gpu_info = {}
-            try:
-                if NVIDIA_AVAILABLE:
-                    gpus = GPUtil.getGPUs()
-                    gpu_info = {
-                        'count': len(gpus),
-                        'details': [{'name': gpu.name, 'memory': gpu.memoryTotal} for gpu in gpus]
-                    }
-            except:
-                gpu_info = {'count': 0, 'details': []}
-
-            # Network interfaces
-            network_interfaces = {}
-            for name, addrs in psutil.net_if_addrs().items():
-                network_interfaces[name] = [addr.address for addr in addrs if addr.family == socket.AF_INET]
-
             return {
                 'system_id': self.system_id,
                 'org_id': self.org_id,
@@ -173,8 +172,8 @@ class UnitClient:
                 'os_info': os_info,
                 'cpu_info': cpu_info,
                 'ram_total': ram_total,
-                'gpu_info': json.dumps(gpu_info),
-                'network_interfaces': json.dumps(network_interfaces)
+                'gpu_info': json.dumps({'nvidia': NVIDIA_AVAILABLE}),
+                'network_interfaces': json.dumps({})
             }
         except Exception as e:
             print(f"Error getting system info: {e}")
@@ -190,75 +189,66 @@ class UnitClient:
             return False
 
         url = f"{self.server_url}/api/register_unit"
-        for attempt in range(MAX_RETRIES):
-            try:
-                response = requests.post(url, json=info, timeout=30)
-                if response.status_code == 200 or response.status_code == 201:
-                    data = response.json()
-                    self.unit_id = data.get('unit_id')
-                    self.registered = True
-                    print("Unit registered successfully")
-                    return True
-                elif response.status_code == 409:  # Already registered
-                    self.registered = True
-                    print("Unit already registered")
-                    return True
-                else:
-                    print(f"Registration failed: {response.status_code} - {response.text}")
-            except requests.RequestException as e:
-                print(f"Registration attempt {attempt + 1} failed: {e}")
-                if attempt < MAX_RETRIES - 1:
-                    time.sleep(RETRY_DELAY)
-
+        try:
+            response = requests.post(url, json=info, timeout=30)
+            if response.status_code in [200, 201, 409]:
+                self.registered = True
+                if not self.silent:
+                    print(f"Unit registered successfully (Status: {response.status_code})")
+                return True
+            else:
+                if not self.silent:
+                    print(f"Registration failed with status: {response.status_code}")
+        except requests.RequestException as e:
+            if not self.silent:
+                print(f"Registration error: {e}")
         return False
 
     def get_gpu_usage(self):
         """Get GPU usage (NVIDIA via GPUtil, or AMD/Generic via PowerShell)"""
+        usage = 0.0
         try:
             # 1. Try NVIDIA first
             if NVIDIA_AVAILABLE:
                 gpus = GPUtil.getGPUs()
                 if gpus:
-                    return max(gpu.load * 100 for gpu in gpus)
-        except:
+                    usage = max(gpu.load * 100 for gpu in gpus)
+                    if usage > 0:
+                        return usage
+        except Exception as e:
+            logging.debug(f"Failed to get NVIDIA GPU usage: {e}")
             pass
 
         # 2. Try Windows Performance Counters (for AMD / Intel / any Windows GPU)
         if platform.system() == 'Windows':
-            return self.get_windows_gpu_usage()
+            usage = self.get_windows_gpu_usage()
             
-        return 0.0
+        return usage
 
     def get_windows_gpu_usage(self):
-        """Get GPU usage via PowerShell counters (Works for AMD, NVIDIA, Intel on Windows)"""
+        """Robust GPU usage detection for Windows (AMD/NVIDIA/Intel)"""
         try:
-            # PowerShell command to get the max utilization across 3D engines
-            # We broaden the filter slightly to catch variations
+            # Ultra-simple PowerShell to avoid any parser/quoting issues
             cmd = [
-                "powershell", 
-                "-Command", 
-                "(Get-Counter '\\GPU Engine(*)\\Utilization Percentage' -ErrorAction SilentlyContinue).CounterSamples | Where-Object {$_.InstanceName -like '*3d*' -or $_.InstanceName -like '*graphics*'} | Measure-Object -Property CookedValue -Max | Select-Object -ExpandProperty Max"
+                "powershell",
+                "-Command",
+                "(Get-Counter '\\GPU Engine(*)\\Utilization Percentage' -ErrorAction SilentlyContinue).CounterSamples.CookedValue | Measure-Object -Max | Select-Object -ExpandProperty Maximum"
             ]
             
-            # Run the command with a timeout to avoid hanging
-            output = subprocess.check_output(cmd, stderr=subprocess.STDOUT, timeout=5).decode().strip()
+            output = subprocess.check_output(cmd, stderr=subprocess.STDOUT, timeout=8).decode().strip()
             
             if output:
                 import re
+                # Match any float or integer
                 match = re.search(r"(\d+[\.,]\d+|\d+)", output)
                 if match:
                     val = match.group(1).replace(',', '.')
                     usage = round(float(val), 2)
-                    print(f"DEBUG: Found GPU usage: {usage}% (Raw: {output})")
-                    return usage
-                else:
-                    print(f"DEBUG: No numeric match in GPU output: '{output}'")
-            else:
-                print("DEBUG: GPU PowerShell command returned no output")
+                    # Cap at 100% just in case of counter oddities
+                    return min(100.0, usage)
         except Exception as e:
-            # Silently fail to 0.0
-            logging.debug(f"Failed to get Windows GPU usage: {e}")
-            pass
+            if not self.silent:
+                logging.debug(f"Failed to get Windows GPU usage: {e}")
         return 0.0
 
     def get_temperature(self):
@@ -305,7 +295,6 @@ class UnitClient:
             cpu_usage = psutil.cpu_percent(interval=1)
             ram_usage = psutil.virtual_memory().percent
             gpu_usage = self.get_gpu_usage()
-            temperature = self.get_temperature()
             network_rx, network_tx = self.get_network_io()
 
             data = {
@@ -316,7 +305,6 @@ class UnitClient:
                 'cpu_usage': cpu_usage,
                 'ram_usage': ram_usage,
                 'gpu_usage': gpu_usage,
-                'temperature': temperature,
                 'network_rx': network_rx,
                 'network_tx': network_tx
             }
@@ -325,104 +313,113 @@ class UnitClient:
             print(f"Error collecting usage data: {e}")
             return None
 
-    def submit_usage_data(self, data):
+    def submit_data(self, data):
         """Submit usage data to the central server"""
         url = f"{self.server_url}/api/submit_usage"
-        for attempt in range(MAX_RETRIES):
-            try:
-                response = requests.post(url, json=data, timeout=30)
-                if response.status_code == 200:
-                    print(f"Data submitted successfully at {data['timestamp']}")
-                    return True
-                else:
-                    print(f"Data submission failed: {response.status_code} - {response.text}")
-            except requests.RequestException as e:
-                print(f"Submission attempt {attempt + 1} failed: {e}")
-                if attempt < MAX_RETRIES - 1:
-                    time.sleep(RETRY_DELAY)
+        try:
+            response = requests.post(url, json=data, timeout=30)
+            if response.status_code != 200:
+                 if not self.silent:
+                    print(f"Data submission failed with status: {response.status_code}")
+            return response.status_code == 200
+        except requests.RequestException as e:
+            if not self.silent:
+                print(f"Data submission error: {e}")
+            return False
 
-        return False
-
-    def data_collection_loop(self):
-        """Main data collection and submission loop"""
+    def sync_offline_data(self):
+        if not self.silent:
+            print("Sync thread started.")
         while self.running:
             try:
-                # Try to register if not registered
-                if not self.registered:
-                    self.register_unit()
-                    if not self.registered:
-                        print("Failed to register, retrying in 5 minutes...")
-                        time.sleep(RECONNECT_INTERVAL)
-                        continue
+                # Wait for data with timeout to check self.running
+                data = self.data_queue.get(timeout=1)
+            except queue.Empty: # Changed from generic except to specific queue.Empty
+                continue
+                
+            if not self.registered and not self.register_unit():
+                self.data_queue.put(data) # Put it back
+                time.sleep(10)
+                continue
+            
+            if self.submit_data(data):
+                if not self.silent and self.data_queue.qsize() % 10 == 0:
+                    print(f"Synced record. Remaining in queue: {self.data_queue.qsize()}")
+                self.data_queue.task_done()
+                # Update persistent cache periodically
+                if self.data_queue.qsize() == 0:
+                    self.save_cache_from_queue()
+            else:
+                self.data_queue.put(data) # Put it back
+                time.sleep(30)
 
-                # Collect and submit data
-                data = self.collect_usage_data()
-                if data:
-                    self.submit_usage_data(data)
-                else:
-                    print("Failed to collect usage data")
+    def save_cache_from_queue(self):
+        """Save remaining queue to disk (approximate)"""
+        try:
+            items = list(self.data_queue.queue)
+            with open(CACHE_FILE, 'w') as f:
+                json.dump(items[-MAX_CACHE_SIZE:], f)
+        except: pass
 
-                # Wait for next collection interval
-                time.sleep(COLLECTION_INTERVAL)
+    def run(self):
+        # Start sync thread
+        self.sync_thread = threading.Thread(target=self.sync_offline_data, daemon=True)
+        self.sync_thread.start()
 
-            except Exception as e:
-                print(f"Error in data collection loop: {e}")
-                time.sleep(RETRY_DELAY)  # Wait before retrying
-
-    def start(self):
-        """Start the client in a background thread"""
-        if self.thread and self.thread.is_alive():
-            print("Client is already running")
-            return
-
-        self.thread = threading.Thread(target=self.data_collection_loop, daemon=True)
-        self.thread.start()
-        print("Unit client started")
+        while self.running:
+            data = self.collect_usage_data()
+            if data:
+                self.data_queue.put(data)
+                # Backup to disk every 10 records
+                if self.data_queue.qsize() % 10 == 0:
+                    self.save_cache_from_queue()
+            
+            if not self.registered:
+                self.register_unit()
+                
+            time.sleep(COLLECTION_INTERVAL)
 
     def stop(self):
         """Stop the client"""
         self.running = False
-        if self.thread:
-            self.thread.join(timeout=5)
-        print("Unit client stopped")
+        if self.sync_thread:
+            self.sync_thread.join(timeout=5)
+        if not self.silent:
+            print("Unit client stopped")
 
-    def run_foreground(self):
-        """Run the client in foreground (for testing)"""
-        print("Running unit client in foreground. Press Ctrl+C to stop.")
-        try:
-            self.data_collection_loop()
-        except KeyboardInterrupt:
-            print("\nStopping...")
-            self.stop()
+def install_service():
+    """Install the client as a Windows background task"""
+    if platform.system() != 'Windows':
+        print("Service installation is only supported on Windows.")
+        return
+
+    script_path = os.path.abspath(__file__)
+    python_exe = sys.executable
+    task_name = "Sys_Logger_Client"
+    
+    # PowerShell command to create a scheduled task that runs on startup
+    command = f'Register-ScheduledTask -TaskName "{task_name}" -Action (New-ScheduledTaskAction -Execute "{python_exe}" -Argument "{script_path} --silent") -Trigger (New-ScheduledTaskTrigger -AtStartup) -Settings (New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -ExecutionTimeLimit 0) -User "SYSTEM" -RunLevel Highest -Force'
+    
+    try:
+        subprocess.check_call(["powershell", "-Command", command])
+        print(f"✓ Background service '{task_name}' installed successfully.")
+        print("It will now start automatically with Windows.")
+    except subprocess.CalledProcessError as e:
+        print(f"FAILED to install service: {e}")
+        print("Try running this command in an Administrator terminal.")
 
 def main():
-    client = UnitClient()
-
-    if len(sys.argv) > 1:
-        command = sys.argv[1]
-        if command == '--foreground':
-            client.run_foreground()
-        elif command == '--start':
-            client.start()
-            # Keep main thread alive
-            try:
-                while True:
-                    time.sleep(1)
-            except KeyboardInterrupt:
-                client.stop()
-        elif command == '--stop':
-            client.stop()
-        elif command == '--status':
-            # Simple status check
-            print(f"System ID: {client.system_id}")
-            print(f"Server URL: {client.server_url}")
-            print(f"Registered: {client.registered}")
-            print(f"Running: {client.thread and client.thread.is_alive() if client.thread else False}")
-        else:
-            print("Usage: python unit_client.py [--foreground|--start|--stop|--status]")
+    is_silent = "--silent" in sys.argv
+    if "--install-service" in sys.argv:
+        install_service()
     else:
-        # Default: run in foreground
-        client.run_foreground()
+        client = UnitClient(silent=is_silent)
+        print("Running unit client. Press Ctrl+C to stop.")
+        try:
+            client.run()
+        except KeyboardInterrupt:
+            print("\nStopping...")
+            client.stop()
 
 if __name__ == "__main__":
     main()
