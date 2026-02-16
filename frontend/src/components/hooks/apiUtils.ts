@@ -6,13 +6,16 @@ export const getApiUrl = () => {
     return 'http://localhost:5000'
 }
 
-export const apiFetch = async (endpoint: string) => {
+export const apiFetch = async (endpoint: string, options: RequestInit = {}) => {
     const baseUrl = getApiUrl()
-    const response = await fetch(`${baseUrl}${endpoint}`, {
+    const { headers, ...otherOptions } = options
+
+    return fetch(`${baseUrl}${endpoint}`, {
         mode: 'cors',
+        ...otherOptions,
         headers: {
             'Content-Type': 'application/json',
+            ...(headers || {}),
         },
     })
-    return response
 }

@@ -7,7 +7,7 @@ import { useUsageData } from '@/components/hooks/useUsageData'
 import { useUnits } from '@/components/hooks/useUnits'
 import { useOrgs } from '@/components/hooks/useOrgs'
 import { Unit } from '@/components/types'
-import { Folder, ChevronRight, ChevronDown, Monitor, Layout, Server, Database, Package, ExternalLink, Activity, Globe, Clock, AlertCircle, CheckCircle2, Download } from 'lucide-react'
+import { Folder, ChevronRight, ChevronDown, Monitor, Layout, Server, Database, Package, ExternalLink, Activity, Globe, Clock, AlertCircle, CheckCircle2, Download, Trash2, Edit, Save, X } from 'lucide-react'
 import Link from 'next/link'
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend)
@@ -22,10 +22,14 @@ export default function DashboardView({ orgId: propOrgId }: DashboardViewProps) 
 
     const { orgs } = useOrgs()
     const { data: usageData, loading, error, refetch, setSelectedUnitId } = useUsageData(viewOrgId || undefined)
-    const { units, loading: unitsLoading } = useUnits(viewOrgId || undefined)
+    const { units, loading: unitsLoading, refetchUnits } = useUnits(viewOrgId || undefined)
     const [selectedUnit, setSelectedUnit] = useState<Unit | null>(null)
     const [expandedOrgs, setExpandedOrgs] = useState<Record<string, boolean>>({})
     const [origin, setOrigin] = useState('')
+
+    // Edit State
+    const [editingUnitId, setEditingUnitId] = useState<string | null>(null)
+    const [editForm, setEditForm] = useState({ comp_id: '', org_id: '' })
 
     useEffect(() => {
         if (typeof window !== 'undefined') {
@@ -54,6 +58,66 @@ export default function DashboardView({ orgId: propOrgId }: DashboardViewProps) 
         window.open(url, '_blank')
     }
 
+    // Deployment Helper
+    const downloadClient = () => {
+        const url = `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000'}/api/deploy/generate`
+        window.open(url, '_blank')
+    }
+
+    // Management Handlers
+    const handleDeleteUnit = async (unitId: string, e: React.MouseEvent) => {
+        e.stopPropagation()
+        if (!confirm('Are you sure you want to delete this unit? This action cannot be undone.')) return
+
+        try {
+            const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000'}/api/units/${unitId}`, {
+                method: 'DELETE'
+            })
+            if (res.ok) {
+                refetchUnits() // Reload list
+                if (selectedUnit?.id === unitId) {
+                    setSelectedUnit(null)
+                    setSelectedUnitId(null)
+                }
+            } else {
+                alert('Failed to delete unit')
+            }
+        } catch (error) {
+            console.error('Delete failed:', error)
+            alert('Error deleting unit')
+        }
+    }
+
+    const startEditing = (unit: Unit, e: React.MouseEvent) => {
+        e.stopPropagation()
+        setEditingUnitId(unit.id)
+        setEditForm({ comp_id: unit.comp_id || '', org_id: unit.org_id || '' })
+    }
+
+    const cancelEditing = (e: React.MouseEvent) => {
+        e.stopPropagation()
+        setEditingUnitId(null)
+    }
+
+    const saveEdit = async (unitId: string, e: React.MouseEvent) => {
+        e.stopPropagation()
+        try {
+            const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000'}/api/units/${unitId}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(editForm)
+            })
+            if (res.ok) {
+                setEditingUnitId(null)
+                refetchUnits()
+            } else {
+                alert('Failed to update unit')
+            }
+        } catch (error) {
+            console.error('Update failed:', error)
+            alert('Error updating unit')
+        }
+    }
     // Robust Local Time Formatting
     const formatTimestamp = (timestamp: string) => {
         if (!timestamp) return 'N/A'
@@ -284,6 +348,17 @@ export default function DashboardView({ orgId: propOrgId }: DashboardViewProps) 
                     {/* VIEW 1: GLOBAL LANDING SCREEN */}
                     {!viewOrgId && !selectedUnit && !propOrgId && (
                         <div className="space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-700">
+                            {/* SHIP CLIENT BUTTON */}
+                            <div className="flex justify-end mb-4">
+                                <button
+                                    onClick={downloadClient}
+                                    className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-bold text-xs uppercase tracking-wider transition-all shadow-lg shadow-blue-500/20"
+                                >
+                                    <Download className="w-4 h-4" />
+                                    Ship Client Payload
+                                </button>
+                            </div>
+
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                                 {orgs.map(org => {
                                     const orgUnits = units.filter(u => u.org_id === org)
@@ -395,21 +470,41 @@ export default function DashboardView({ orgId: propOrgId }: DashboardViewProps) 
                                                 <tr
                                                     key={unit.id}
                                                     onClick={() => {
+                                                        if (editingUnitId === unit.id) return
                                                         setSelectedUnitId(unit.id)
                                                         setSelectedUnit(unit)
                                                     }}
-                                                    className="group hover:bg-slate-700/30 transition-colors cursor-pointer border-b border-slate-800/50 last:border-0"
+                                                    className={`group hover:bg-slate-700/30 transition-colors cursor-pointer border-b border-slate-800/50 last:border-0 ${editingUnitId === unit.id ? 'bg-slate-700/40' : ''}`}
                                                 >
                                                     <td className="px-6 py-4">
                                                         <div className="flex items-center gap-3">
                                                             <Monitor className={`w-4 h-4 ${unit.status === 'online' ? 'text-slate-300' : 'text-slate-600'}`} />
-                                                            <span className="font-bold text-sm text-white font-mono">{unit.comp_id}</span>
+                                                            {editingUnitId === unit.id ? (
+                                                                <div className="flex flex-col gap-1" onClick={e => e.stopPropagation()}>
+                                                                    <input
+                                                                        type="text"
+                                                                        value={editForm.comp_id}
+                                                                        onChange={e => setEditForm({ ...editForm, comp_id: e.target.value })}
+                                                                        className="bg-slate-900 border border-slate-600 rounded px-2 py-1 text-xs text-white focus:border-blue-500 outline-none font-mono"
+                                                                        placeholder="Hostname"
+                                                                    />
+                                                                    <input
+                                                                        type="text"
+                                                                        value={editForm.org_id}
+                                                                        onChange={e => setEditForm({ ...editForm, org_id: e.target.value })}
+                                                                        className="bg-slate-900 border border-slate-600 rounded px-2 py-1 text-xs text-slate-400 focus:border-blue-500 outline-none"
+                                                                        placeholder="Organization"
+                                                                    />
+                                                                </div>
+                                                            ) : (
+                                                                <span className="font-bold text-sm text-white font-mono">{unit.comp_id}</span>
+                                                            )}
                                                         </div>
                                                     </td>
                                                     <td className="px-6 py-4">
                                                         <div className={`inline-flex items-center gap-2 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wide border ${unit.status === 'online'
-                                                                ? 'bg-green-500/10 text-green-500 border-green-500/20'
-                                                                : 'bg-red-500/10 text-red-500 border-red-500/20'
+                                                            ? 'bg-green-500/10 text-green-500 border-green-500/20'
+                                                            : 'bg-red-500/10 text-red-500 border-red-500/20'
                                                             }`}>
                                                             {unit.status === 'online' ? <CheckCircle2 className="w-3 h-3" /> : <AlertCircle className="w-3 h-3" />}
                                                             {unit.status}
@@ -422,7 +517,30 @@ export default function DashboardView({ orgId: propOrgId }: DashboardViewProps) 
                                                         </div>
                                                     </td>
                                                     <td className="px-6 py-4 text-right">
-                                                        <ChevronRight className="w-4 h-4 text-slate-600 group-hover:text-blue-400 group-hover:translate-x-1 transition-all inline-block" />
+                                                        {editingUnitId === unit.id ? (
+                                                            <div className="flex items-center justify-end gap-2">
+                                                                <button onClick={(e) => saveEdit(unit.id, e)} className="p-1.5 bg-green-500/10 text-green-500 rounded hover:bg-green-500/20 transition-colors">
+                                                                    <Save className="w-4 h-4" />
+                                                                </button>
+                                                                <button onClick={cancelEditing} className="p-1.5 bg-slate-700 text-slate-400 rounded hover:bg-slate-600 transition-colors">
+                                                                    <X className="w-4 h-4" />
+                                                                </button>
+                                                            </div>
+                                                        ) : (
+                                                            <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                                {!propOrgId && (
+                                                                    <>
+                                                                        <button onClick={(e) => startEditing(unit, e)} className="p-1.5 hover:bg-blue-500/10 text-slate-500 hover:text-blue-400 rounded transition-colors">
+                                                                            <Edit className="w-4 h-4" />
+                                                                        </button>
+                                                                        <button onClick={(e) => handleDeleteUnit(unit.id, e)} className="p-1.5 hover:bg-red-500/10 text-slate-500 hover:text-red-400 rounded transition-colors">
+                                                                            <Trash2 className="w-4 h-4" />
+                                                                        </button>
+                                                                    </>
+                                                                )}
+                                                                <ChevronRight className="w-4 h-4 text-slate-600 group-hover:text-blue-400 group-hover:translate-x-1 transition-all inline-block" />
+                                                            </div>
+                                                        )}
                                                     </td>
                                                 </tr>
                                             ))}

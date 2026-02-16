@@ -193,6 +193,10 @@ class UnitClient:
             response = requests.post(url, json=info, timeout=30)
             if response.status_code in [200, 201, 409]:
                 self.registered = True
+                try:
+                    self.unit_id = response.json().get('unit_id')
+                except: pass
+
                 if not self.silent:
                     print(f"Unit registered successfully (Status: {response.status_code})")
                 return True
@@ -306,7 +310,8 @@ class UnitClient:
                 'ram_usage': ram_usage,
                 'gpu_usage': gpu_usage,
                 'network_rx': network_rx,
-                'network_tx': network_tx
+                'network_tx': network_tx,
+                'unit_id': self.unit_id
             }
             return data
         except Exception as e:
@@ -315,10 +320,10 @@ class UnitClient:
 
     def submit_data(self, data):
         """Submit usage data to the central server"""
-        url = f"{self.server_url}/api/submit_usage"
+        url = f"{self.server_url}/api/report_usage"
         try:
             if not self.silent:
-                print(f"DEBUG: Submitting data with timestamp: {data.get('timestamp')}")
+                # print(f"DEBUG: Submitting data with timestamp: {data.get('timestamp')}")
             response = requests.post(url, json=data, timeout=30)
             if response.status_code != 200:
                  if not self.silent:
@@ -344,6 +349,10 @@ class UnitClient:
                 time.sleep(10)
                 continue
             
+            # Patch unit_id if missing (e.g. collected before registration)
+            if not data.get('unit_id') and self.unit_id:
+                data['unit_id'] = self.unit_id
+
             if self.submit_data(data):
                 if not self.silent and self.data_queue.qsize() % 10 == 0:
                     print(f"Synced record. Remaining in queue: {self.data_queue.qsize()}")

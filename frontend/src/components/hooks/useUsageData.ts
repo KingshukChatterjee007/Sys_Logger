@@ -23,11 +23,13 @@ export const useUsageData = (orgId?: string): UseUsageDataReturn => {
     try {
       let endpoint = ''
       if (selectedUnitId) {
-        endpoint = `/api/unit/${selectedUnitId}/usage`
+        endpoint = `/api/units/${selectedUnitId}/usage`
       } else if (orgId) {
-        endpoint = `/api/orgs/${orgId}/usage`
+        // Fallback for Org View if no specfic unit selected (maybe average?)
+        endpoint = '/api/usage'
       } else {
-        endpoint = '/api/all-units-usage'
+        // Global View / Fallback
+        endpoint = '/api/usage'
       }
 
       const response = await apiFetch(endpoint)
@@ -45,6 +47,8 @@ export const useUsageData = (orgId?: string): UseUsageDataReturn => {
 
         if (log.gpu_load !== undefined && log.gpu_load !== null) {
           gpu_load = typeof log.gpu_load === 'number' ? log.gpu_load : 0
+        } else if (log.gpu_usage !== undefined && log.gpu_usage !== null) {
+          gpu_load = typeof log.gpu_usage === 'number' ? log.gpu_usage : 0
         } else if (log.gpu !== undefined && log.gpu !== null) {
           const gpuData = log.gpu
           if (typeof gpuData === 'number') {
@@ -66,7 +70,11 @@ export const useUsageData = (orgId?: string): UseUsageDataReturn => {
 
         return {
           ...log,
-          gpu_load: gpu_load || 0
+          cpu: (log.cpu !== undefined) ? log.cpu : (log.cpu_usage || 0),
+          ram: (log.ram !== undefined) ? log.ram : (log.ram_usage || 0),
+          gpu_load: gpu_load || 0,
+          network_rx: (log.network_rx !== undefined) ? log.network_rx : 0,
+          network_tx: (log.network_tx !== undefined) ? log.network_tx : 0
         }
       })
 

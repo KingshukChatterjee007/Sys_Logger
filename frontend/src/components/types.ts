@@ -10,6 +10,9 @@ export interface UsageData {
   unit_id: string
   org_id?: string
   comp_id?: string
+  cpu_usage?: number
+  ram_usage?: number
+  gpu_usage?: number
 }
 
 export interface Unit {
