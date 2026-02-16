@@ -261,8 +261,10 @@ def generate_deploy_script():
 # Organization: {org_id}
 # Target Server: {server_url}
 
-$OrgId = "{org_id}"
-$ServerUrl = "{server_url}"
+param(
+    [string]$OrgId = "{org_id}",
+    [string]$ServerUrl = "{server_url}"
+)
 
 Write-Host ">>> Starting Sys_Logger Deployment for Org: $OrgId" -ForegroundColor Cyan
 

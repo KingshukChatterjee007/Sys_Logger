@@ -58,10 +58,33 @@ export default function DashboardView({ orgId: propOrgId }: DashboardViewProps) 
         window.open(url, '_blank')
     }
 
-    // Deployment Helper
-    const downloadClient = () => {
-        const url = `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000'}/api/deploy/generate`
+    // Deployment State
+    const [showDeployModal, setShowDeployModal] = useState(false)
+    const [deployOrgId, setDeployOrgId] = useState('default_org')
+    const [deployServerUrl, setDeployServerUrl] = useState('')
+
+    useEffect(() => {
+        if (typeof window !== 'undefined') {
+            setOrigin(window.location.origin)
+            // Default to current origin API
+            setDeployServerUrl(`${window.location.protocol}//${window.location.hostname}:5000`)
+        }
+    }, [])
+
+    const openDeployModal = () => {
+        setShowDeployModal(true)
+    }
+
+    const closeDeployModal = () => {
+        setShowDeployModal(false)
+    }
+
+    const downloadClientPayload = () => {
+        // Construct the URL with parameters
+        const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000'
+        const url = `${baseUrl}/api/deploy/generate?org_id=${encodeURIComponent(deployOrgId)}&server=${encodeURIComponent(deployServerUrl)}`
         window.open(url, '_blank')
+        closeDeployModal()
     }
 
     // Management Handlers
@@ -351,7 +374,7 @@ export default function DashboardView({ orgId: propOrgId }: DashboardViewProps) 
                             {/* SHIP CLIENT BUTTON */}
                             <div className="flex justify-end mb-4">
                                 <button
-                                    onClick={downloadClient}
+                                    onClick={openDeployModal}
                                     className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-bold text-xs uppercase tracking-wider transition-all shadow-lg shadow-blue-500/20"
                                 >
                                     <Download className="w-4 h-4" />
@@ -650,6 +673,64 @@ export default function DashboardView({ orgId: propOrgId }: DashboardViewProps) 
                     )}
                 </div>
             </div>
+            {/* Deployment Modal */}
+            {showDeployModal && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm animate-in fade-in duration-200">
+                    <div className="bg-slate-800 border border-slate-600 rounded-2xl p-6 w-full max-w-md shadow-2xl scale-100 animate-in zoom-in-95 duration-200">
+                        <div className="flex justify-between items-center mb-6">
+                            <h3 className="text-lg font-black text-white uppercase tracking-wide flex items-center gap-2">
+                                <Package className="w-5 h-5 text-blue-500" />
+                                Configure Payload
+                            </h3>
+                            <button onClick={closeDeployModal} className="text-slate-400 hover:text-white transition-colors">
+                                <X className="w-5 h-5" />
+                            </button>
+                        </div>
+
+                        <div className="space-y-4 mb-8">
+                            <div>
+                                <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1.5">Target Organization ID</label>
+                                <input
+                                    type="text"
+                                    value={deployOrgId}
+                                    onChange={(e) => setDeployOrgId(e.target.value)}
+                                    className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:border-blue-500 outline-none font-mono"
+                                    placeholder="e.g. Finance_Dept"
+                                />
+                                <p className="text-[10px] text-slate-500 mt-1">Units will automatically join this organization.</p>
+                            </div>
+
+                            <div>
+                                <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1.5">Connection Server URL</label>
+                                <input
+                                    type="text"
+                                    value={deployServerUrl}
+                                    onChange={(e) => setDeployServerUrl(e.target.value)}
+                                    className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:border-blue-500 outline-none font-mono"
+                                    placeholder="http://server_ip:5000"
+                                />
+                                <p className="text-[10px] text-slate-500 mt-1">Ensure this URL is reachable from the target machines.</p>
+                            </div>
+                        </div>
+
+                        <div className="flex justify-end gap-3">
+                            <button
+                                onClick={closeDeployModal}
+                                className="px-4 py-2 text-xs font-bold text-slate-400 hover:text-white transition-colors uppercase"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={downloadClientPayload}
+                                className="flex items-center gap-2 px-6 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-bold text-xs uppercase tracking-wider shadow-lg shadow-blue-500/20 transition-all"
+                            >
+                                <Download className="w-4 h-4" />
+                                Download Payload
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     )
 }
