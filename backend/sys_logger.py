@@ -505,9 +505,13 @@ def export_unit_data(unit_id):
                              try: gpu = float(record['gpu'])
                              except: pass
 
+                        # Convert to IST (UTC + 5:30)
+                        ist_offset = timedelta(hours=5, minutes=30)
+                        dt_ist = record_time + ist_offset
+                        
                         records.append({
-                            'timestamp': record.get('timestamp'),
-                            'dt': record_time,
+                            'timestamp': dt_ist.strftime('%Y-%m-%d %H:%M:%S'),
+                            'dt': record_time, # Keep original for sorting
                             'cpu': cpu,
                             'ram': ram,
                             'gpu': gpu

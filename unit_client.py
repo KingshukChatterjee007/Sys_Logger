@@ -322,9 +322,16 @@ class UnitClient:
         """Submit usage data to the central server"""
         url = f"{self.server_url}/api/report_usage"
         try:
-            if not self.silent:
-                # print(f"DEBUG: Submitting data with timestamp: {data.get('timestamp')}")
+            # if not self.silent:
+            #     print(f"DEBUG: Submitting data with timestamp: {data.get('timestamp')}")
             response = requests.post(url, json=data, timeout=30)
+            if response.status_code == 404:
+                # Server forgot us (likely restarted), force re-registration
+                if not self.silent:
+                    print("Server responded with 404 (Unit Not Found). Re-registering...")
+                self.registered = False
+                return False
+            
             if response.status_code != 200:
                  if not self.silent:
                     print(f"Data submission failed with status: {response.status_code}")
@@ -349,8 +356,8 @@ class UnitClient:
                 time.sleep(10)
                 continue
             
-            # Patch unit_id if missing (e.g. collected before registration)
-            if not data.get('unit_id') and self.unit_id:
+            # Always update unit_id to the current active ID to prevent sending stale IDs
+            if self.unit_id:
                 data['unit_id'] = self.unit_id
 
             if self.submit_data(data):

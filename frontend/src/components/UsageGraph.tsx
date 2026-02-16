@@ -120,7 +120,7 @@ export const UsageGraph: React.FC<UsageGraphProps> = ({
       case 'cpu':
         dataset = {
           label: 'CPU Usage',
-          data: filteredData.map(log => log.cpu),
+          data: filteredData.map(log => log.cpu ?? log.cpu_usage ?? 0),
           borderColor: '#ef4444',
           backgroundColor: 'rgba(239, 68, 68, 0.1)',
           fill: true,
@@ -134,7 +134,7 @@ export const UsageGraph: React.FC<UsageGraphProps> = ({
       case 'ram':
         dataset = {
           label: 'RAM Usage',
-          data: filteredData.map(log => log.ram),
+          data: filteredData.map(log => log.ram ?? log.ram_usage ?? 0),
           borderColor: '#3b82f6',
           backgroundColor: 'rgba(59, 130, 246, 0.1)',
           fill: true,
@@ -148,7 +148,11 @@ export const UsageGraph: React.FC<UsageGraphProps> = ({
       case 'gpu':
         dataset = {
           label: 'GPU Usage',
-          data: filteredData.map(log => log.gpu_load || 0),
+          data: filteredData.map(log => {
+            // Handle complex objects or usage keys
+            if (typeof log.gpu === 'number') return log.gpu
+            return log.gpu_load ?? log.gpu_usage ?? 0
+          }),
           borderColor: '#10b981',
           backgroundColor: 'rgba(16, 185, 129, 0.1)',
           fill: true,
@@ -224,12 +228,16 @@ export const UsageGraph: React.FC<UsageGraphProps> = ({
         callbacks: {
           title: (context: TooltipItem<'line'>[]) => {
             const index = context[0].dataIndex
-            const iso = filteredData[index].timestamp.endsWith('Z') ? filteredData[index].timestamp : filteredData[index].timestamp + 'Z'
+            const dataPoint = filteredData[index]
+            if (!dataPoint || !dataPoint.timestamp) return 'N/A'
+            const iso = dataPoint.timestamp.endsWith('Z') ? dataPoint.timestamp : dataPoint.timestamp + 'Z'
             return new Date(iso).toLocaleString()
           },
           label: (context: TooltipItem<'line'>) => {
             const value = context.parsed.y
             if (value === null) return ''
+            // The data mapping already handles fallback to 0 for cpu/ram/gpu if undefined.
+            // The 'value' here is already the processed number.
             const unit = (metric === 'cpu' || metric === 'ram' || metric === 'gpu') ? '%' :
               (metric === 'temperature') ? '°C' : ' KB/s'
             return `${context.dataset.label || 'Usage'}: ${value.toFixed(1)}${unit}`

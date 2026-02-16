@@ -354,19 +354,102 @@ def setup_sqlite():
 # -----------------------------------------------------------
 # MAIN LOGIC
 # -----------------------------------------------------------
+
+def setup_windows_service():
+    """Install Sys_Logger Server as a Windows Service using NSSM"""
+    print("\n➡ Installing Windows Service...")
+    
+    if platform.system() != 'Windows':
+        print("❌ Service installation is only supported on Windows.")
+        return
+
+    # Check for Admin privileges
+    try:
+        is_admin = os.getuid() == 0
+    except AttributeError:
+        import ctypes
+        is_admin = ctypes.windll.shell32.IsUserAnAdmin() != 0
+
+    if not is_admin:
+        print("❌ Admin privileges required. Please run this script as Administrator.")
+        return
+
+    # Helper Paths
+    nssm_path = PROJECT_ROOT / "nssm.exe"
+    python_exe = sys.executable
+    server_script = PROJECT_ROOT / "backend" / "sys_logger.py"
+    service_name = "Sys_Logger_Server"
+
+    # Download NSSM if missing
+    if not nssm_path.exists():
+        print("⬇ Downloading NSSM (Service Manager)...")
+        # Reuse logic from create_service.ps1 but in Python or just rely on powershell
+        # For simplicity, let's use a PowerShell one-liner to download/extract if needed
+        # Or better, just instruct user or bundling it. 
+        # Actually, let's use the explicit powershell command to download it blindly if missing
+        ps_download = f"""
+        $Url = "https://nssm.cc/release/nssm-2.24.zip"
+        $Zip = "{PROJECT_ROOT}\\nssm.zip"
+        $Dest = "{PROJECT_ROOT}\\nssm-temp"
+        Invoke-WebRequest -Uri $Url -OutFile $Zip
+        Expand-Archive -Path $Zip -DestinationPath $Dest
+        Copy-Item "$Dest\\nssm-2.24\\win64\\nssm.exe" "{nssm_path}"
+        Remove-Item $Zip
+        Remove-Item $Dest -Recurse
+        """
+        try:
+            subprocess.run(["powershell", "-Command", ps_download], check=True)
+        except Exception as e:
+            print(f"❌ Failed to download NSSM: {e}")
+            return
+
+    print(f"➡ Registering Service: {service_name}...")
+    
+    # NSSM Commands
+    commands = [
+        f'{nssm_path} install {service_name} "{python_exe}" "{server_script}"',
+        f'{nssm_path} set {service_name} AppDirectory "{PROJECT_ROOT}"',
+        f'{nssm_path} set {service_name} Description "Sys_Logger Backend Server"',
+        f'{nssm_path} set {service_name} DisplayName "Sys_Logger Server"',
+        f'{nssm_path} set {service_name} Start SERVICE_AUTO_START',
+        f'{nssm_path} set {service_name} AppExit Default Restart',
+        f'{nssm_path} set {service_name} AppRestartDelay 5000',
+        f'{nssm_path} set {service_name} AppStdout "{PROJECT_ROOT}\\server_log.txt"',
+        f'{nssm_path} set {service_name} AppStderr "{PROJECT_ROOT}\\server_error.log"'
+    ]
+
+    for cmd in commands:
+        try:
+            subprocess.run(cmd, check=True, shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        except subprocess.CalledProcessError:
+            print(f"⚠ Warning: specific NSSM command failed or service already exists. Continuing...")
+
+    print("➡ Starting Service...")
+    subprocess.run(f'{nssm_path} start {service_name}', shell=True)
+    
+    print(f"✅ Service '{service_name}' installed and started!")
+    print("   Run 'services.msc' to verify.")
+
+
 def main():
     print("\n=== Sys_Logger Server Setup ===\n")
 
-    # Prefer PostgreSQL
+    # 1. Database Setup
     if PG_AVAILABLE and postgres_running() and setup_postgres_database():
         if apply_postgres_schema():
-            print("🎉 Using PostgreSQL mode")
+            print("🎉 Database: PostgreSQL")
         else:
-            print("⚠ PostgreSQL schema failed → switching to SQLite")
+            print("⚠ Database: SQLite (PostgreSQL schema failed)")
             setup_sqlite()
     else:
-        print("⚠ PostgreSQL not available → using SQLite")
+        print("⚠ Database: SQLite (PostgreSQL unavailable)")
         setup_sqlite()
+
+    # 2. Service Installation Prompt
+    print("\n--- Production Setup ---")
+    ask = input("Install as persistent Windows Service? (y/n): ").lower().strip()
+    if ask == 'y':
+        setup_windows_service()
 
     print("\nSetup complete.\n")
 
