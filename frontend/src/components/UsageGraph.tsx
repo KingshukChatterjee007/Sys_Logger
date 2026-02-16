@@ -37,14 +37,20 @@ export const UsageGraph: React.FC<UsageGraphProps> = ({
     return () => clearInterval(interval)
   }, [])
 
+  // Navigation & Time Helper: Standardize UTC to Local
+  const toLocalTime = (timestamp: string) => {
+    if (!timestamp) return 0
+    // Force UTC if missing Z
+    const iso = timestamp.endsWith('Z') ? timestamp : timestamp + 'Z'
+    return new Date(iso).getTime()
+  }
+
   const filteredData = useMemo(() => {
     if (!data.length) return []
 
-    // Sort data by timestamp to ensure chronological order
+    // Sort data by timestamp (Local Time) to ensure chronological order
     const sortedData = [...data].sort((a, b) => {
-      const timeA = new Date(a.timestamp).getTime()
-      const timeB = new Date(b.timestamp).getTime()
-      return timeA - timeB
+      return toLocalTime(a.timestamp) - toLocalTime(b.timestamp)
     })
 
     const timeRanges = {
@@ -60,25 +66,20 @@ export const UsageGraph: React.FC<UsageGraphProps> = ({
       '1d': 24 * 60 * 60 * 1000
     }
 
-    // Get the most recent timestamp from data
+    // Get the most recent timestamp from data in Local Time
     const latestTimestamp = sortedData.length > 0
-      ? new Date(sortedData[sortedData.length - 1].timestamp).getTime()
+      ? toLocalTime(sortedData[sortedData.length - 1].timestamp)
       : currentTime
 
-    // Use the latest data timestamp as reference point instead of currentTime
-    // This handles timezone differences and system clock issues
     const referenceTime = latestTimestamp > currentTime ? latestTimestamp : currentTime
     const cutoff = referenceTime - timeRanges[selectedTimeRange]
 
     const filtered = sortedData.filter(log => {
-      const logTime = new Date(log.timestamp).getTime()
-      return logTime >= cutoff
+      return toLocalTime(log.timestamp) >= cutoff
     })
 
-    // If no data after filtering, show last N data points (fallback)
-    // This ensures graphs always show something if data exists
     if (filtered.length === 0 && sortedData.length > 0) {
-      const maxPoints = Math.min(sortedData.length, Math.ceil(timeRanges[selectedTimeRange] / 4000)) // 4s per point
+      const maxPoints = Math.min(sortedData.length, Math.ceil(timeRanges[selectedTimeRange] / 4000))
       return sortedData.slice(-maxPoints)
     }
 
@@ -87,7 +88,6 @@ export const UsageGraph: React.FC<UsageGraphProps> = ({
 
   const chartData = useMemo(() => {
     if (!filteredData.length) {
-      // Return empty chart data structure
       return {
         labels: [],
         datasets: [{
@@ -107,9 +107,10 @@ export const UsageGraph: React.FC<UsageGraphProps> = ({
 
     const labels = filteredData.map(log => {
       try {
-        return new Date(log.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })
+        const iso = log.timestamp.endsWith('Z') ? log.timestamp : log.timestamp + 'Z'
+        return new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })
       } catch {
-        return new Date(log.timestamp).toString()
+        return 'N/A'
       }
     })
 
@@ -202,29 +203,15 @@ export const UsageGraph: React.FC<UsageGraphProps> = ({
         break
     }
 
-    if (!dataset) {
-      return {
-        labels: [],
-        datasets: [],
-      }
-    }
-
-    return {
-      labels,
-      datasets: [dataset],
-    }
+    return { labels, datasets: [dataset] }
   }, [filteredData, metric])
 
   const chartOptions = useMemo(() => ({
     responsive: true,
     maintainAspectRatio: false,
-    animation: {
-      duration: 200,
-    },
+    animation: { duration: 200 },
     plugins: {
-      legend: {
-        display: false,
-      },
+      legend: { display: false },
       tooltip: {
         enabled: true,
         backgroundColor: 'rgba(15, 23, 42, 0.95)',
@@ -234,16 +221,11 @@ export const UsageGraph: React.FC<UsageGraphProps> = ({
         borderWidth: 1,
         cornerRadius: 4,
         padding: 8,
-        titleFont: {
-          size: 11,
-        },
-        bodyFont: {
-          size: 10,
-        },
         callbacks: {
           title: (context: TooltipItem<'line'>[]) => {
             const index = context[0].dataIndex
-            return new Date(filteredData[index].timestamp).toLocaleString()
+            const iso = filteredData[index].timestamp.endsWith('Z') ? filteredData[index].timestamp : filteredData[index].timestamp + 'Z'
+            return new Date(iso).toLocaleString()
           },
           label: (context: TooltipItem<'line'>) => {
             const value = context.parsed.y
@@ -257,106 +239,51 @@ export const UsageGraph: React.FC<UsageGraphProps> = ({
     },
     scales: {
       x: {
-        display: true,
         ticks: {
           color: '#94a3b8',
-          font: {
-            size: 9,
-          },
+          font: { size: 9 },
           autoSkip: true,
-          autoSkipPadding: 20,
-          maxRotation: 0,
           maxTicksLimit: 8
         },
-        grid: {
-          color: 'rgba(71, 85, 105, 0.3)',
-        },
+        grid: { color: 'rgba(71, 85, 105, 0.1)' },
       },
       y: {
-        display: true,
         ticks: {
           color: '#94a3b8',
-          font: {
-            size: 9,
-          },
-          callback: (value: string | number) => {
-            const numValue = typeof value === 'string' ? parseFloat(value) : value
-            if (metric === 'cpu' || metric === 'ram' || metric === 'gpu') return `${numValue}%`
-            if (metric === 'temperature') return `${numValue}°C`
-            return `${numValue} KB/s`
-          },
+          font: { size: 9 },
+          callback: (value: any) => {
+            if (metric === 'cpu' || metric === 'ram' || metric === 'gpu') return `${value}%`
+            return value
+          }
         },
-        grid: {
-          color: 'rgba(71, 85, 105, 0.3)',
-        },
+        grid: { color: 'rgba(71, 85, 105, 0.1)' },
         min: 0,
         max: (metric === 'cpu' || metric === 'ram' || metric === 'gpu') ? 100 : undefined,
       },
     },
-    interaction: {
-      intersect: false,
-      mode: 'index' as const,
-    },
-  }), [filteredData])
+    interaction: { intersect: false, mode: 'index' as const },
+  }), [filteredData, metric])
 
-  const timeRangeOptions: { value: TimeRange; label: string }[] = [
-    { value: '30s', label: '30s' },
-    { value: '1m', label: '1m' },
-    { value: '5m', label: '5m' },
-    { value: '15m', label: '15m' },
-    { value: '30m', label: '30m' },
-    { value: '1h', label: '1h' },
-    { value: '3h', label: '3h' },
-    { value: '6h', label: '6h' },
-    { value: '12h', label: '12h' },
-    { value: '1d', label: '1d' }
-  ]
-
-  if (loading) {
-    return (
-      <div className={`flex items-center justify-center p-8 ${className}`}>
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-6 w-6 border-2 border-blue-500 border-t-transparent mx-auto mb-2"></div>
-          <p className="text-slate-400 text-xs">Loading...</p>
-        </div>
-      </div>
-    )
-  }
-
-  if (error) {
-    return (
-      <div className={`p-4 ${className}`}>
-        <div className="text-center">
-          <p className="text-red-400 text-xs mb-2">{error}</p>
-          <button
-            onClick={onRetry}
-            className="bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded text-xs transition-colors"
-          >
-            Retry
-          </button>
-        </div>
-      </div>
-    )
-  }
+  if (loading) return <div className="p-8 text-center text-slate-500">Loading Fleet Data...</div>
+  if (error) return <div className="p-8 text-center text-red-400">{error}</div>
 
   return (
     <div className={className}>
-      {/* Time Range Selector */}
-      <div className="flex flex-wrap gap-1 mb-3">
-        {timeRangeOptions.map((option) => (
+      <div className="flex flex-wrap gap-1 mb-4">
+        {['30s', '1m', '5m', '15m', '30m', '1h', '3h', '6h', '12h', '1d'].map((range) => (
           <button
-            key={option.value}
-            onClick={() => setSelectedTimeRange(option.value)}
-            className={`px-2 py-0.5 text-xs rounded transition-colors ${selectedTimeRange === option.value
-              ? 'bg-blue-600 text-white'
-              : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+            key={range}
+            onClick={() => setSelectedTimeRange(range as TimeRange)}
+            className={`px-3 py-1 text-[10px] font-bold rounded-lg transition-all ${selectedTimeRange === range
+              ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/20'
+              : 'bg-slate-800 text-slate-500 hover:text-slate-300 hover:bg-slate-700'
               }`}
           >
-            {option.label}
+            {range.toUpperCase()}
           </button>
         ))}
       </div>
-      <div className="h-36">
+      <div className="h-48">
         <Line data={chartData} options={chartOptions} />
       </div>
     </div>
