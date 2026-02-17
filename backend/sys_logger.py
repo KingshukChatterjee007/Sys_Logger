@@ -183,9 +183,25 @@ socketio = SocketIO(app, cors_allowed_origins="*")
 
 # --- Routes ---
 
+def get_local_ip():
+    """Detect the local IP address of this machine"""
+    try:
+        # Connect to a public DNS to determine the routing IP (doesn't actually send data)
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.connect(("8.8.8.8", 80))
+        ip = s.getsockname()[0]
+        s.close()
+        return ip
+    except Exception:
+        return "127.0.0.1"
+
 @app.route('/health', methods=['GET'])
 def health_check():
-    return jsonify({'status': 'ok', 'timestamp': datetime.now().isoformat()}), 200
+    return jsonify({
+        'status': 'ok', 
+        'timestamp': datetime.now().isoformat(),
+        'local_ip': get_local_ip()
+    }), 200
 
 @app.route('/api/units', methods=['GET'])
 def get_units():
@@ -250,11 +266,24 @@ def update_unit(unit_id):
 
 # --- DEPLOYMENT GENERATOR ---
 
+@app.route('/api/deploy/client_source', methods=['GET'])
+def serve_client_source():
+    """Serve the full unit_client.py source code"""
+    try:
+        # Assuming unit_client.py is one level up from backend/
+        client_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'unit_client.py')
+        if os.path.exists(client_path):
+            return send_file(client_path, mimetype='text/x-python')
+        else:
+            return "Client source not found on server.", 404
+    except Exception as e:
+        return str(e), 500
+
 @app.route('/api/deploy/generate', methods=['GET'])
 def generate_deploy_script():
     """Generate a PowerShell script for bulk deployment"""
     org_id = request.args.get('org_id', 'default_org')
-    server_url = request.args.get('server', 'http://localhost:5000') # Defaults to current, client should send
+    server_url = request.args.get('server', 'http://localhost:5000') 
     
     script_content = f"""
 # Sys_Logger Bulk Deployment Script
@@ -278,65 +307,36 @@ if (!(Get-Command python -ErrorAction SilentlyContinue)) {{
 Write-Host "Installing dependencies..."
 pip install requests psutil GPUtil flask flask-socketio flask-cors python-dotenv
 
-# 3. Create Client Script
-$ClientScript = @"
-import time
-import psutil
-import requests
-import platform
-import socket
-import json
+# 3. Download Client Source
+$ClientUrl = "$ServerUrl/api/deploy/client_source"
+$ClientPath = Join-Path $PWD "unit_client.py"
+$ConfigPath = Join-Path $PWD "unit_client_config.json"
 
-SERVER_URL = '$ServerUrl'
-ORG_ID = '$OrgId'
-COMP_ID = socket.gethostname() # Auto-use Hostname
-SYSTEM_ID = str(socket.gethostname()) # Simple ID
+Write-Host "Downloading client from $ClientUrl..."
+try {{
+    Invoke-WebRequest -Uri $ClientUrl -OutFile $ClientPath
+}} catch {{
+    Write-Host "Failed to download client source. Connectivity issue?" -ForegroundColor Red
+    exit
+}}
 
-def register():
-    try:
-        data = {{
-            'system_id': SYSTEM_ID,
-            'org_id': ORG_ID,
-            'comp_id': COMP_ID,
-            'hostname': socket.gethostname(),
-            'os_info': platform.platform(),
-            'cpu_info': platform.processor(),
-            'ram_total': round(psutil.virtual_memory().total / (1024**3), 2)
-        }}
-        res = requests.post(f'{{SERVER_URL}}/api/register_unit', json=data)
-        if res.status_code in [200, 201]:
-            print(f"Registered as {{ORG_ID}}/{{COMP_ID}}")
-            return res.json().get('unit_id')
-    except Exception as e:
-        print(f"Registration failed: {{e}}")
-    return None
-
-def loop(unit_id):
-    while True:
-        try:
-            usage = {{
-                'unit_id': unit_id,
-                'org_id': ORG_ID,
-                'cpu': psutil.cpu_percent(interval=1),
-                'ram': psutil.virtual_memory().percent,
-                'timestamp': time.time()
-            }}
-            requests.post(f'{{SERVER_URL}}/api/report_usage', json=usage)
-            print("Sent pulse...")
-        except:
-            print("Connection lost...")
-            time.sleep(5)
-
-if __name__ == '__main__':
-    uid = register()
-    if uid: loop(uid)
+# 4. Configure Client
+$ConfigJson = @"
+{{
+    "server_url": "$ServerUrl",
+    "org_id": "$OrgId",
+    "comp_id": "$env:COMPUTERNAME",
+    "system_id": "$(New-Guid)"
+}}
 "@
+Set-Content -Path $ConfigPath -Value $ConfigJson
 
-$ScriptPath = Join-Path $PWD "unit_client_limited.py"
-Set-Content -Path $ScriptPath -Value $ClientScript
+Write-Host "Client configured for $OrgId at $ServerUrl" -ForegroundColor Green
+Write-Host "Starting Client..."
 
-Write-Host "Client script created at: $ScriptPath" -ForegroundColor Green
-Write-Host "Run 'python unit_client_limited.py' to start."
+# 5. Start Client
+Start-Process python -ArgumentList "unit_client.py"
+Write-Host "Sys_Logger Client started in background!"
 """
     
     # Return as file download

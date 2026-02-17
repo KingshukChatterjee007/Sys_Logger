@@ -66,8 +66,23 @@ export default function DashboardView({ orgId: propOrgId }: DashboardViewProps) 
     useEffect(() => {
         if (typeof window !== 'undefined') {
             setOrigin(window.location.origin)
-            // Default to current origin API
-            setDeployServerUrl(`${window.location.protocol}//${window.location.hostname}:5000`)
+
+            // Auto-detect Server IP for deployment
+            const fetchLocalIp = async () => {
+                const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000'
+                try {
+                    const res = await fetch(`${baseUrl}/api/health`)
+                    const data = await res.json()
+                    if (data.local_ip) {
+                        setDeployServerUrl(`http://${data.local_ip}:5000`)
+                    } else {
+                        setDeployServerUrl(`${window.location.protocol}//${window.location.hostname}:5000`)
+                    }
+                } catch {
+                    setDeployServerUrl(`${window.location.protocol}//${window.location.hostname}:5000`)
+                }
+            }
+            fetchLocalIp()
         }
     }, [])
 
