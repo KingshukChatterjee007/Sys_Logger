@@ -221,18 +221,100 @@ def get_unit_usage(unit_id):
     data = UnitStore.get_usage(unit_id, limit=100)
     return jsonify(data)
 
+# --- SERVER MONITORING ---
+
+latest_server_stats = {
+    'cpu': 0,
+    'ram': 0,
+    'gpu_load': 0,
+    'timestamp': datetime.now().isoformat()
+}
+
+class ServerMonitor(threading.Thread):
+    def __init__(self):
+        super().__init__(daemon=True)
+        self.running = True
+        self.typeperf_proc = None
+
+    def run(self):
+        print("Starting Background Server Monitor...")
+        
+        # Windows GPU Monitoring via Typeperf (Generic)
+        if not NVIDIA_AVAILABLE and os.name == 'nt':
+            try:
+                # -si 0.1 for 10Hz updates
+                cmd = ['typeperf', r'\GPU Engine(*)\Utilization Percentage', '-sc', '0', '-si', '0.1']
+                self.typeperf_proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+                
+                # Skip header lines
+                for _ in range(2):
+                    self.typeperf_proc.stdout.readline()
+            except Exception as e:
+                print(f"Failed to start typeperf: {e}")
+
+        while self.running:
+            try:
+                # 1. CPU & RAM (Fast)
+                cpu = psutil.cpu_percent(interval=None)
+                ram = psutil.virtual_memory().percent
+                gpu = 0.0
+
+                # 2. GPU
+                if NVIDIA_AVAILABLE:
+                    try:
+                        gpus = GPUtil.getGPUs()
+                        if gpus:
+                            gpu = max(gpu.load * 100 for gpu in gpus)
+                    except: pass
+                
+                elif self.typeperf_proc:
+                    try:
+                        line = self.typeperf_proc.stdout.readline()
+                        if line:
+                            parts = line.split(',')
+                            # First part is timestamp, rest are values
+                            # Remove quotes and convert to float
+                            values = []
+                            for p in parts[1:]:
+                                try:
+                                    val = float(p.replace('"', ''))
+                                    values.append(val)
+                                except: pass
+                            
+                            if values:
+                                gpu = max(values)
+                    except Exception as e:
+                        print(f"Error reading typeperf: {e}")
+                        # Restart typeperf if needed?
+                        pass
+
+                # Update Global State
+                global latest_server_stats
+                latest_server_stats = {
+                    'cpu': cpu,
+                    'ram': ram,
+                    'gpu_load': round(gpu, 1),
+                    'timestamp': datetime.now().isoformat()
+                }
+
+                # Sleep small amount if not using typeperf blocking read
+                if not self.typeperf_proc:
+                     time.sleep(0.1)
+
+            except Exception as e:
+                print(f"Monitor error: {e}")
+                time.sleep(1)
+
+# Start Monitor
+monitor = ServerMonitor()
+monitor.start()
+
 # Fallback for Global Dashboard
 @app.route('/api/usage', methods=['GET'])
 def get_system_usage_route():
-    # Return fake or server usage to prevent 404s
-    return jsonify([
-        {
-            'timestamp': datetime.now().isoformat(),
-            'cpu': psutil.cpu_percent(),
-            'ram': psutil.virtual_memory().percent,
-            'gpu_load': 0
-        }
-    ])
+    # Return cached high-frequency stats
+    return jsonify([latest_server_stats])
+
 
 # --- FLEET MANAGEMENT APIS ---
 
