@@ -1,6 +1,6 @@
 #!/bin/bash
 # ==========================================
-# Sys_Logger One-Click Installer
+# Sys_Logger Installer
 # ==========================================
 
 # Ensure setup script is executable
