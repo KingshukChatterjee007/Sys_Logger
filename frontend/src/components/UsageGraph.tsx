@@ -40,8 +40,13 @@ export const UsageGraph: React.FC<UsageGraphProps> = ({
   // Navigation & Time Helper: Standardize UTC to Local
   const toLocalTime = (timestamp: string) => {
     if (!timestamp) return 0
-    // Force UTC if missing Z
-    const iso = timestamp.endsWith('Z') ? timestamp : timestamp + 'Z'
+    // Fix: Only append Z if it looks like a naive string (no Z, no +/-, T separator)
+    let iso = timestamp
+    if (!iso.endsWith('Z') && !iso.includes('+') && (iso.match(/-/g) || []).length < 3) {
+      // rough check: if only 2 hyphens (YYYY-MM-DD), and no +, assume naive UTC -> append Z
+      // If it has offset (+05:30 or -05:00), Date() handles it.
+      iso = timestamp + 'Z'
+    }
     return new Date(iso).getTime()
   }
 
@@ -107,7 +112,10 @@ export const UsageGraph: React.FC<UsageGraphProps> = ({
 
     const labels = filteredData.map(log => {
       try {
-        const iso = log.timestamp.endsWith('Z') ? log.timestamp : log.timestamp + 'Z'
+        let iso = log.timestamp
+        if (!iso.endsWith('Z') && !iso.includes('+') && (iso.match(/-/g) || []).length < 3) {
+          iso = log.timestamp + 'Z'
+        }
         return new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })
       } catch {
         return 'N/A'
@@ -230,7 +238,10 @@ export const UsageGraph: React.FC<UsageGraphProps> = ({
             const index = context[0].dataIndex
             const dataPoint = filteredData[index]
             if (!dataPoint || !dataPoint.timestamp) return 'N/A'
-            const iso = dataPoint.timestamp.endsWith('Z') ? dataPoint.timestamp : dataPoint.timestamp + 'Z'
+            let iso = dataPoint.timestamp
+            if (!iso.endsWith('Z') && !iso.includes('+') && (iso.match(/-/g) || []).length < 3) {
+              iso = dataPoint.timestamp + 'Z'
+            }
             return new Date(iso).toLocaleString()
           },
           label: (context: TooltipItem<'line'>) => {

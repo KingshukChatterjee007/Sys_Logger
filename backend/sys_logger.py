@@ -14,6 +14,8 @@ import uuid
 import pickle
 import csv
 import io
+import psycopg2
+from psycopg2.extras import RealDictCursor
 try:
     import redis
 except ImportError:
@@ -38,6 +40,16 @@ if getattr(sys, 'frozen', False):
     load_dotenv(env_path)
 else:
     load_dotenv()
+
+# DB Config
+DB_HOST = os.getenv('DB_HOST', 'localhost')
+DB_USER = os.getenv('DB_USER', 'postgres')
+DB_PASS = os.getenv('DB_PASS', 'postgres')
+DB_NAME = 'sys_logger'
+
+def get_db_connection():
+    conn = psycopg2.connect(host=DB_HOST, user=DB_USER, password=DB_PASS, dbname=DB_NAME)
+    return conn
 
 app = Flask(__name__)
 DATA_DIR = 'unit_data'
@@ -152,14 +164,7 @@ class UnitStore:
 
     @staticmethod
     def add_usage(unit_id, usage_data):
-        # Persist usage history to disk (JSONL)
-        try:
-            log_file = os.path.join(DATA_DIR, f'{unit_id}.jsonl')
-            with open(log_file, 'a') as f:
-                f.write(json.dumps(usage_data) + '\n')
-        except Exception as e:
-            print(f"Failed to log usage to disk: {e}")
-
+        # 1. Update In-Memory Cache for Real-time Graphs (last 100)
         if USE_REDIS:
             key = f'usage:{unit_id}'
             redis_client.rpush(key, json.dumps(usage_data))
@@ -171,12 +176,103 @@ class UnitStore:
             if len(unit_usage[unit_id]) > 100:
                 unit_usage[unit_id] = unit_usage[unit_id][-100:]
 
+        # 2. Persist to PostgreSQL (Deep Storage)
+        try:
+            conn = get_db_connection()
+            cur = conn.cursor()
+            
+            # Resolve System ID (Upsert logic to ensure system exists)
+            # Use unit_id as system_name (Short ID for URLs)
+            # Use system_id as system_uuid (Full UUID for uniqueness/proper tracking)
+            
+            timestamp = usage_data.get('timestamp')
+            if timestamp.endswith('Z'): timestamp = timestamp[:-1]
+            
+            # Extract UUID from payload (client sends 'system_id' as UUID)
+            sys_uuid = usage_data.get('system_id') 
+            
+            cur.execute("""
+                INSERT INTO systems (system_name, system_uuid, hostname, last_seen)
+                VALUES (%s, %s, 'dynamic_host', %s)
+                ON CONFLICT (system_name) DO UPDATE SET 
+                    last_seen = EXCLUDED.last_seen,
+                    system_uuid = COALESCE(EXCLUDED.system_uuid, systems.system_uuid)
+                RETURNING system_id
+            """, (unit_id, sys_uuid, timestamp))
+            
+            sys_int_id = cur.fetchone()[0]
+            
+            cpu = usage_data.get('cpu', usage_data.get('cpu_usage', 0))
+            ram = usage_data.get('ram', usage_data.get('ram_usage', 0))
+            gpu = 0
+            if usage_data.get('gpu_load') is not None: gpu = usage_data.get('gpu_load')
+            elif usage_data.get('gpu_usage') is not None: gpu = usage_data.get('gpu_usage')
+            
+            net_rx = usage_data.get('network_rx', 0)
+            net_tx = usage_data.get('network_tx', 0)
+
+            cur.execute("""
+                INSERT INTO system_metrics 
+                (system_id, timestamp, cpu_usage, ram_usage, gpu_usage, network_rx_mb, network_tx_mb)
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
+                ON CONFLICT DO NOTHING
+            """, (sys_int_id, timestamp, cpu, ram, gpu, net_rx, net_tx))
+            
+            conn.commit()
+            cur.close()
+            conn.close()
+        except Exception as e:
+            print(f"Failed to write to DB: {e}")
+
     @staticmethod
     def get_usage(unit_id, limit=50):
-        if USE_REDIS:
-            raw_data = redis_client.lrange(f'usage:{unit_id}', -limit, -1)
-            return [json.loads(d) for d in raw_data]
-        return unit_usage.get(unit_id, [])[-limit:]
+        # Read from Postgres (Single Source of Truth)
+        try:
+            conn = get_db_connection()
+            cur = conn.cursor(cursor_factory=RealDictCursor)
+            
+            # Get System ID
+            cur.execute("SELECT system_id FROM systems WHERE system_name = %s", (unit_id,))
+            res = cur.fetchone()
+            if not res: return []
+            sys_int_id = res['system_id']
+            
+            cur.execute("""
+                SELECT timestamp, cpu_usage as cpu, ram_usage as ram, gpu_usage as gpu, network_rx_mb as network_rx, network_tx_mb as network_tx 
+                FROM system_metrics 
+                WHERE system_id = %s 
+                ORDER BY timestamp DESC 
+                LIMIT %s
+            """, (sys_int_id, limit))
+            
+            rows = cur.fetchall()
+            
+            # Reverse to Chronological Order (Oldest -> Newest) for Graph
+            rows.reverse()
+            
+            # Format dates to string if needed by frontend, or let JSON encoder handle it
+            # Frontend likely expects 'timestamp' string in specific format?
+            # Existing JSONL had 'timestamp': '2026-...'
+            # DB returns datetime object.
+            
+            cleaned_rows = []
+            for r in rows:
+                r['timestamp'] = r['timestamp'].isoformat()
+                # Ensure Decimals are floats for JSON serialization
+                if r.get('cpu') is not None: r['cpu'] = float(r['cpu'])
+                if r.get('ram') is not None: r['ram'] = float(r['ram'])
+                if r.get('gpu') is not None: r['gpu'] = float(r['gpu'])
+                if r.get('network_rx') is not None: r['network_rx'] = float(r['network_rx'])
+                if r.get('network_tx') is not None: r['network_tx'] = float(r['network_tx'])
+                cleaned_rows.append(r)
+                
+            cur.close()
+            conn.close()
+            return cleaned_rows
+            
+        except Exception as e:
+            print(f"Error reading usage from DB: {e}")
+            return []
 
 CORS(app)
 socketio = SocketIO(app, cors_allowed_origins="*")
@@ -570,13 +666,27 @@ def report_usage():
 @app.route('/api/units/<unit_id>/export', methods=['GET'])
 def export_unit_data(unit_id):
     try:
-        # 1. Check for custom date range
+        # DB Connection
+        conn = get_db_connection()
+        cur = conn.cursor(cursor_factory=RealDictCursor)
+        
+        # 1. Resolve System ID
+        cur.execute("SELECT system_id FROM systems WHERE system_name = %s", (unit_id,))
+        res = cur.fetchone()
+        if not res:
+             return jsonify({'error': 'No data found for this unit'}), 404
+        sys_int_id = res['system_id']
+
+        # 2. Check for custom date range
         start_date_str = request.args.get('start_date')
         end_date_str = request.args.get('end_date')
         
         filter_start = None
         filter_end = None
         filename_dates = ""
+        
+        query = "SELECT * FROM system_metrics WHERE system_id = %s "
+        params = [sys_int_id]
 
         if start_date_str and end_date_str:
             try:
@@ -584,6 +694,9 @@ def export_unit_data(unit_id):
                 filter_start = datetime.strptime(start_date_str, '%Y-%m-%d')
                 # Set end date to end of that day (23:59:59)
                 filter_end = datetime.strptime(end_date_str, '%Y-%m-%d') + timedelta(days=1, seconds=-1)
+                
+                query += "AND timestamp >= %s AND timestamp <= %s "
+                params.extend([filter_start, filter_end])
                 filename_dates = f"{start_date_str}_to_{end_date_str}"
             except ValueError:
                 return jsonify({'error': 'Invalid date format. Use YYYY-MM-DD'}), 400
@@ -593,74 +706,36 @@ def export_unit_data(unit_id):
             days = 1
             if time_range == '5d': days = 5
             elif time_range == '10d': days = 10
-            elif time_range == 'all': days = 3650 # 10 years
+            elif time_range == 'all': days = 3650
             
             filter_start = datetime.now() - timedelta(days=days)
-            filter_end = datetime.now()
+            query += "AND timestamp >= %s "
+            params.append(filter_start)
             filename_dates = time_range
+            
+        query += "ORDER BY timestamp ASC"
 
-        log_file = os.path.join(DATA_DIR, f'{unit_id}.jsonl')
-        
-        if not os.path.exists(log_file):
-            return jsonify({'error': 'No data found for this unit'}), 404
+        cur.execute(query, tuple(params))
+        rows = cur.fetchall()
 
         si = io.StringIO()
         cw = csv.writer(si)
-        cw.writerow(['Timestamp', 'CPU (%)', 'RAM (%)', 'GPU Load (%)'])
+        cw.writerow(['Timestamp', 'CPU (%)', 'RAM (%)', 'GPU Load (%)', 'Network RX (MB)', 'Network TX (MB)'])
         
-        records = []
-        with open(log_file, 'r') as f:
-            for line in f:
-                try:
-                    record = json.loads(line)
-                    ts_str = record.get('timestamp', '')
-                    if ts_str.endswith('Z'): ts_str = ts_str[:-1]
-                    try: 
-                        record_time = datetime.fromisoformat(ts_str)
-                    except: 
-                        continue
-                    
-                    # Filtering Logic
-                    if record_time >= filter_start and record_time <= filter_end:
-                        # Normalize keys
-                        cpu = record.get('cpu') if record.get('cpu') is not None else record.get('cpu_usage', 0)
-                        ram = record.get('ram') if record.get('ram') is not None else record.get('ram_usage', 0)
-                        
-                        # GPU Logic: Try gpu_load -> gpu_usage -> gpu (complex)
-                        gpu = 0
-                        if record.get('gpu_load') is not None:
-                            gpu = record.get('gpu_load')
-                        elif record.get('gpu_usage') is not None:
-                            gpu = record.get('gpu_usage')
-                        elif record.get('gpu'):
-                             # Fallback for old complex objects if any
-                             try: gpu = float(record['gpu'])
-                             except: pass
-
-                        # Convert to IST (UTC + 5:30)
-                        ist_offset = timedelta(hours=5, minutes=30)
-                        dt_ist = record_time + ist_offset
-                        
-                        records.append({
-                            'timestamp': dt_ist.strftime('%Y-%m-%d %H:%M:%S'),
-                            'dt': record_time, # Keep original for sorting
-                            'cpu': cpu,
-                            'ram': ram,
-                            'gpu': gpu
-                        })
-                except Exception:
-                    continue
-
-        # Sort by timestamp
-        records.sort(key=lambda x: x['dt'])
-
-        for r in records:
+        for r in rows:
+            # Convert timestamp to local string if needed, DB returns datetime obj
+            ts_str = r['timestamp'].strftime('%Y-%m-%d %H:%M:%S')
             cw.writerow([
-                r['timestamp'],
-                r['cpu'],
-                r['ram'],
-                r['gpu']
+                ts_str,
+                r['cpu_usage'],
+                r['ram_usage'],
+                r['gpu_usage'],
+                r['network_rx_mb'],
+                r['network_tx_mb']
             ])
+
+        cur.close()
+        conn.close()
 
         output = make_response(si.getvalue())
         output.headers["Content-Disposition"] = f"attachment; filename={unit_id}_usage_{filename_dates}.csv"
