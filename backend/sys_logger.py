@@ -471,6 +471,7 @@ def register_unit():
             existing_unit['status'] = 'online'
             existing_unit['org_id'] = org_id
             existing_unit['comp_id'] = comp_id
+            existing_unit['ip'] = request.remote_addr
             
             if hostname != 'Unknown': existing_unit['hostname'] = hostname
             if os_info != 'Unknown': existing_unit['os_info'] = os_info
@@ -489,6 +490,7 @@ def register_unit():
             'system_id': system_id,
             'org_id': org_id,
             'comp_id': comp_id,
+            'ip': request.remote_addr,
             'name': f"{org_id}/{comp_id}",
             'status': 'online',
             'last_seen': datetime.now().isoformat(),

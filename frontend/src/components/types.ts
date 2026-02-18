@@ -22,6 +22,7 @@ export interface Unit {
   comp_id?: string
   status: 'online' | 'offline' | 'warning'
   last_seen: string
+  ip?: string
   alerts?: Alert[]
 }
 

@@ -4,11 +4,11 @@ import React, { useState, useEffect } from 'react'
 import { UsageGraph } from '@/components/UsageGraph'
 import { useUsageData } from '@/components/hooks/useUsageData'
 import { useUnits } from '@/components/hooks/useUnits'
-import { useOrgs } from '@/components/hooks/useOrgs'
+
 import { Unit } from '@/components/types'
 import {
-    Monitor, Server, Database, Activity, Globe, Clock,
-    AlertCircle, CheckCircle2, ChevronRight, Layout,
+    Monitor, Server, Database, Activity, Globe,
+    ChevronRight, Layout,
     Cpu, HardDrive, Wifi, Zap
 } from 'lucide-react'
 
@@ -17,9 +17,9 @@ interface DashboardViewProps {
 }
 
 export default function DashboardView({ orgId: propOrgId }: DashboardViewProps) {
-    const [viewOrgId, setViewOrgId] = useState<string | null>(propOrgId || null)
-    const { data: usageData, loading, error, refetch, setSelectedUnitId } = useUsageData(viewOrgId || undefined)
-    const { units, loading: unitsLoading } = useUnits(viewOrgId || undefined)
+    const [viewOrgId] = useState<string | null>(propOrgId || null)
+    const { data: usageData, loading, setSelectedUnitId } = useUsageData(viewOrgId || undefined)
+    const { units } = useUnits(viewOrgId || undefined)
     const [selectedUnit, setSelectedUnit] = useState<Unit | null>(null)
     const [currentTime, setCurrentTime] = useState<string>('')
 
@@ -181,7 +181,7 @@ export default function DashboardView({ orgId: propOrgId }: DashboardViewProps) 
                                             </div>
                                             <span className="text-2xl font-mono text-white">{usageData.length > 0 ? usageData[usageData.length - 1].cpu?.toFixed(1) : 0}%</span>
                                         </div>
-                                        <div className="h-40 relative z-10">
+                                        <div className="relative z-10">
                                             <UsageGraph data={usageData} metric="cpu" timeRange="1m" />
                                         </div>
                                     </div>
@@ -197,11 +197,11 @@ export default function DashboardView({ orgId: propOrgId }: DashboardViewProps) 
                                                 {usageData.length > 0 ? (
                                                     typeof usageData[usageData.length - 1].gpu === 'number'
                                                         ? (usageData[usageData.length - 1].gpu as number).toFixed(1)
-                                                        : ((usageData[usageData.length - 1] as any).gpu_load || 0).toFixed(1)
+                                                        : (usageData[usageData.length - 1].gpu_load || 0).toFixed(1)
                                                 ) : 0}%
                                             </span>
                                         </div>
-                                        <div className="h-40 relative z-10">
+                                        <div className="relative z-10">
                                             <UsageGraph data={usageData} metric="gpu" timeRange="1m" />
                                         </div>
                                     </div>
@@ -215,7 +215,7 @@ export default function DashboardView({ orgId: propOrgId }: DashboardViewProps) 
                                             </div>
                                             <span className="text-2xl font-mono text-white">{usageData.length > 0 ? usageData[usageData.length - 1].ram?.toFixed(1) : 0}%</span>
                                         </div>
-                                        <div className="h-40 relative z-10">
+                                        <div className="relative z-10">
                                             <UsageGraph data={usageData} metric="ram" timeRange="1m" />
                                         </div>
                                     </div>
@@ -229,7 +229,7 @@ export default function DashboardView({ orgId: propOrgId }: DashboardViewProps) 
                                             </div>
                                             <span className="text-2xl font-mono text-white">{usageData.length > 0 ? usageData[usageData.length - 1].network_rx?.toFixed(1) : 0} <span className="text-xs text-slate-500">KB/s</span></span>
                                         </div>
-                                        <div className="h-40 relative z-10">
+                                        <div className="relative z-10">
                                             <UsageGraph data={usageData} metric="network_rx" timeRange="1m" />
                                         </div>
                                     </div>
