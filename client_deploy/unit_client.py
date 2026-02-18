@@ -22,7 +22,7 @@ except ImportError:
 # Configuration
 CONFIG_FILE = 'unit_client_config.json'
 CACHE_FILE = 'cached_usage.json'
-DEFAULT_SERVER_URL = 'http://10.5.171.78:5001'  # Change this to your central server URL
+DEFAULT_SERVER_URL = 'http://203.193.145.59:5010'  # Change this to your central server URL
 COLLECTION_INTERVAL = 1  # seconds - updated for 1-second updates
 RECONNECT_INTERVAL = 300  # seconds (5 minutes)
 MAX_RETRIES = 3
@@ -36,7 +36,7 @@ def prompt_server_url():
     print("=" * 50)
 
     while True:
-        server_url = input("Enter server URL or IP (default: http://localhost:5000): ").strip()
+        server_url = input("Enter server URL or IP (default: http://203.193.145.59:5010): ").strip()
         if not server_url:
             server_url = DEFAULT_SERVER_URL
             print(f"Using default server URL: {server_url}")
