@@ -12,7 +12,8 @@ import { Unit } from '@/components/types'
 import {
     Monitor, Server, Database, Activity, Globe,
     ChevronRight, Layout, Download,
-    Cpu, HardDrive, Wifi, Zap, Clock
+    Cpu, HardDrive, Wifi, Zap, Clock,
+    Share2, Check
 } from 'lucide-react'
 
 function cn(...inputs: ClassValue[]) {
@@ -31,6 +32,7 @@ export default function DashboardView({ orgId: propOrgId }: DashboardViewProps) 
     const [currentTime, setCurrentTime] = useState<string>('')
     const [startDate, setStartDate] = useState<string>('')
     const [endDate, setEndDate] = useState<string>('')
+    const [copied, setCopied] = useState(false)
 
     useEffect(() => {
         const interval = setInterval(() => {
@@ -47,6 +49,16 @@ export default function DashboardView({ orgId: propOrgId }: DashboardViewProps) 
     const clearSelection = () => {
         setSelectedUnit(null)
         setSelectedUnitId(null)
+    }
+
+    const handleShare = () => {
+        const orgToShare = viewOrgId || selectedUnit?.org_id
+        if (!orgToShare) return
+
+        const url = `${window.location.origin}/org/${orgToShare}`
+        navigator.clipboard.writeText(url)
+        setCopied(true)
+        setTimeout(() => setCopied(false), 2000)
     }
 
     const handleCustomDownload = () => {
@@ -94,7 +106,20 @@ export default function DashboardView({ orgId: propOrgId }: DashboardViewProps) 
                                 <h1 className="text-xl font-bold tracking-tight text-white">Sys_Logger <span className="text-blue-400">Prime</span></h1>
                                 <span className="px-1.5 py-0.5 rounded-md bg-blue-500/10 border border-blue-500/20 text-[10px] font-bold text-blue-400 tracking-widest uppercase">V2.0</span>
                             </div>
-                            <p className="text-[10px] text-slate-400 font-semibold tracking-[0.2em] uppercase opacity-60">Fleet Telemetry Matrix</p>
+                            <div className="flex items-center gap-3">
+                                <p className="text-[10px] text-slate-400 font-semibold tracking-[0.2em] uppercase opacity-60">Fleet Telemetry Matrix</p>
+                                {(viewOrgId || selectedUnit?.org_id) && (
+                                    <button
+                                        onClick={handleShare}
+                                        className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-indigo-500/10 border border-indigo-500/20 hover:bg-indigo-500/20 transition-colors group"
+                                    >
+                                        {copied ? <Check className="w-3 h-3 text-emerald-400" /> : <Share2 className="w-3 h-3 text-indigo-400 group-hover:text-indigo-300" />}
+                                        <span className="text-[9px] font-bold tracking-wider text-indigo-400 group-hover:text-indigo-300 uppercase">
+                                            {copied ? 'Copied Link' : 'Share Org'}
+                                        </span>
+                                    </button>
+                                )}
+                            </div>
                         </div>
                     </div>
 

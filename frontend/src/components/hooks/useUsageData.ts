@@ -121,6 +121,12 @@ export const useUsageData = (orgId?: string): UseUsageDataReturn => {
 
     socket.on('usage_update', (payload: { unit_id: string, data: any }) => {
       // console.log('Socket received usage_update:', payload)
+
+      // Strict Org Filtering if orgId is active (Case-Insensitive)
+      if (orgId && payload.data?.org_id && payload.data.org_id.toLowerCase() !== orgId.toLowerCase()) {
+        return
+      }
+
       const currentSelectedId = selectedUnitIdRef.current
 
       // Case-insensitive comparison if ID exists
