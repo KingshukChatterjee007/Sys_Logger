@@ -78,8 +78,24 @@ pm2 delete sys-logger-client 2>$null
 pm2 start ecosystem.config.js --interpreter venv\Scripts\python.exe
 
 pm2 save
-# pm2 startup is not supported on Windows, we use pm2-windows-service or similar if needed, 
-# but for now pm2 save + pm2 resurrect (manual) is safer.
+pm2 save
+
+Write-Host "Configuring Auto-Startup..." -ForegroundColor Yellow
+# Install pm2-windows-startup to handle boot persistence
+try {
+    if (!(Get-Command pm2-startup -ErrorAction SilentlyContinue)) {
+        Write-Host "Installing pm2-windows-startup..."
+        npm install -g pm2-windows-startup
+    }
+    
+    # Install the registry entry (Safe to run multiple times)
+    Write-Host "Registering Startup Service..."
+    pm2-startup install
+    pm2 save
+    Write-Host "Auto-Startup Configured Successfully!" -ForegroundColor Green
+} catch {
+    Write-Host "Warning: Failed to configure auto-startup. You may need to run this script as Administrator." -ForegroundColor Red
+}
 
 Write-Host ""
 Write-Host "Setup Complete! Client is running in background." -ForegroundColor Green
