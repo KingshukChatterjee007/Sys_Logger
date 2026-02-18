@@ -2,15 +2,19 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   output: 'standalone',
-  // Enable if deploying behind a reverse proxy
-  // async rewrites() {
-  //   return [
-  //     {
-  //       source: '/api/:path*',
-  //       destination: `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000'}/api/:path*`,
-  //     },
-  //   ];
-  // },
+  // Proxy API and Socket.IO to backend to avoid Mixed Content (HTTPS -> HTTP)
+  async rewrites() {
+    return [
+      {
+        source: '/api/:path*',
+        destination: 'http://127.0.0.1:5010/api/:path*',
+      },
+      {
+        source: '/socket.io/:path*',
+        destination: 'http://127.0.0.1:5010/socket.io/:path*',
+      },
+    ];
+  },
 };
 
 export default nextConfig;
