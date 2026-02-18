@@ -277,7 +277,7 @@ export default function DashboardView({ orgId: propOrgId }: DashboardViewProps) 
                                             </div>
                                         </div>
 
-                                        {/* Export Controls */}
+                                        {/* Export Controls 
                                         <div className="flex gap-2 items-center bg-white/[0.02] p-2 rounded-xl border border-white/5 group hover:border-white/10 transition-colors">
                                             <div className="flex items-center gap-2">
                                                 <div className="flex flex-col px-2">
@@ -297,6 +297,7 @@ export default function DashboardView({ orgId: propOrgId }: DashboardViewProps) 
                                                 <Download className="w-4 h-4 transition-transform group-hover:-translate-y-0.5" />
                                             </button>
                                         </div>
+                                        */}
                                     </div>
 
                                     {/* Advanced Metric Grid */}
@@ -310,7 +311,7 @@ export default function DashboardView({ orgId: propOrgId }: DashboardViewProps) 
                                                     </div>
                                                     <div>
                                                         <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-blue-400/80">Processor</h3>
-                                                        <p className="font-bold text-white italic">CPU CLUSTER LOAD</p>
+                                                        <p className="font-bold text-white italic">CPU USAGE</p>
                                                     </div>
                                                 </div>
                                                 <div className="text-right">
@@ -333,7 +334,7 @@ export default function DashboardView({ orgId: propOrgId }: DashboardViewProps) 
                                                     </div>
                                                     <div>
                                                         <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-emerald-400/80">Graphics</h3>
-                                                        <p className="font-bold text-white italic">TENSOR CORE UTIL</p>
+                                                        <p className="font-bold text-white italic">GPU USAGE</p>
                                                     </div>
                                                 </div>
                                                 <div className="text-right">
@@ -357,7 +358,7 @@ export default function DashboardView({ orgId: propOrgId }: DashboardViewProps) 
                                                     </div>
                                                     <div>
                                                         <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-purple-400/80">Memory</h3>
-                                                        <p className="font-bold text-white italic">DYNAMIC RAM POOL</p>
+                                                        <p className="font-bold text-white italic">RAM USAGE</p>
                                                     </div>
                                                 </div>
                                                 <div className="text-right">
@@ -380,7 +381,7 @@ export default function DashboardView({ orgId: propOrgId }: DashboardViewProps) 
                                                     </div>
                                                     <div>
                                                         <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-cyan-400/80">Interface</h3>
-                                                        <p className="font-bold text-white italic">TRAFFIC THROUGHPUT</p>
+                                                        <p className="font-bold text-white italic">NETWORK THROUGHPUT</p>
                                                     </div>
                                                 </div>
                                                 <div className="text-right">
