@@ -8,7 +8,7 @@ import { useUnits } from '@/components/hooks/useUnits'
 import { Unit } from '@/components/types'
 import {
     Monitor, Server, Database, Activity, Globe,
-    ChevronRight, Layout,
+    ChevronRight, Layout, Calendar, Download,
     Cpu, HardDrive, Wifi, Zap
 } from 'lucide-react'
 
@@ -18,10 +18,12 @@ interface DashboardViewProps {
 
 export default function DashboardView({ orgId: propOrgId }: DashboardViewProps) {
     const [viewOrgId] = useState<string | null>(propOrgId || null)
-    const { data: usageData, loading, setSelectedUnitId } = useUsageData(viewOrgId || undefined)
+    const { data: usageData, loading, setSelectedUnitId, selectedUnitId } = useUsageData(viewOrgId || undefined)
     const { units } = useUnits(viewOrgId || undefined)
     const [selectedUnit, setSelectedUnit] = useState<Unit | null>(null)
     const [currentTime, setCurrentTime] = useState<string>('')
+    const [startDate, setStartDate] = useState<string>('')
+    const [endDate, setEndDate] = useState<string>('')
 
     useEffect(() => {
         // Clock for header
@@ -39,6 +41,19 @@ export default function DashboardView({ orgId: propOrgId }: DashboardViewProps) 
     const clearSelection = () => {
         setSelectedUnit(null)
         setSelectedUnitId(null)
+    }
+
+    const handleCustomDownload = () => {
+        if (!selectedUnitId) return
+
+        let url = `/api/units/${selectedUnitId}/export`
+        if (startDate && endDate) {
+            url += `?start_date=${startDate}&end_date=${endDate}`
+        } else {
+            // Default to 1d if no dates selected, or could alert user
+            url += `?range=1d`
+        }
+        window.open(url, '_blank')
     }
 
     // Calculated Stats
@@ -165,8 +180,36 @@ export default function DashboardView({ orgId: propOrgId }: DashboardViewProps) 
                                             </span>
                                         </div>
                                     </div>
-                                    <div className="flex gap-2">
-                                        {/* Actions could go here */}
+                                    <div className="flex gap-2 items-end">
+                                        {/* Date Range Picker */}
+                                        <div className="flex items-center gap-2 bg-slate-800/50 p-1.5 rounded-lg border border-slate-700/50">
+                                            <div className="flex flex-col">
+                                                <label className="text-[10px] text-slate-500 ml-1">From</label>
+                                                <input
+                                                    type="date"
+                                                    value={startDate}
+                                                    onChange={(e) => setStartDate(e.target.value)}
+                                                    className="bg-transparent text-xs text-white border-none focus:ring-0 p-0 px-1 w-24 [color-scheme:dark]"
+                                                />
+                                            </div>
+                                            <span className="text-slate-600">-</span>
+                                            <div className="flex flex-col">
+                                                <label className="text-[10px] text-slate-500 ml-1">To</label>
+                                                <input
+                                                    type="date"
+                                                    value={endDate}
+                                                    onChange={(e) => setEndDate(e.target.value)}
+                                                    className="bg-transparent text-xs text-white border-none focus:ring-0 p-0 px-1 w-24 [color-scheme:dark]"
+                                                />
+                                            </div>
+                                            <button
+                                                onClick={handleCustomDownload}
+                                                className="ml-1 p-2 bg-blue-600 hover:bg-blue-500 text-white rounded-md transition-colors shadow-lg shadow-blue-600/20"
+                                                title="Download CSV"
+                                            >
+                                                <Download className="w-4 h-4" />
+                                            </button>
+                                        </div>
                                     </div>
                                 </div>
 

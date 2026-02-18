@@ -570,13 +570,35 @@ def report_usage():
 @app.route('/api/units/<unit_id>/export', methods=['GET'])
 def export_unit_data(unit_id):
     try:
-        time_range = request.args.get('range', '1d')
-        days = 1
-        if time_range == '5d': days = 5
-        elif time_range == '10d': days = 10
-        elif time_range == 'all': days = 9999
+        # 1. Check for custom date range
+        start_date_str = request.args.get('start_date')
+        end_date_str = request.args.get('end_date')
         
-        start_date = datetime.now() - timedelta(days=days)
+        filter_start = None
+        filter_end = None
+        filename_dates = ""
+
+        if start_date_str and end_date_str:
+            try:
+                # Parse YYYY-MM-DD
+                filter_start = datetime.strptime(start_date_str, '%Y-%m-%d')
+                # Set end date to end of that day (23:59:59)
+                filter_end = datetime.strptime(end_date_str, '%Y-%m-%d') + timedelta(days=1, seconds=-1)
+                filename_dates = f"{start_date_str}_to_{end_date_str}"
+            except ValueError:
+                return jsonify({'error': 'Invalid date format. Use YYYY-MM-DD'}), 400
+        else:
+            # 2. Fallback to relative range
+            time_range = request.args.get('range', '1d')
+            days = 1
+            if time_range == '5d': days = 5
+            elif time_range == '10d': days = 10
+            elif time_range == 'all': days = 3650 # 10 years
+            
+            filter_start = datetime.now() - timedelta(days=days)
+            filter_end = datetime.now()
+            filename_dates = time_range
+
         log_file = os.path.join(DATA_DIR, f'{unit_id}.jsonl')
         
         if not os.path.exists(log_file):
@@ -598,7 +620,8 @@ def export_unit_data(unit_id):
                     except: 
                         continue
                     
-                    if record_time >= start_date:
+                    # Filtering Logic
+                    if record_time >= filter_start and record_time <= filter_end:
                         # Normalize keys
                         cpu = record.get('cpu') if record.get('cpu') is not None else record.get('cpu_usage', 0)
                         ram = record.get('ram') if record.get('ram') is not None else record.get('ram_usage', 0)
@@ -640,7 +663,7 @@ def export_unit_data(unit_id):
             ])
 
         output = make_response(si.getvalue())
-        output.headers["Content-Disposition"] = f"attachment; filename={unit_id}_usage_{time_range}.csv"
+        output.headers["Content-Disposition"] = f"attachment; filename={unit_id}_usage_{filename_dates}.csv"
         output.headers["Content-type"] = "text/csv"
         return output
 
