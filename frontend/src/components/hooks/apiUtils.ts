@@ -1,11 +1,11 @@
 export const getApiUrl = () => {
-    if (process.env.NEXT_PUBLIC_API_URL) {
-        return process.env.NEXT_PUBLIC_API_URL
-    }
-
-    // If running in browser and HTTPS, use relative path to avoid Mixed Content
+    // If running in browser and HTTPS, use relative path (proxy) to avoid Mixed Content (HTTPS -> HTTP)
     if (typeof window !== 'undefined' && window.location.protocol === 'https:') {
         return ''
+    }
+
+    if (process.env.NEXT_PUBLIC_API_URL) {
+        return process.env.NEXT_PUBLIC_API_URL
     }
 
     // Default to the public IP for local development or HTTP
