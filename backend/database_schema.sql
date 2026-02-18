@@ -74,10 +74,10 @@ $$ LANGUAGE plpgsql;
 
 
 -- Create current month partition
-SELECT create_system_metrics_partition(CURRENT_DATE);
+SELECT create_system_metrics_partition(CURRENT_DATE::DATE);
 
 -- Create next month partition (prevent downtime)
-SELECT create_system_metrics_partition(CURRENT_DATE + INTERVAL '1 month');
+SELECT create_system_metrics_partition((CURRENT_DATE + INTERVAL '1 month')::DATE);
 
 
 -- Indexes for partitions

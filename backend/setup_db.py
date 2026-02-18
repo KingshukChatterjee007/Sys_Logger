@@ -2,12 +2,16 @@
 import psycopg2
 from psycopg2.extensions import ISOLATION_LEVEL_AUTOCOMMIT
 import os
+from dotenv import load_dotenv
 
-# Default Credentials (User might need to change these in Env vars later)
+# Load environment variables
+load_dotenv()
+
+# Default Credentials
 DB_HOST = os.getenv('DB_HOST', 'localhost')
 DB_USER = os.getenv('DB_USER', 'postgres')
-DB_PASS = os.getenv('DB_PASS', 'postgres') # Trying default
-DB_NAME = 'sys_logger'
+DB_PASS = os.getenv('DB_PASS', 'postgres')
+DB_NAME = os.getenv('DB_NAME', 'sys_logger')
 
 def create_database():
     try:
