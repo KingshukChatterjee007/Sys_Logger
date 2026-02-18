@@ -70,8 +70,8 @@ export const useUsageData = (orgId?: string): UseUsageDataReturn => {
   const fetchData = useCallback(async () => {
     try {
       let endpoint = ''
-      if (selectedUnitIdRef.current) {
-        endpoint = `/api/units/${selectedUnitIdRef.current}/usage`
+      if (selectedUnitId) {
+        endpoint = `/api/units/${selectedUnitId}/usage`
       } else if (orgId) {
         endpoint = '/api/usage'
       } else {
@@ -100,13 +100,18 @@ export const useUsageData = (orgId?: string): UseUsageDataReturn => {
       // setError(`Failed to connect to backend. Error: ${err}`)
       setLoading(false)
     }
-  }, [orgId]) // Removed selectedUnitId dependency to prevent loop, using ref
+  }, [orgId, selectedUnitId]) // Re-fetch when unit changes // Removed selectedUnitId dependency to prevent loop, using ref
 
   // Socket.IO Integration - Stable Effect
   useEffect(() => {
-    const socketUrl = getApiUrl()
+    // If getApiUrl returns '' (HTTPS), we use '/' to indicate relative path
+    const socketUrl = getApiUrl() || '/'
     console.log('Initializing Socket.IO connection to:', socketUrl)
-    const socket: Socket = io(socketUrl)
+
+    const socket: Socket = io(socketUrl, {
+      path: '/socket.io/', // Explicitly set path to match Next.js rewrite
+      transports: ['polling', 'websocket'], // Force polling first, then upgrade (safer for proxies)
+    })
 
     socket.on('connect', () => {
       console.log('Connected to WebSocket')
@@ -147,6 +152,13 @@ export const useUsageData = (orgId?: string): UseUsageDataReturn => {
       socket.disconnect()
     }
   }, [orgId]) // Socket doesn't restart on unit selection change anymore!
+
+  // Initial Fetch & Polling Fallback
+  useEffect(() => {
+    fetchData()
+    const interval = setInterval(fetchData, 5000)
+    return () => clearInterval(interval)
+  }, [fetchData])
 
   const filteredData = useMemo(() => {
     return data
