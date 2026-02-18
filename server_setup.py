@@ -72,6 +72,7 @@ def setup_postgres_database():
     print("➡ Checking PostgreSQL...")
 
     # must be installed + running
+    
     if not postgres_running():
         print("❌ PostgreSQL is not running.")
         return False
