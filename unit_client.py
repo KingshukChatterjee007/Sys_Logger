@@ -344,32 +344,60 @@ class UnitClient:
     def sync_offline_data(self):
         if not self.silent:
             print("Sync thread started.")
-        while self.running:
-            try:
-                # Wait for data with timeout to check self.running
-                data = self.data_queue.get(timeout=1)
-            except queue.Empty: # Changed from generic except to specific queue.Empty
-                continue
-                
-            if not self.registered and not self.register_unit():
-                self.data_queue.put(data) # Put it back
-                time.sleep(10)
-                continue
             
-            # Always update unit_id to the current active ID to prevent sending stale IDs
-            if self.unit_id:
-                data['unit_id'] = self.unit_id
+        while self.running:
+            # 1. Build a batch
+            batch = []
+            try:
+                # Block for the first item
+                item = self.data_queue.get(timeout=1)
+                batch.append(item)
+                
+                # Opportunistically grab more items up to batch size
+                while len(batch) < SYNC_BATCH_SIZE:
+                    try:
+                        item = self.data_queue.get_nowait()
+                        batch.append(item)
+                    except queue.Empty:
+                        break
+            except queue.Empty:
+                continue
 
-            if self.submit_data(data):
-                if not self.silent and self.data_queue.qsize() % 10 == 0:
-                    print(f"Synced record. Remaining in queue: {self.data_queue.qsize()}")
-                self.data_queue.task_done()
-                # Update persistent cache periodically
-                if self.data_queue.qsize() == 0:
-                    self.save_cache_from_queue()
-            else:
-                self.data_queue.put(data) # Put it back
-                time.sleep(30)
+            if not batch:
+                continue
+
+            # 2. Add Unit ID check for all items in batch
+            for item in batch:
+                if self.unit_id:
+                    item['unit_id'] = self.unit_id
+
+            # 3. Retry Loop (Infinite until success or stop)
+            sent = False
+            while not sent and self.running:
+                # Check registration before sending
+                if not self.registered:
+                    if not self.register_unit():
+                         # If we can't register, wait and retry loop
+                        time.sleep(RETRY_DELAY)
+                        continue
+                        
+                # Attempt Send
+                if self.submit_data(batch):
+                    sent = True
+                    if not self.silent:
+                         print(f"✓ Synced batch of {len(batch)} records. Queue size: {self.data_queue.qsize()}")
+                    
+                    # Mark all as done
+                    for _ in batch:
+                        self.data_queue.task_done()
+                        
+                    # Save cache (optional optimization: only save if queue is empty or periodically)
+                    if self.data_queue.qsize() == 0:
+                        self.save_cache_from_queue()
+                else:
+                    if not self.silent:
+                        print(f"⚠ Sync failed for batch of {len(batch)}. Retrying in {RETRY_DELAY}s...")
+                    time.sleep(RETRY_DELAY)
 
     def save_cache_from_queue(self):
         """Save remaining queue to disk (approximate)"""

@@ -515,30 +515,53 @@ def register_unit():
         print(f"Error registering unit: {e}")
         return jsonify({'error': str(e)}), 500
 
+def process_usage_record(data):
+    """Process a single usage record"""
+    if not data or 'unit_id' not in data:
+        return False, 'unit_id required'
+
+    unit_id = data['unit_id']
+    org_id = data.get('org_id')
+    unit = UnitStore.get_unit(unit_id)
+    
+    if not unit:
+        return False, 'Unit not registered'
+
+    unit['last_seen'] = datetime.now().isoformat()
+    unit['status'] = 'online'
+    UnitStore.save_unit(unit_id, unit) # Updates last_seen
+    UnitStore.add_usage(unit_id, data)
+
+    socketio.emit('usage_update', {'unit_id': unit_id, 'data': data})
+    if org_id:
+            socketio.emit('org_usage_update', {'unit_id': unit_id, 'data': data}, room=org_id)
+            
+    return True, 'processed'
+
 @app.route('/api/report_usage', methods=['POST'])
 def report_usage():
     try:
         data = request.get_json()
-        if not data or 'unit_id' not in data:
-            return jsonify({'error': 'unit_id required'}), 400
-
-        unit_id = data['unit_id']
-        org_id = data.get('org_id')
-        unit = UnitStore.get_unit(unit_id)
         
-        if not unit:
-            return jsonify({'error': 'Unit not registered'}), 404
+        # Batch Processing
+        if isinstance(data, list):
+            success_count = 0
+            for item in data:
+                success, _ = process_usage_record(item)
+                if success: success_count += 1
+            
+            return jsonify({'status': 'received batch', 'processed': success_count}), 200
 
-        unit['last_seen'] = datetime.now().isoformat()
-        unit['status'] = 'online'
-        UnitStore.save_unit(unit_id, unit) # Updates last_seen
-        UnitStore.add_usage(unit_id, data)
-
-        socketio.emit('usage_update', {'unit_id': unit_id, 'data': data})
-        if org_id:
-             socketio.emit('org_usage_update', {'unit_id': unit_id, 'data': data}, room=org_id)
-
-        return jsonify({'status': 'received'}), 200
+        # Single Record Processing
+        else:
+            success, msg = process_usage_record(data)
+            if not success:
+                # Keep 404 for "Unit not registered" to trigger client re-registration
+                if msg == 'Unit not registered':
+                    return jsonify({'error': msg}), 404
+                return jsonify({'error': msg}), 400
+                
+            return jsonify({'status': 'received'}), 200
 
     except Exception as e:
         print(f"Error reporting usage: {e}")
