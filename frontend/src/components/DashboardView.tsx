@@ -1,751 +1,271 @@
 'use client'
 
-import React, { useState, useEffect, useMemo } from 'react'
-import { Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend } from 'chart.js'
+import React, { useState, useEffect } from 'react'
 import { UsageGraph } from '@/components/UsageGraph'
 import { useUsageData } from '@/components/hooks/useUsageData'
 import { useUnits } from '@/components/hooks/useUnits'
 import { useOrgs } from '@/components/hooks/useOrgs'
 import { Unit } from '@/components/types'
-import { Folder, ChevronRight, ChevronDown, Monitor, Layout, Server, Database, Package, ExternalLink, Activity, Globe, Clock, AlertCircle, CheckCircle2, Download, Trash2, Edit, Save, X } from 'lucide-react'
-import Link from 'next/link'
-
-ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend)
+import {
+    Monitor, Server, Database, Activity, Globe, Clock,
+    AlertCircle, CheckCircle2, ChevronRight, Layout,
+    Cpu, HardDrive, Wifi, Zap
+} from 'lucide-react'
 
 interface DashboardViewProps {
     orgId?: string
 }
 
 export default function DashboardView({ orgId: propOrgId }: DashboardViewProps) {
-    // Internal navigation state
     const [viewOrgId, setViewOrgId] = useState<string | null>(propOrgId || null)
-
-    const { orgs } = useOrgs()
     const { data: usageData, loading, error, refetch, setSelectedUnitId } = useUsageData(viewOrgId || undefined)
-    const { units, loading: unitsLoading, refetchUnits } = useUnits(viewOrgId || undefined)
+    const { units, loading: unitsLoading } = useUnits(viewOrgId || undefined)
     const [selectedUnit, setSelectedUnit] = useState<Unit | null>(null)
-    const [expandedOrgs, setExpandedOrgs] = useState<Record<string, boolean>>({})
-    const [origin, setOrigin] = useState('')
-
-    // Edit State
-    const [editingUnitId, setEditingUnitId] = useState<string | null>(null)
-    const [editForm, setEditForm] = useState({ comp_id: '', org_id: '' })
+    const [currentTime, setCurrentTime] = useState<string>('')
 
     useEffect(() => {
-        if (typeof window !== 'undefined') {
-            setOrigin(window.location.origin)
-        }
+        // Clock for header
+        const interval = setInterval(() => {
+            setCurrentTime(new Date().toLocaleTimeString())
+        }, 1000)
+        return () => clearInterval(interval)
     }, [])
 
-    const toggleOrg = (orgId: string) => {
-        setExpandedOrgs(prev => ({ ...prev, [orgId]: !prev[orgId] }))
+    const handleUnitSelect = (unit: Unit) => {
+        setSelectedUnit(unit)
+        setSelectedUnitId(unit.id)
     }
 
-    // Navigation Helper
-    const navigateToOrg = (orgId: string | null) => {
-        // If we are in "Shareable Link Mode" (propOrgId is set), we cannot go back to global
-        if (propOrgId) return
-
-        setViewOrgId(orgId)
+    const clearSelection = () => {
         setSelectedUnit(null)
         setSelectedUnitId(null)
     }
 
-    // Export Helper
-    const downloadData = (range: string) => {
-        if (!selectedUnit) return
-        const url = `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000'}/api/units/${selectedUnit.id}/export?range=${range}`
-        window.open(url, '_blank')
-    }
-
-    // Deployment State
-    const [showDeployModal, setShowDeployModal] = useState(false)
-    const [deployOrgId, setDeployOrgId] = useState('default_org')
-    const [deployServerUrl, setDeployServerUrl] = useState('')
-
-    useEffect(() => {
-        if (typeof window !== 'undefined') {
-            setOrigin(window.location.origin)
-
-            // Auto-detect Server IP for deployment
-            const fetchLocalIp = async () => {
-                const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000'
-                try {
-                    const res = await fetch(`${baseUrl}/api/health`)
-                    const data = await res.json()
-                    if (data.local_ip) {
-                        setDeployServerUrl(`http://${data.local_ip}:5000`)
-                    } else {
-                        setDeployServerUrl(`${window.location.protocol}//${window.location.hostname}:5000`)
-                    }
-                } catch {
-                    setDeployServerUrl(`${window.location.protocol}//${window.location.hostname}:5000`)
-                }
-            }
-            fetchLocalIp()
-        }
-    }, [])
-
-    const openDeployModal = () => {
-        setShowDeployModal(true)
-    }
-
-    const closeDeployModal = () => {
-        setShowDeployModal(false)
-    }
-
-    const downloadClientPayload = () => {
-        // Construct the URL with parameters
-        const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000'
-        const url = `${baseUrl}/api/deploy/generate?org_id=${encodeURIComponent(deployOrgId)}&server=${encodeURIComponent(deployServerUrl)}`
-        window.open(url, '_blank')
-        closeDeployModal()
-    }
-
-    // Management Handlers
-    const handleDeleteUnit = async (unitId: string, e: React.MouseEvent) => {
-        e.stopPropagation()
-        if (!confirm('Are you sure you want to delete this unit? This action cannot be undone.')) return
-
-        try {
-            const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000'}/api/units/${unitId}`, {
-                method: 'DELETE'
-            })
-            if (res.ok) {
-                refetchUnits() // Reload list
-                if (selectedUnit?.id === unitId) {
-                    setSelectedUnit(null)
-                    setSelectedUnitId(null)
-                }
-            } else {
-                alert('Failed to delete unit')
-            }
-        } catch (error) {
-            console.error('Delete failed:', error)
-            alert('Error deleting unit')
-        }
-    }
-
-    const startEditing = (unit: Unit, e: React.MouseEvent) => {
-        e.stopPropagation()
-        setEditingUnitId(unit.id)
-        setEditForm({ comp_id: unit.comp_id || '', org_id: unit.org_id || '' })
-    }
-
-    const cancelEditing = (e: React.MouseEvent) => {
-        e.stopPropagation()
-        setEditingUnitId(null)
-    }
-
-    const saveEdit = async (unitId: string, e: React.MouseEvent) => {
-        e.stopPropagation()
-        try {
-            const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000'}/api/units/${unitId}`, {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(editForm)
-            })
-            if (res.ok) {
-                setEditingUnitId(null)
-                refetchUnits()
-            } else {
-                alert('Failed to update unit')
-            }
-        } catch (error) {
-            console.error('Update failed:', error)
-            alert('Error updating unit')
-        }
-    }
-    // Robust Local Time Formatting
-    const formatTimestamp = (timestamp: string) => {
-        if (!timestamp) return 'N/A'
-        try {
-            const isoString = timestamp.endsWith('Z') ? timestamp : timestamp + 'Z'
-            const date = new Date(isoString)
-            if (isNaN(date.getTime())) return 'Inv. Date'
-            return date.toLocaleTimeString([], {
-                hour: '2-digit',
-                minute: '2-digit',
-                second: '2-digit',
-                hour12: false
-            })
-        } catch {
-            return 'Error'
-        }
-    }
-
-    const formatLastSeen = (timestamp: string) => {
-        try {
-            const date = new Date(timestamp)
-            const now = new Date()
-            const diffInSeconds = Math.floor((now.getTime() - date.getTime()) / 1000)
-
-            if (diffInSeconds < 60) return 'Just now'
-            if (diffInSeconds < 3600) return `${Math.floor(diffInSeconds / 60)}m ago`
-            if (diffInSeconds < 86400) return `${Math.floor(diffInSeconds / 3600)}h ago`
-            return date.toLocaleDateString()
-        } catch {
-            return 'Unknown'
-        }
-    }
-
-    if (loading) {
-        return (
-            <div className="min-h-screen bg-slate-900 flex">
-                <div className="w-64 bg-slate-800 border-r border-slate-700"></div>
-                <div className="flex-1 ml-64 flex items-center justify-center">
-                    <div className="text-center">
-                        <div className="animate-spin rounded-full h-8 w-8 border-2 border-blue-500 border-t-transparent mx-auto mb-3"></div>
-                        <p className="text-slate-400 text-sm">Loading system data</p>
-                    </div>
-                </div>
-            </div>
-        )
-    }
-
-    const currentData = usageData.length > 0 ? usageData[usageData.length - 1] : null
-
-    // Stats for sidebar and views
-    const activeUnitsCount = units.filter(u => u.status === 'online').length
-    const activeOrgsCount = Array.from(new Set(units.filter(u => u.status === 'online').map(u => u.org_id))).length
+    // Calculated Stats
+    const activeUnits = units.filter(u => u.status === 'online').length
+    const totalUnits = units.length
+    const avgCpu = usageData.length > 0 ? usageData[usageData.length - 1].cpu : 0
 
     return (
-        <div className="min-h-screen bg-slate-900 flex transition-all duration-500 font-sans">
-            {/* Left Sidebar - Fixed */}
-            <div className="w-64 bg-slate-800 border-r border-slate-700 flex flex-col fixed h-screen z-20">
+        <div className="min-h-screen text-slate-200 font-sans selection:bg-cyan-500/30">
+            {/* Ambient Background Glows */}
+            <div className="fixed top-0 left-0 w-[500px] h-[500px] bg-blue-600/20 rounded-full blur-[120px] pointer-events-none -translate-x-1/2 -translate-y-1/2 z-0" />
+            <div className="fixed bottom-0 right-0 w-[500px] h-[500px] bg-purple-600/10 rounded-full blur-[120px] pointer-events-none translate-x-1/3 translate-y-1/3 z-0" />
 
-                {/* 📦 HIDE SHIPPING LINK in Shareable Mode */}
-                {!propOrgId && (
-                    <div className="p-3 bg-blue-600/10 border-b border-blue-500/20">
-                        <Link
-                            href="/deployment"
-                            className="flex items-center justify-center gap-2 px-3 py-2 bg-blue-600 hover:bg-blue-500 rounded-lg text-[10px] font-bold text-white transition-all uppercase tracking-widest shadow-lg shadow-blue-500/20 group"
-                        >
-                            <Package className="w-4 h-4 group-hover:scale-110 transition-transform" />
-                            Shipping Guide
-                            <ExternalLink className="w-3 h-3 opacity-70" />
-                        </Link>
-                    </div>
-                )}
+            <div className="relative z-10 container mx-auto p-4 lg:p-8 max-w-[1600px]">
 
-                {/* Sidebar Header */}
-                <div className="p-6 border-b border-slate-700 bg-slate-800/50">
-                    <div className="flex items-center space-x-3">
-                        <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-cyan-500 rounded-lg flex items-center justify-center shadow-lg shadow-blue-500/10">
-                            <Server className="w-5 h-5 text-white" />
+                {/* Header */}
+                <header className="flex justify-between items-center mb-8 glass-panel p-4 rounded-2xl">
+                    <div className="flex items-center gap-3">
+                        <div className="p-2 bg-gradient-to-br from-blue-500 to-cyan-400 rounded-lg shadow-lg shadow-blue-500/20">
+                            <Activity className="w-6 h-6 text-white" />
                         </div>
                         <div>
-                            <h1 className="text-lg font-black text-white tracking-tighter uppercase">{viewOrgId ? viewOrgId : 'Main Hub'}</h1>
-                            <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Sys_Logger v2.0</p>
+                            <h1 className="text-xl font-bold tracking-tight text-white">Sys_Logger <span className="text-blue-400">Prime</span></h1>
+                            <p className="text-xs text-slate-400 font-medium tracking-wide">REAL-TIME FLEET MONITORING</p>
                         </div>
                     </div>
-                </div>
-
-                {/* Navigation */}
-                <div className="p-4 border-b border-slate-700 flex-1 overflow-y-auto custom-scrollbar">
-                    {/* Show Global Fleet Button ONLY if not in Shareable Mode */}
-                    {!propOrgId && (
-                        <button
-                            onClick={() => navigateToOrg(null)}
-                            className={`w-full px-4 py-3 rounded-lg transition-all text-left flex items-center space-x-3 mb-6 ${viewOrgId === null && selectedUnit === null
-                                ? 'bg-blue-600 shadow-xl shadow-blue-500/30 text-white'
-                                : 'text-slate-400 hover:bg-slate-700/50 hover:text-slate-200'
-                                }`}
-                        >
-                            <Globe className="w-5 h-5" />
-                            <span className="font-bold tracking-tight text-sm">Global Fleet</span>
-                        </button>
-                    )}
-
-                    <div className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] mb-4 px-2">Folders</div>
-                    <div className="space-y-1.5">
-                        {orgs.map(org => {
-                            // If in Shareable Mode, only show the relevant org
-                            if (propOrgId && org !== propOrgId) return null
-
-                            const orgUnits = units.filter(u => u.org_id === org)
-                            const isSelected = viewOrgId === org && selectedUnit === null
-                            const isExpanded = expandedOrgs[org] || viewOrgId === org
-
-                            return (
-                                <div key={org} className="group-nav">
-                                    <div className="flex items-center mb-1">
-                                        <button
-                                            onClick={() => navigateToOrg(org)}
-                                            className={`flex-1 flex items-center gap-2.5 px-3 py-2 text-sm rounded-lg transition-all group ${isSelected ? 'bg-slate-700 text-blue-400 font-bold' : 'text-slate-300 hover:text-white hover:bg-slate-700/40'}`}
-                                        >
-                                            <Folder className={`w-4 h-4 ${isSelected || isExpanded ? 'text-blue-400 fill-blue-400/10' : 'text-slate-500'}`} />
-                                            <span className="truncate uppercase tracking-tight">{org}</span>
-                                        </button>
-                                        <button
-                                            onClick={(e) => { e.stopPropagation(); toggleOrg(org); }}
-                                            className="p-2 text-slate-600 hover:text-slate-400 transition-colors"
-                                        >
-                                            {isExpanded ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
-                                        </button>
-                                    </div>
-
-                                    {isExpanded && (
-                                        <div className="ml-4 mt-1 space-y-1 border-l border-slate-700/50 animate-in fade-in slide-in-from-left-1 duration-200">
-                                            {orgUnits.length === 0 ? (
-                                                <div className="px-5 py-2 text-[10px] text-slate-600 italic font-medium">No active nodes</div>
-                                            ) : (
-                                                orgUnits.map(unit => (
-                                                    <button
-                                                        key={unit.id}
-                                                        onClick={() => {
-                                                            setSelectedUnitId(unit.id)
-                                                            setSelectedUnit(unit)
-                                                        }}
-                                                        className={`w-full flex items-center gap-2.5 px-4 py-2 text-xs transition-all ${selectedUnit?.id === unit.id ? 'text-white font-black bg-blue-600/20 border-r-2 border-blue-500' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-700/20'}`}
-                                                    >
-                                                        <div className={`w-1.5 h-1.5 rounded-full ${unit.status === 'online' ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.4)]' : 'bg-red-500'}`} />
-                                                        <span className="truncate font-mono">{unit.comp_id}</span>
-                                                    </button>
-                                                ))
-                                            )}
-                                        </div>
-                                    )}
-                                </div>
-                            )
-                        })}
-                    </div>
-                </div>
-
-                {/* Status Footer */}
-                <div className="p-4 bg-slate-900/30 border-t border-slate-700">
-                    <div className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] mb-4">Fleet Health</div>
-                    <div className="grid grid-cols-2 gap-3">
-                        <div className="bg-slate-800/80 rounded-xl p-3 border border-slate-700 shadow-inner">
-                            <div className="text-[9px] text-slate-500 font-bold uppercase mb-1">Active Orgs</div>
-                            <div className="text-xl font-black text-white">{activeOrgsCount}</div>
-                        </div>
-                        <div className="bg-slate-800/80 rounded-xl p-3 border border-slate-700 shadow-inner">
-                            <div className="text-[9px] text-slate-500 font-bold uppercase mb-1">Online Units</div>
-                            <div className="text-xl font-black text-green-500">{activeUnitsCount}</div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            {/* Main Content Area */}
-            <div className="flex-1 ml-64 overflow-y-auto min-h-screen flex flex-col bg-slate-900/50">
-                {/* Header Bar */}
-                <div className="bg-slate-800 border-b border-slate-700 sticky top-0 z-10 backdrop-blur-xl bg-opacity-80">
-                    <div className="px-6 py-4 flex justify-between items-center">
-                        <div className="flex items-center gap-4">
-                            {!viewOrgId && !selectedUnit ? (
-                                <h2 className="text-lg font-black text-white flex items-center gap-2 uppercase tracking-tighter">
-                                    <Globe className="w-5 h-5 text-blue-500" />
-                                    Infrastructure Overview
-                                </h2>
-                            ) : (
-                                <div className="flex items-center gap-2 text-xs font-bold">
-                                    {/* Hide Global Breadcrumb if in Shareable Mode */}
-                                    {!propOrgId && (
-                                        <>
-                                            <button
-                                                onClick={() => navigateToOrg(null)}
-                                                className="text-slate-500 hover:text-blue-400 transition-colors uppercase"
-                                            >
-                                                Global
-                                            </button>
-                                            <ChevronRight className="w-3.5 h-3.5 text-slate-700" />
-                                        </>
-                                    )}
-
-                                    <button
-                                        onClick={() => navigateToOrg(viewOrgId)}
-                                        className={`uppercase ${!selectedUnit ? 'text-blue-400' : 'text-slate-500 hover:text-blue-400'} transition-colors`}
-                                    >
-                                        {viewOrgId}
-                                    </button>
-                                    {selectedUnit && (
-                                        <>
-                                            <ChevronRight className="w-3.5 h-3.5 text-slate-700" />
-                                            <span className="text-white font-mono bg-slate-700 px-2 py-0.5 rounded">{selectedUnit.comp_id}</span>
-                                        </>
-                                    )}
-                                </div>
-                            )}
-                        </div>
-
-                        <div className="flex items-center gap-4">
-                            <div className="flex items-center gap-3 px-4 py-1.5 bg-slate-900/80 rounded-full border border-slate-700/50 shadow-inner">
-                                <Activity className={`w-3.5 h-3.5 ${currentData ? 'text-green-500 animate-pulse' : 'text-slate-600'}`} />
-                                <span className="text-[10px] text-slate-400 font-mono font-bold tracking-tight">
-                                    SYNC: {formatTimestamp(currentData?.timestamp || '')}
+                    <div className="flex items-center gap-6">
+                        <div className="hidden md:flex flex-col items-end">
+                            <span className="text-2xl font-light font-mono text-white">{currentTime}</span>
+                            <span className="text-[10px] uppercase tracking-widest text-emerald-400 flex items-center gap-1">
+                                <span className="relative flex h-2 w-2">
+                                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                                    <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
                                 </span>
-                            </div>
+                                System Operational
+                            </span>
                         </div>
                     </div>
-                </div>
+                </header>
 
-                <div className="max-w-7xl mx-auto px-6 py-8 w-full transition-opacity duration-300">
+                <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
 
-                    {/* VIEW 1: GLOBAL LANDING SCREEN */}
-                    {!viewOrgId && !selectedUnit && !propOrgId && (
-                        <div className="space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-700">
-                            {/* SHIP CLIENT BUTTON */}
-                            <div className="flex justify-end mb-4">
-                                <button
-                                    onClick={openDeployModal}
-                                    className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-bold text-xs uppercase tracking-wider transition-all shadow-lg shadow-blue-500/20"
-                                >
-                                    <Download className="w-4 h-4" />
-                                    Ship Client Payload
-                                </button>
+                    {/* Sidebar / Unit List */}
+                    <aside className="lg:col-span-1 space-y-4">
+
+                        {/* Status Card */}
+                        <div className="glass-panel p-6 rounded-2xl relative overflow-hidden group">
+                            <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+                                <Server className="w-24 h-24" />
                             </div>
+                            <h2 className="text-sm font-semibold text-slate-400 uppercase tracking-wider mb-1">Fleet Status</h2>
+                            <div className="flex items-baseline gap-2">
+                                <span className="text-4xl font-bold text-white">{activeUnits}</span>
+                                <span className="text-sm text-slate-400">/ {totalUnits} Online</span>
+                            </div>
+                            <div className="mt-4 h-1.5 w-full bg-slate-800 rounded-full overflow-hidden">
+                                <div
+                                    className="h-full bg-gradient-to-r from-emerald-500 to-cyan-500 transition-all duration-1000"
+                                    style={{ width: `${(activeUnits / (totalUnits || 1)) * 100}%` }}
+                                />
+                            </div>
+                        </div>
 
-                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                                {orgs.map(org => {
-                                    const orgUnits = units.filter(u => u.org_id === org)
-                                    const onlineCount = orgUnits.filter(u => u.status === 'online').length
-                                    return (
-                                        <div
-                                            key={org}
-                                            onClick={() => navigateToOrg(org)}
-                                            className="bg-slate-800/40 border border-slate-700/80 rounded-3xl p-8 hover:border-blue-500/50 hover:bg-slate-800/60 transition-all group cursor-pointer relative overflow-hidden shadow-2xl hover:shadow-blue-500/5"
-                                        >
-                                            <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/5 blur-3xl -mr-16 -mt-16 group-hover:bg-blue-500/10 transition-colors" />
-                                            <div className="flex justify-between items-start mb-8">
-                                                <div className="p-4 bg-blue-500/10 rounded-2xl group-hover:scale-110 transition-transform duration-500">
-                                                    <Folder className="w-8 h-8 text-blue-500 fill-blue-500/10" />
+                        {/* Unit List */}
+                        <div className="glass-panel rounded-2xl overflow-hidden flex flex-col max-h-[600px]">
+                            <div className="p-4 border-b border-white/5 bg-white/5 backdrop-blur-md">
+                                <h3 className="font-semibold text-white flex items-center gap-2">
+                                    <Monitor className="w-4 h-4 text-blue-400" />
+                                    Connected Units
+                                </h3>
+                            </div>
+                            <div className="overflow-y-auto p-2 space-y-1 custom-scrollbar flex-1">
+                                {loading ? (
+                                    <div className="text-center p-8 text-slate-500 animate-pulse">Scanning...</div>
+                                ) : units.map(unit => (
+                                    <button
+                                        key={unit.id}
+                                        onClick={() => handleUnitSelect(unit)}
+                                        className={`w-full text-left p-3 rounded-xl transition-all duration-200 border border-transparent group relative overflow-hidden
+                                            ${selectedUnit?.id === unit.id
+                                                ? 'bg-blue-600/20 border-blue-500/50 shadow-[0_0_20px_rgba(37,99,235,0.2)]'
+                                                : 'hover:bg-white/5 hover:border-white/10'
+                                            }
+                                        `}
+                                    >
+                                        <div className="flex justify-between items-start relative z-10">
+                                            <div>
+                                                <div className={`font-medium ${selectedUnit?.id === unit.id ? 'text-white' : 'text-slate-300'}`}>
+                                                    {unit.name}
                                                 </div>
-                                                <div className="text-right">
-                                                    <div className="text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-widest">Live Nodes</div>
-                                                    <span className={`text-[11px] px-3 py-1 rounded-full font-black tracking-tighter ${onlineCount > 0 ? 'bg-green-500/10 text-green-500 border border-green-500/20' : 'bg-slate-800 text-slate-500 border border-slate-700'}`}>
-                                                        {onlineCount}/{orgUnits.length} ONLINE
-                                                    </span>
-                                                </div>
+                                                <div className="text-[10px] text-slate-500 font-mono mt-0.5">{unit.ip}</div>
                                             </div>
-                                            <h3 className="text-2xl font-black text-white mb-1 group-hover:text-blue-400 transition-colors uppercase tracking-tighter">{org}</h3>
-                                            <p className="text-[10px] text-slate-500 mb-8 font-black tracking-[0.2em] uppercase opacity-60">Fleet Cluster ID: {org.slice(0, 3)}-PROD</p>
+                                            <div className={`w-2 h-2 rounded-full mt-1.5 ${unit.status === 'online' ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]' : 'bg-slate-600'}`} />
                                         </div>
-                                    )
-                                })}
+                                    </button>
+                                ))}
                             </div>
                         </div>
-                    )}
 
-                    {/* VIEW 2: ORGANIZATION DASHBOARD (STATUS OVERVIEW) */}
-                    {viewOrgId && !selectedUnit && (
-                        <div className="space-y-8 animate-in zoom-in-95 duration-500">
-                            {/* Organization Health Stats */}
-                            <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-                                <div className="bg-slate-800/40 border border-slate-700/80 rounded-2xl p-6 relative overflow-hidden">
-                                    <div className="absolute top-0 right-0 w-24 h-24 bg-green-500/5 blur-2xl -mr-8 -mt-8" />
-                                    <h3 className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">Cluster Status</h3>
-                                    <div className="flex items-center gap-2">
-                                        <div className="w-3 h-3 rounded-full bg-green-500 animate-pulse" />
-                                        <span className="text-2xl font-black text-white">ONLINE</span>
+                        <div className="glass-panel p-4 rounded-2xl text-center">
+                            <p className="text-xs text-slate-500">Avg CPU Load</p>
+                            <div className="text-2xl font-bold text-white mt-1">{avgCpu.toFixed(1)}%</div>
+                            <div className="text-[10px] text-emerald-400 mt-1">System Nominal</div>
+                        </div>
+
+                    </aside>
+
+                    {/* Main Content Area */}
+                    <main className="lg:col-span-3 space-y-6">
+                        {selectedUnit ? (
+                            <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                                {/* Unit Header */}
+                                <div className="flex justify-between items-end">
+                                    <div>
+                                        <button onClick={clearSelection} className="text-xs text-blue-400 hover:text-blue-300 mb-2 flex items-center gap-1 transition-colors">
+                                            <ChevronRight className="w-3 h-3 rotate-180" /> Back to Fleet
+                                        </button>
+                                        <h2 className="text-3xl font-bold text-white tracking-tight">{selectedUnit.name}</h2>
+                                        <div className="flex items-center gap-4 mt-2 text-sm text-slate-400">
+                                            <span className="flex items-center gap-1.5"><Globe className="w-3 h-3" /> {selectedUnit.ip}</span>
+                                            <span className="flex items-center gap-1.5"><Database className="w-3 h-3" /> ID: {selectedUnit.id.substring(0, 8)}...</span>
+                                            <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${selectedUnit.status === 'online' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/20' : 'bg-red-500/20 text-red-400'}`}>
+                                                {selectedUnit.status}
+                                            </span>
+                                        </div>
+                                    </div>
+                                    <div className="flex gap-2">
+                                        {/* Actions could go here */}
                                     </div>
                                 </div>
 
-                                <div className="bg-slate-800/40 border border-slate-700/80 rounded-2xl p-6 relative overflow-hidden">
-                                    <h3 className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">Active Nodes</h3>
-                                    <div className="text-3xl font-black text-white">
-                                        {units.filter(u => u.status === 'online').length} / {units.length}
-                                    </div>
-                                </div>
-
-                                {/* HIDE Shareable Link CARD in Shareable Mode, but SHOW in Admin Mode */}
-                                {!propOrgId && (
-                                    <div className="bg-slate-800/40 border border-slate-700/80 rounded-2xl p-6 relative overflow-hidden">
-                                        <h3 className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">Shareable Dashboard</h3>
-                                        <div className="flex flex-col gap-2">
-                                            <div className="text-[10px] font-mono text-blue-400 truncate bg-blue-500/10 p-1.5 rounded border border-blue-500/20 select-all">
-                                                {origin}/org/{viewOrgId}/dashboard
+                                {/* Metrics Grid */}
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div className="glass-panel rounded-2xl p-5 border-t-2 border-t-blue-500 relative group">
+                                        <div className="absolute inset-0 bg-blue-500/5 opacity-0 group-hover:opacity-100 transition-opacity rounded-2xl" />
+                                        <div className="flex justify-between items-center mb-4 relative z-10">
+                                            <div className="flex items-center gap-2 text-blue-400">
+                                                <Cpu className="w-5 h-5" />
+                                                <h3 className="font-semibold">CPU Load</h3>
                                             </div>
-                                            <Link
-                                                href={`/org/${viewOrgId}/dashboard`}
-                                                target="_blank"
-                                                className="flex items-center gap-1.5 text-[10px] font-bold text-slate-400 hover:text-white transition-colors"
-                                            >
-                                                <ExternalLink className="w-3 h-3" /> Open Direct Link
-                                            </Link>
+                                            <span className="text-2xl font-mono text-white">{usageData.length > 0 ? usageData[usageData.length - 1].cpu?.toFixed(1) : 0}%</span>
+                                        </div>
+                                        <div className="h-40 relative z-10">
+                                            <UsageGraph data={usageData} metric="cpu" timeRange="1m" />
                                         </div>
                                     </div>
-                                )}
 
-                                {/* Fill space if no shareable link card */}
-                                {propOrgId && (
-                                    <div className="bg-slate-800/40 border border-slate-700/80 rounded-2xl p-6 relative overflow-hidden">
-                                        <h3 className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">Sync Frequency</h3>
-                                        <div className="text-3xl font-black text-blue-400">1s</div>
-                                        <div className="text-[10px] text-slate-500 mt-1">Real-time Encrypted</div>
-                                    </div>
-                                )}
-
-                                <div className="bg-slate-800/40 border border-slate-700/80 rounded-2xl p-6 relative overflow-hidden">
-                                    <h3 className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">Active Alerts</h3>
-                                    <div className="text-3xl font-black text-blue-400">0</div>
-                                    <div className="text-[10px] text-slate-500 mt-1">System Healthy</div>
-                                </div>
-                            </div>
-
-                            {/* Node Table */}
-                            <div className="bg-slate-800/40 border border-slate-700/80 rounded-3xl overflow-hidden backdrop-blur-sm">
-                                <div className="px-8 py-6 border-b border-slate-700/50 flex items-center justify-between">
-                                    <h3 className="text-sm font-black text-white uppercase tracking-widest flex items-center gap-2">
-                                        <Server className="w-4 h-4 text-blue-500" />
-                                        Connected Nodes
-                                    </h3>
-                                    <span className="text-xs font-bold text-slate-500 bg-slate-900/50 px-3 py-1 rounded-full">{units.length} Total</span>
-                                </div>
-                                <div className="p-2">
-                                    <table className="w-full text-left border-collapse">
-                                        <thead>
-                                            <tr className="text-[10px] font-black text-slate-500 uppercase tracking-widest border-b border-slate-700/50">
-                                                <th className="px-6 py-4">Node ID</th>
-                                                <th className="px-6 py-4">Status</th>
-                                                <th className="px-6 py-4">Last Pulse</th>
-                                                <th className="px-6 py-4 text-right">Action</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            {units.map((unit) => (
-                                                <tr
-                                                    key={unit.id}
-                                                    onClick={() => {
-                                                        if (editingUnitId === unit.id) return
-                                                        setSelectedUnitId(unit.id)
-                                                        setSelectedUnit(unit)
-                                                    }}
-                                                    className={`group hover:bg-slate-700/30 transition-colors cursor-pointer border-b border-slate-800/50 last:border-0 ${editingUnitId === unit.id ? 'bg-slate-700/40' : ''}`}
-                                                >
-                                                    <td className="px-6 py-4">
-                                                        <div className="flex items-center gap-3">
-                                                            <Monitor className={`w-4 h-4 ${unit.status === 'online' ? 'text-slate-300' : 'text-slate-600'}`} />
-                                                            {editingUnitId === unit.id ? (
-                                                                <div className="flex flex-col gap-1" onClick={e => e.stopPropagation()}>
-                                                                    <input
-                                                                        type="text"
-                                                                        value={editForm.comp_id}
-                                                                        onChange={e => setEditForm({ ...editForm, comp_id: e.target.value })}
-                                                                        className="bg-slate-900 border border-slate-600 rounded px-2 py-1 text-xs text-white focus:border-blue-500 outline-none font-mono"
-                                                                        placeholder="Hostname"
-                                                                    />
-                                                                    <input
-                                                                        type="text"
-                                                                        value={editForm.org_id}
-                                                                        onChange={e => setEditForm({ ...editForm, org_id: e.target.value })}
-                                                                        className="bg-slate-900 border border-slate-600 rounded px-2 py-1 text-xs text-slate-400 focus:border-blue-500 outline-none"
-                                                                        placeholder="Organization"
-                                                                    />
-                                                                </div>
-                                                            ) : (
-                                                                <span className="font-bold text-sm text-white font-mono">{unit.comp_id}</span>
-                                                            )}
-                                                        </div>
-                                                    </td>
-                                                    <td className="px-6 py-4">
-                                                        <div className={`inline-flex items-center gap-2 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wide border ${unit.status === 'online'
-                                                            ? 'bg-green-500/10 text-green-500 border-green-500/20'
-                                                            : 'bg-red-500/10 text-red-500 border-red-500/20'
-                                                            }`}>
-                                                            {unit.status === 'online' ? <CheckCircle2 className="w-3 h-3" /> : <AlertCircle className="w-3 h-3" />}
-                                                            {unit.status}
-                                                        </div>
-                                                    </td>
-                                                    <td className="px-6 py-4">
-                                                        <div className="flex items-center gap-2 text-xs font-medium text-slate-400">
-                                                            <Clock className="w-3.5 h-3.5" />
-                                                            {formatLastSeen(unit.last_seen)}
-                                                        </div>
-                                                    </td>
-                                                    <td className="px-6 py-4 text-right">
-                                                        {editingUnitId === unit.id ? (
-                                                            <div className="flex items-center justify-end gap-2">
-                                                                <button onClick={(e) => saveEdit(unit.id, e)} className="p-1.5 bg-green-500/10 text-green-500 rounded hover:bg-green-500/20 transition-colors">
-                                                                    <Save className="w-4 h-4" />
-                                                                </button>
-                                                                <button onClick={cancelEditing} className="p-1.5 bg-slate-700 text-slate-400 rounded hover:bg-slate-600 transition-colors">
-                                                                    <X className="w-4 h-4" />
-                                                                </button>
-                                                            </div>
-                                                        ) : (
-                                                            <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                                {!propOrgId && (
-                                                                    <>
-                                                                        <button onClick={(e) => startEditing(unit, e)} className="p-1.5 hover:bg-blue-500/10 text-slate-500 hover:text-blue-400 rounded transition-colors">
-                                                                            <Edit className="w-4 h-4" />
-                                                                        </button>
-                                                                        <button onClick={(e) => handleDeleteUnit(unit.id, e)} className="p-1.5 hover:bg-red-500/10 text-slate-500 hover:text-red-400 rounded transition-colors">
-                                                                            <Trash2 className="w-4 h-4" />
-                                                                        </button>
-                                                                    </>
-                                                                )}
-                                                                <ChevronRight className="w-4 h-4 text-slate-600 group-hover:text-blue-400 group-hover:translate-x-1 transition-all inline-block" />
-                                                            </div>
-                                                        )}
-                                                    </td>
-                                                </tr>
-                                            ))}
-                                            {units.length === 0 && (
-                                                <tr>
-                                                    <td colSpan={4} className="px-6 py-12 text-center text-slate-500 font-medium text-sm italic">
-                                                        No nodes connected to this organization cluster.
-                                                    </td>
-                                                </tr>
-                                            )}
-                                        </tbody>
-                                    </table>
-                                </div>
-                            </div>
-                        </div>
-                    )}
-
-                    {/* VIEW 3: UNIT DETAIL DASHBOARD (GRAPHS) */}
-                    {selectedUnit && (
-                        <div className="space-y-6 animate-in zoom-in-95 duration-500">
-                            {/* Header Stats Bar */}
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                                <div className="bg-slate-800/40 border border-slate-700/80 rounded-2xl p-6 flex items-center justify-between group hover:border-red-500/30 transition-all">
-                                    <div>
-                                        <div className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">CPU Power</div>
-                                        <div className="text-3xl font-black text-white">{currentData ? currentData.cpu.toFixed(1) : '0.0'}%</div>
-                                    </div>
-                                    <div className="w-12 h-12 rounded-full bg-red-500/10 flex items-center justify-center group-hover:bg-red-500/20 transition-colors">
-                                        <Activity className="w-6 h-6 text-red-500" />
-                                    </div>
-                                </div>
-                                <div className="bg-slate-800/40 border border-slate-700/80 rounded-2xl p-6 flex items-center justify-between group hover:border-green-500/30 transition-all">
-                                    <div>
-                                        <div className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">GPU Compute</div>
-                                        <div className="text-3xl font-black text-white">{currentData ? (currentData.gpu_load || 0).toFixed(1) : '0.0'}%</div>
-                                    </div>
-                                    <div className="w-12 h-12 rounded-full bg-green-500/10 flex items-center justify-center group-hover:bg-green-500/20 transition-colors">
-                                        <Activity className="w-6 h-6 text-green-500" />
-                                    </div>
-                                </div>
-                                <div className="bg-slate-800/40 border border-slate-700/80 rounded-2xl p-6 flex items-center justify-between group hover:border-blue-500/30 transition-all">
-                                    <div>
-                                        <div className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Memory Cache</div>
-                                        <div className="text-3xl font-black text-white">{currentData ? currentData.ram.toFixed(1) : '0.0'}%</div>
-                                    </div>
-                                    <div className="w-12 h-12 rounded-full bg-blue-500/10 flex items-center justify-center group-hover:bg-blue-500/20 transition-colors">
-                                        <Activity className="w-6 h-6 text-blue-500" />
-                                    </div>
-                                </div>
-                            </div>
-
-                            {/* DATA EXPORT SECTION - ONLY IN GLOBAL MODE */}
-                            {!propOrgId && (
-                                <div className="bg-slate-800/40 border border-slate-700/80 rounded-2xl p-6 flex items-center justify-between backdrop-blur-sm">
-                                    <div className="flex items-center gap-4">
-                                        <div className="p-3 bg-blue-500/10 rounded-xl">
-                                            <Download className="w-6 h-6 text-blue-500" />
+                                    <div className="glass-panel rounded-2xl p-5 border-t-2 border-t-emerald-500 relative group">
+                                        <div className="absolute inset-0 bg-emerald-500/5 opacity-0 group-hover:opacity-100 transition-opacity rounded-2xl" />
+                                        <div className="flex justify-between items-center mb-4 relative z-10">
+                                            <div className="flex items-center gap-2 text-emerald-400">
+                                                <Zap className="w-5 h-5" />
+                                                <h3 className="font-semibold">GPU Load</h3>
+                                            </div>
+                                            <span className="text-2xl font-mono text-white">
+                                                {usageData.length > 0 ? (
+                                                    typeof usageData[usageData.length - 1].gpu === 'number'
+                                                        ? (usageData[usageData.length - 1].gpu as number).toFixed(1)
+                                                        : ((usageData[usageData.length - 1] as any).gpu_load || 0).toFixed(1)
+                                                ) : 0}%
+                                            </span>
                                         </div>
-                                        <div>
-                                            <h3 className="text-sm font-black text-white uppercase tracking-wider">Export Usage Data</h3>
-                                            <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Download historical CSV reports</p>
+                                        <div className="h-40 relative z-10">
+                                            <UsageGraph data={usageData} metric="gpu" timeRange="1m" />
                                         </div>
                                     </div>
-                                    <div className="flex items-center gap-2">
-                                        {['1d', '5d', '10d', 'all'].map(range => (
-                                            <button
-                                                key={range}
-                                                onClick={() => downloadData(range)}
-                                                className="px-4 py-2 bg-slate-900 border border-slate-700 rounded-lg text-xs font-bold text-slate-400 hover:text-white hover:bg-slate-700/80 hover:border-slate-500 transition-all uppercase"
-                                            >
-                                                {range === 'all' ? 'All Time' : range.toUpperCase()}
-                                            </button>
-                                        ))}
-                                    </div>
-                                </div>
-                            )}
 
-                            <div className="grid grid-cols-1 gap-6">
-                                <div className="bg-slate-800/40 border border-slate-700/80 rounded-3xl p-8 backdrop-blur-sm">
-                                    <div className="flex items-center justify-between mb-8">
-                                        <h3 className="text-xs font-black text-slate-400 uppercase tracking-[0.3em] flex items-center gap-3">
-                                            <div className="w-1 h-6 bg-red-500 rounded-full" /> Load Timeline (Real-time)
-                                        </h3>
+                                    <div className="glass-panel rounded-2xl p-5 border-t-2 border-t-purple-500 relative group">
+                                        <div className="absolute inset-0 bg-purple-500/5 opacity-0 group-hover:opacity-100 transition-opacity rounded-2xl" />
+                                        <div className="flex justify-between items-center mb-4 relative z-10">
+                                            <div className="flex items-center gap-2 text-purple-400">
+                                                <HardDrive className="w-5 h-5" />
+                                                <h3 className="font-semibold">RAM Usage</h3>
+                                            </div>
+                                            <span className="text-2xl font-mono text-white">{usageData.length > 0 ? usageData[usageData.length - 1].ram?.toFixed(1) : 0}%</span>
+                                        </div>
+                                        <div className="h-40 relative z-10">
+                                            <UsageGraph data={usageData} metric="ram" timeRange="1m" />
+                                        </div>
                                     </div>
-                                    <UsageGraph data={usageData} metric="cpu" loading={loading} error={error} onRetry={refetch} timeRange="1m" />
-                                </div>
 
-                                <div className="bg-slate-800/40 border border-slate-700/80 rounded-3xl p-8 backdrop-blur-sm">
-                                    <div className="flex items-center justify-between mb-8">
-                                        <h3 className="text-xs font-black text-slate-400 uppercase tracking-[0.3em] flex items-center gap-3">
-                                            <div className="w-1 h-6 bg-green-500 rounded-full" /> Graphics Pipeline
-                                        </h3>
+                                    <div className="glass-panel rounded-2xl p-5 border-t-2 border-t-cyan-500 relative group">
+                                        <div className="absolute inset-0 bg-cyan-500/5 opacity-0 group-hover:opacity-100 transition-opacity rounded-2xl" />
+                                        <div className="flex justify-between items-center mb-4 relative z-10">
+                                            <div className="flex items-center gap-2 text-cyan-400">
+                                                <Wifi className="w-5 h-5" />
+                                                <h3 className="font-semibold">Network RX</h3>
+                                            </div>
+                                            <span className="text-2xl font-mono text-white">{usageData.length > 0 ? usageData[usageData.length - 1].network_rx?.toFixed(1) : 0} <span className="text-xs text-slate-500">KB/s</span></span>
+                                        </div>
+                                        <div className="h-40 relative z-10">
+                                            <UsageGraph data={usageData} metric="network_rx" timeRange="1m" />
+                                        </div>
                                     </div>
-                                    <UsageGraph data={usageData} metric="gpu" loading={loading} error={error} onRetry={refetch} timeRange="1m" />
-                                </div>
-
-                                <div className="bg-slate-800/40 border border-slate-700/80 rounded-3xl p-8 backdrop-blur-sm">
-                                    <div className="flex items-center justify-between mb-8">
-                                        <h3 className="text-xs font-black text-slate-400 uppercase tracking-[0.3em] flex items-center gap-3">
-                                            <div className="w-1 h-6 bg-blue-500 rounded-full" /> Memory Allocation
-                                        </h3>
-                                    </div>
-                                    <UsageGraph data={usageData} metric="ram" loading={loading} error={error} onRetry={refetch} timeRange="1m" />
                                 </div>
                             </div>
-                        </div>
-                    )}
+                        ) : (
+                            // Empty State / Global Dashboard Overview
+                            <div className="h-full flex flex-col items-center justify-center p-12 glass-panel rounded-3xl border-dashed border-2 border-slate-700/50">
+                                <div className="p-6 bg-slate-800/50 rounded-full mb-6 relative">
+                                    <div className="absolute inset-0 bg-blue-500/20 blur-xl rounded-full animate-pulse" />
+                                    <Layout className="w-16 h-16 text-blue-400 relative z-10" />
+                                </div>
+                                <h2 className="text-2xl font-bold text-white mb-2">Select a Unit</h2>
+                                <p className="text-slate-400 text-center max-w-md">
+                                    Choose a unit from the sidebar to view high-frequency real-time telemetry, GPU load, and system performance metrics.
+                                </p>
+
+                                <div className="grid grid-cols-3 gap-8 mt-12 w-full max-w-2xl">
+                                    <div className="text-center">
+                                        <div className="text-3xl font-bold text-emerald-400 mb-1">10Hz</div>
+                                        <div className="text-xs text-slate-500 uppercase tracking-widest">Polling Rate</div>
+                                    </div>
+                                    <div className="text-center">
+                                        <div className="text-3xl font-bold text-blue-400 mb-1">0ms</div>
+                                        <div className="text-xs text-slate-500 uppercase tracking-widest">Latency Info</div>
+                                    </div>
+                                    <div className="text-center">
+                                        <div className="text-3xl font-bold text-purple-400 mb-1">{totalUnits}</div>
+                                        <div className="text-xs text-slate-500 uppercase tracking-widest">Total Monitored</div>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+                    </main>
                 </div>
             </div>
-            {/* Deployment Modal */}
-            {showDeployModal && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm animate-in fade-in duration-200">
-                    <div className="bg-slate-800 border border-slate-600 rounded-2xl p-6 w-full max-w-md shadow-2xl scale-100 animate-in zoom-in-95 duration-200">
-                        <div className="flex justify-between items-center mb-6">
-                            <h3 className="text-lg font-black text-white uppercase tracking-wide flex items-center gap-2">
-                                <Package className="w-5 h-5 text-blue-500" />
-                                Configure Payload
-                            </h3>
-                            <button onClick={closeDeployModal} className="text-slate-400 hover:text-white transition-colors">
-                                <X className="w-5 h-5" />
-                            </button>
-                        </div>
-
-                        <div className="space-y-4 mb-8">
-                            <div>
-                                <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1.5">Target Organization ID</label>
-                                <input
-                                    type="text"
-                                    value={deployOrgId}
-                                    onChange={(e) => setDeployOrgId(e.target.value)}
-                                    className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:border-blue-500 outline-none font-mono"
-                                    placeholder="e.g. Finance_Dept"
-                                />
-                                <p className="text-[10px] text-slate-500 mt-1">Units will automatically join this organization.</p>
-                            </div>
-
-                            <div>
-                                <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1.5">Connection Server URL</label>
-                                <input
-                                    type="text"
-                                    value={deployServerUrl}
-                                    onChange={(e) => setDeployServerUrl(e.target.value)}
-                                    className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:border-blue-500 outline-none font-mono"
-                                    placeholder="http://server_ip:5000"
-                                />
-                                <p className="text-[10px] text-slate-500 mt-1">Ensure this URL is reachable from the target machines.</p>
-                            </div>
-                        </div>
-
-                        <div className="flex justify-end gap-3">
-                            <button
-                                onClick={closeDeployModal}
-                                className="px-4 py-2 text-xs font-bold text-slate-400 hover:text-white transition-colors uppercase"
-                            >
-                                Cancel
-                            </button>
-                            <button
-                                onClick={downloadClientPayload}
-                                className="flex items-center gap-2 px-6 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-bold text-xs uppercase tracking-wider shadow-lg shadow-blue-500/20 transition-all"
-                            >
-                                <Download className="w-4 h-4" />
-                                Download Payload
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
         </div>
     )
 }
