@@ -2,8 +2,8 @@ export const getApiUrl = () => {
     if (process.env.NEXT_PUBLIC_API_URL) {
         return process.env.NEXT_PUBLIC_API_URL
     }
-    // Default to localhost:5000 for dev
-    return 'http://localhost:5000'
+    // Default to the public IP for live deployment
+    return 'http://203.193.145.59:5010'
 }
 
 export const apiFetch = async (endpoint: string, options: RequestInit = {}) => {

@@ -274,7 +274,8 @@ class UnitStore:
             print(f"Error reading usage from DB: {e}")
             return []
 
-CORS(app)
+# Strict CORS for production if needed, but for now allow all to fix frontend connection issues
+CORS(app, resources={r"/*": {"origins": "*"}})
 socketio = SocketIO(app, cors_allowed_origins="*")
 
 # --- Routes ---
@@ -613,6 +614,9 @@ def register_unit():
 
 def process_usage_record(data):
     """Process a single usage record"""
+    # DEBUG: Print incoming data to console
+    print(f"Received Data: {data}")
+    
     if not data or 'unit_id' not in data:
         return False, 'unit_id required'
 
@@ -625,7 +629,15 @@ def process_usage_record(data):
 
     unit['last_seen'] = datetime.now().isoformat()
     unit['status'] = 'online'
-    UnitStore.save_unit(unit_id, unit) # Updates last_seen
+    # Update metadata if changed
+    if 'org_id' in data:
+        unit['org_id'] = data['org_id']
+    if 'comp_id' in data:
+        unit['name'] = f"{data.get('org_id', 'unknown')}/{data.get('comp_id', 'unknown')}"
+        unit['hostname'] = data.get('hostname', unit.get('hostname'))
+        unit['ip'] = data.get('ip', request.remote_addr)
+
+    UnitStore.save_unit(unit_id, unit) # Updates last_seen and metadata
     UnitStore.add_usage(unit_id, data)
 
     socketio.emit('usage_update', {'unit_id': unit_id, 'data': data})

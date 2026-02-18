@@ -12,7 +12,18 @@ import subprocess
 import signal
 import logging
 import queue
+import io
 from datetime import datetime, timedelta, timezone
+
+# Force UTF-8 encoding for stdout to prevent UnicodeEncodeError on Windows
+if sys.stdout.encoding != 'utf-8':
+    try:
+        sys.stdout.reconfigure(encoding='utf-8')
+    except AttributeError:
+        # Fallback for older Python versions
+        import codecs
+        sys.stdout = codecs.getwriter("utf-8")(sys.stdout.detach())
+
 try:
     import GPUtil
     NVIDIA_AVAILABLE = True
@@ -20,9 +31,10 @@ except ImportError:
     NVIDIA_AVAILABLE = False
 
 # Configuration
-CONFIG_FILE = 'unit_client_config.json'
-CACHE_FILE = 'cached_usage.json'
-DEFAULT_SERVER_URL = 'http://localhost:5010'  # Change this to your central server URL
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+CONFIG_FILE = os.path.join(BASE_DIR, 'unit_client_config.json')
+CACHE_FILE = os.path.join(BASE_DIR, 'cached_usage.json')
+DEFAULT_SERVER_URL = 'http://203.193.145.59:5010'  # Hardcoded central server URL
 COLLECTION_INTERVAL = 1  # seconds - updated for 1-second updates
 RECONNECT_INTERVAL = 300  # seconds (5 minutes)
 MAX_RETRIES = 3
@@ -85,7 +97,9 @@ class UnitClient:
         self.system_id = self.config.get('system_id')
         self.org_id = self.config.get('org_id')
         self.comp_id = self.config.get('comp_id')
-        self.server_url = self.config.get('server_url', DEFAULT_SERVER_URL)
+        
+        # Hardcode server URL as requested by user
+        self.server_url = DEFAULT_SERVER_URL
         
         if not self.org_id or not self.comp_id:
             self.org_id, self.comp_id = prompt_org_info(silent)
@@ -117,10 +131,11 @@ class UnitClient:
         self.stop()
 
     def load_config(self):
-        config = {'system_id': str(uuid.uuid4()), 'server_url': DEFAULT_SERVER_URL, 'org_id': None, 'comp_id': None}
+        config = {'system_id': str(uuid.uuid4()), 'org_id': None, 'comp_id': None}
         if os.path.exists(CONFIG_FILE):
             try:
-                with open(CONFIG_FILE, 'r') as f:
+                # Use utf-8-sig to handle Windows BOMs
+                with open(CONFIG_FILE, 'r', encoding='utf-8-sig') as f:
                     config.update(json.load(f))
             except (json.JSONDecodeError, KeyError):
                 pass
