@@ -1,9 +1,38 @@
-import React, { useMemo, useState, useEffect } from 'react'
-import { Line } from 'react-chartjs-2'
-import { Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend, TooltipItem } from 'chart.js'
-import { UsageData } from './types'
+'use client'
 
-ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend)
+import React, { useMemo, useState, useEffect, useRef } from 'react'
+import { Line } from 'react-chartjs-2'
+import {
+  Chart as ChartJS,
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  Title,
+  Tooltip,
+  Legend,
+  Filler,
+  TooltipItem,
+  ScriptableContext
+} from 'chart.js'
+import { UsageData } from './types'
+import { clsx, type ClassValue } from 'clsx'
+import { twMerge } from 'tailwind-merge'
+
+function cn(...inputs: ClassValue[]) {
+  return twMerge(clsx(inputs))
+}
+
+ChartJS.register(
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  Title,
+  Tooltip,
+  Legend,
+  Filler
+)
 
 type TimeRange = '30s' | '1m' | '5m' | '15m' | '30m' | '1h' | '3h' | '6h' | '12h' | '1d'
 
@@ -28,6 +57,7 @@ export const UsageGraph: React.FC<UsageGraphProps> = ({
 }) => {
   const [selectedTimeRange, setSelectedTimeRange] = useState<TimeRange>(timeRange)
   const [currentTime, setCurrentTime] = useState(() => Date.now())
+  const chartRef = useRef<any>(null)
 
   // Update current time every second to force re-filtering
   useEffect(() => {
@@ -37,25 +67,24 @@ export const UsageGraph: React.FC<UsageGraphProps> = ({
     return () => clearInterval(interval)
   }, [])
 
-  // Navigation & Time Helper: Standardize UTC to Local
-  const toLocalTime = (timestamp: string) => {
+  const parseTimestamp = (timestamp: string) => {
     if (!timestamp) return 0
-    // Fix: Only append Z if it looks like a naive string (no Z, no +/-, T separator)
-    let iso = timestamp
-    if (!iso.endsWith('Z') && !iso.includes('+') && (iso.match(/-/g) || []).length < 3) {
-      // rough check: if only 2 hyphens (YYYY-MM-DD), and no +, assume naive UTC -> append Z
-      // If it has offset (+05:30 or -05:00), Date() handles it.
-      iso = timestamp + 'Z'
+    try {
+      // If it's a naive ISO string from Python (2026-02-18T...), 
+      // new Date() treats it as local time correctly.
+      // If we want to be safe against different browser behaviors:
+      const d = new Date(timestamp)
+      return isNaN(d.getTime()) ? 0 : d.getTime()
+    } catch {
+      return 0
     }
-    return new Date(iso).getTime()
   }
 
   const filteredData = useMemo(() => {
     if (!data.length) return []
 
-    // Sort data by timestamp (Local Time) to ensure chronological order
     const sortedData = [...data].sort((a, b) => {
-      return toLocalTime(a.timestamp) - toLocalTime(b.timestamp)
+      return parseTimestamp(a.timestamp) - parseTimestamp(b.timestamp)
     })
 
     const timeRanges = {
@@ -71,148 +100,72 @@ export const UsageGraph: React.FC<UsageGraphProps> = ({
       '1d': 24 * 60 * 60 * 1000
     }
 
-    // Get the most recent timestamp from data in Local Time
     const latestTimestamp = sortedData.length > 0
-      ? toLocalTime(sortedData[sortedData.length - 1].timestamp)
+      ? parseTimestamp(sortedData[sortedData.length - 1].timestamp)
       : currentTime
 
     const referenceTime = latestTimestamp > currentTime ? latestTimestamp : currentTime
     const cutoff = referenceTime - timeRanges[selectedTimeRange]
 
     const filtered = sortedData.filter(log => {
-      return toLocalTime(log.timestamp) >= cutoff
+      return parseTimestamp(log.timestamp) >= cutoff
     })
 
+    // If no data in range, show last few points to avoid blank screen
     if (filtered.length === 0 && sortedData.length > 0) {
-      const maxPoints = Math.min(sortedData.length, Math.ceil(timeRanges[selectedTimeRange] / 4000))
-      return sortedData.slice(-maxPoints)
+      return sortedData.slice(-20)
     }
 
     return filtered
   }, [data, selectedTimeRange, currentTime])
 
   const chartData = useMemo(() => {
-    if (!filteredData.length) {
-      return {
-        labels: [],
-        datasets: [{
-          label: 'Usage',
-          data: [],
-          borderColor: '#ef4444',
-          backgroundColor: 'rgba(239, 68, 68, 0.1)',
-          fill: true,
-          tension: 0.4,
-          pointRadius: 0,
-          pointHoverRadius: 4,
-          borderWidth: 2,
-          pointHoverBorderWidth: 2,
-        }]
+    const labels = filteredData.map(log => {
+      const d = new Date(log.timestamp)
+      if (isNaN(d.getTime())) return 'N/A'
+      return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })
+    })
+
+    const getMetricColor = () => {
+      switch (metric) {
+        case 'cpu': return { border: '#3b82f6', bg: 'rgba(59, 130, 246, 0.2)' }
+        case 'ram': return { border: '#8b5cf6', bg: 'rgba(139, 92, 246, 0.2)' }
+        case 'gpu': return { border: '#10b981', bg: 'rgba(16, 185, 129, 0.2)' }
+        case 'network_rx': return { border: '#06b6d4', bg: 'rgba(6, 182, 212, 0.2)' }
+        case 'network_tx': return { border: '#0ea5e9', bg: 'rgba(14, 165, 233, 0.2)' }
+        case 'temperature': return { border: '#f59e0b', bg: 'rgba(245, 158, 11, 0.2)' }
+        default: return { border: '#64748b', bg: 'rgba(100, 116, 139, 0.2)' }
       }
     }
 
-    const labels = filteredData.map(log => {
-      try {
-        let iso = log.timestamp
-        if (!iso.endsWith('Z') && !iso.includes('+') && (iso.match(/-/g) || []).length < 3) {
-          iso = log.timestamp + 'Z'
-        }
-        return new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })
-      } catch {
-        return 'N/A'
-      }
-    })
+    const colors = getMetricColor()
 
-    let dataset: any
-
-    switch (metric) {
-      case 'cpu':
-        dataset = {
-          label: 'CPU Usage',
-          data: filteredData.map(log => log.cpu ?? log.cpu_usage ?? 0),
-          borderColor: '#ef4444',
-          backgroundColor: 'rgba(239, 68, 68, 0.1)',
-          fill: true,
-          tension: 0.4,
-          pointRadius: 0,
-          pointHoverRadius: 4,
-          borderWidth: 2,
-          pointHoverBorderWidth: 2,
-        }
-        break
-      case 'ram':
-        dataset = {
-          label: 'RAM Usage',
-          data: filteredData.map(log => log.ram ?? log.ram_usage ?? 0),
-          borderColor: '#3b82f6',
-          backgroundColor: 'rgba(59, 130, 246, 0.1)',
-          fill: true,
-          tension: 0.4,
-          pointRadius: 0,
-          pointHoverRadius: 4,
-          borderWidth: 2,
-          pointHoverBorderWidth: 2,
-        }
-        break
-      case 'gpu':
-        dataset = {
-          label: 'GPU Usage',
-          data: filteredData.map(log => {
-            // Handle complex objects or usage keys
-            if (typeof log.gpu === 'number') return log.gpu
-            return log.gpu_load ?? log.gpu_usage ?? 0
-          }),
-          borderColor: '#10b981',
-          backgroundColor: 'rgba(16, 185, 129, 0.1)',
-          fill: true,
-          tension: 0.4,
-          pointRadius: 0,
-          pointHoverRadius: 4,
-          borderWidth: 2,
-          pointHoverBorderWidth: 2,
-        }
-        break
-      case 'temperature':
-        dataset = {
-          label: 'Temperature',
-          data: filteredData.map(log => log.temperature || 0),
-          borderColor: '#f59e0b',
-          backgroundColor: 'rgba(245, 158, 11, 0.1)',
-          fill: true,
-          tension: 0.4,
-          pointRadius: 0,
-          pointHoverRadius: 4,
-          borderWidth: 2,
-          pointHoverBorderWidth: 2,
-        }
-        break
-      case 'network_rx':
-        dataset = {
-          label: 'Network RX (KB/s)',
-          data: filteredData.map(log => log.network_rx || 0),
-          borderColor: '#8b5cf6',
-          backgroundColor: 'rgba(139, 92, 246, 0.1)',
-          fill: true,
-          tension: 0.4,
-          pointRadius: 0,
-          pointHoverRadius: 4,
-          borderWidth: 2,
-          pointHoverBorderWidth: 2,
-        }
-        break
-      case 'network_tx':
-        dataset = {
-          label: 'Network TX (KB/s)',
-          data: filteredData.map(log => log.network_tx || 0),
-          borderColor: '#06b6d4',
-          backgroundColor: 'rgba(6, 182, 212, 0.1)',
-          fill: true,
-          tension: 0.4,
-          pointRadius: 0,
-          pointHoverRadius: 4,
-          borderWidth: 2,
-          pointHoverBorderWidth: 2,
-        }
-        break
+    const dataset = {
+      label: metric.toUpperCase(),
+      data: filteredData.map(log => {
+        if (metric === 'cpu') return log.cpu ?? log.cpu_usage ?? 0
+        if (metric === 'ram') return log.ram ?? log.ram_usage ?? 0
+        if (metric === 'gpu') return typeof log.gpu === 'number' ? log.gpu : (log.gpu_load ?? log.gpu_usage ?? 0)
+        return (log as any)[metric] ?? 0
+      }),
+      borderColor: colors.border,
+      backgroundColor: (context: ScriptableContext<'line'>) => {
+        const chart = context.chart
+        const { ctx, chartArea } = chart
+        if (!chartArea) return 'transparent'
+        const gradient = ctx.createLinearGradient(0, chartArea.top, 0, chartArea.bottom)
+        gradient.addColorStop(0, colors.bg)
+        gradient.addColorStop(1, 'transparent')
+        return gradient
+      },
+      fill: true,
+      tension: 0.4,
+      pointRadius: 0,
+      pointHoverRadius: 4,
+      pointHoverBackgroundColor: colors.border,
+      pointHoverBorderColor: '#fff',
+      pointHoverBorderWidth: 2,
+      borderWidth: 2,
     }
 
     return { labels, datasets: [dataset] }
@@ -221,61 +174,55 @@ export const UsageGraph: React.FC<UsageGraphProps> = ({
   const chartOptions = useMemo(() => ({
     responsive: true,
     maintainAspectRatio: false,
-    animation: { duration: 200 },
+    animation: { duration: 400, easing: 'easeOutQuart' as const },
     plugins: {
       legend: { display: false },
       tooltip: {
         enabled: true,
-        backgroundColor: 'rgba(15, 23, 42, 0.95)',
-        titleColor: '#e2e8f0',
-        bodyColor: '#cbd5e1',
-        borderColor: '#475569',
+        backgroundColor: 'rgba(2, 6, 23, 0.9)',
+        titleColor: '#94a3b8',
+        bodyColor: '#fff',
+        titleFont: { size: 10, weight: 'bold' as const },
+        bodyFont: { size: 12, family: 'monospace', weight: 'bold' as const },
+        borderColor: 'rgba(255, 255, 255, 0.1)',
         borderWidth: 1,
-        cornerRadius: 4,
-        padding: 8,
+        cornerRadius: 8,
+        padding: 12,
+        displayColors: false,
         callbacks: {
           title: (context: TooltipItem<'line'>[]) => {
             const index = context[0].dataIndex
             const dataPoint = filteredData[index]
-            if (!dataPoint || !dataPoint.timestamp) return 'N/A'
-            let iso = dataPoint.timestamp
-            if (!iso.endsWith('Z') && !iso.includes('+') && (iso.match(/-/g) || []).length < 3) {
-              iso = dataPoint.timestamp + 'Z'
-            }
-            return new Date(iso).toLocaleString()
+            if (!dataPoint?.timestamp) return 'UPLINK LOST'
+            return new Date(dataPoint.timestamp).toLocaleString()
           },
           label: (context: TooltipItem<'line'>) => {
             const value = context.parsed.y
-            if (value === null) return ''
-            // The data mapping already handles fallback to 0 for cpu/ram/gpu if undefined.
-            // The 'value' here is already the processed number.
+            if (value === null || value === undefined) return '➤ DATA UNAVAILABLE'
             const unit = (metric === 'cpu' || metric === 'ram' || metric === 'gpu') ? '%' :
               (metric === 'temperature') ? '°C' : ' KB/s'
-            return `${context.dataset.label || 'Usage'}: ${value.toFixed(1)}${unit}`
+            return `➤ ${value.toFixed(1)}${unit}`
           },
         },
       },
     },
     scales: {
       x: {
-        ticks: {
-          color: '#94a3b8',
-          font: { size: 9 },
-          autoSkip: true,
-          maxTicksLimit: 8
-        },
-        grid: { color: 'rgba(71, 85, 105, 0.1)' },
+        display: false,
+        grid: { display: false },
       },
       y: {
+        position: 'right' as const,
         ticks: {
-          color: '#94a3b8',
-          font: { size: 9 },
+          color: 'rgba(148, 163, 184, 0.4)',
+          font: { size: 8, family: 'monospace' },
+          maxTicksLimit: 5,
           callback: (value: any) => {
             if (metric === 'cpu' || metric === 'ram' || metric === 'gpu') return `${value}%`
             return value
           }
         },
-        grid: { color: 'rgba(71, 85, 105, 0.1)' },
+        grid: { color: 'rgba(255, 255, 255, 0.03)' },
         min: 0,
         max: (metric === 'cpu' || metric === 'ram' || metric === 'gpu') ? 100 : undefined,
       },
@@ -283,27 +230,34 @@ export const UsageGraph: React.FC<UsageGraphProps> = ({
     interaction: { intersect: false, mode: 'index' as const },
   }), [filteredData, metric])
 
-  if (loading) return <div className="p-8 text-center text-slate-500">Loading Fleet Data...</div>
-  if (error) return <div className="p-8 text-center text-red-400">{error}</div>
+  if (loading) return (
+    <div className="flex flex-col items-center justify-center h-full gap-2">
+      <div className="w-4 h-4 border-2 border-blue-500/20 border-t-blue-400 rounded-full animate-spin" />
+      <span className="text-[10px] font-bold text-slate-600 uppercase tracking-widest">Hydrating...</span>
+    </div>
+  )
+  if (error) return <div className="p-8 text-center text-red-400 font-bold text-[10px] uppercase">{error}</div>
 
   return (
-    <div className={className}>
-      <div className="flex flex-wrap gap-1 mb-4">
-        {['30s', '1m', '5m', '15m', '30m', '1h', '3h', '6h', '12h', '1d'].map((range) => (
+    <div className={cn("flex flex-col h-full", className)}>
+      <div className="flex flex-wrap gap-1 mb-2">
+        {['30s', '1m', '5m', '15m', '30m', '1h', '6h', '1d'].map((range) => (
           <button
             key={range}
             onClick={() => setSelectedTimeRange(range as TimeRange)}
-            className={`px-3 py-1 text-[10px] font-bold rounded-lg transition-all ${selectedTimeRange === range
-              ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/20'
-              : 'bg-slate-800 text-slate-500 hover:text-slate-300 hover:bg-slate-700'
-              }`}
+            className={cn(
+              "px-2 py-0.5 text-[8px] font-black rounded-md transition-all uppercase tracking-widest border",
+              selectedTimeRange === range
+                ? 'bg-white/10 text-white border-white/20'
+                : 'text-slate-600 border-transparent hover:text-slate-400 hover:bg-white/5'
+            )}
           >
-            {range.toUpperCase()}
+            {range}
           </button>
         ))}
       </div>
-      <div className="h-48">
-        <Line data={chartData} options={chartOptions} />
+      <div className="flex-1 min-h-0 relative">
+        <Line ref={chartRef} data={chartData} options={chartOptions} />
       </div>
     </div>
   )
