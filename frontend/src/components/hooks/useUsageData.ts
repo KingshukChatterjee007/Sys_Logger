@@ -110,7 +110,7 @@ export const useUsageData = (orgId?: string): UseUsageDataReturn => {
 
     const socket: Socket = io(socketUrl, {
       path: '/socket.io/', // Explicitly set path to match Next.js rewrite
-      transports: ['polling', 'websocket'], // Force polling first, then upgrade (safer for proxies)
+      transports: ['polling'], // FORCE polling to bypass potential proxy WebSocket issues
     })
 
     socket.on('connect', () => {
