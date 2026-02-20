@@ -1,9 +1,7 @@
 export const getApiUrl = () => {
-    if (process.env.NEXT_PUBLIC_API_URL) {
-        return process.env.NEXT_PUBLIC_API_URL
-    }
-    // Default to localhost:5000 for dev
-    return 'http://localhost:5000'
+    // Return empty string to use relative paths (e.g. /api/units)
+    // This allows Next.js rewrites to handle the proxying to the actual backend
+    return ''
 }
 
 export const apiFetch = async (endpoint: string, options: RequestInit = {}) => {
