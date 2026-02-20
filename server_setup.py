@@ -65,13 +65,14 @@ def connect_postgres(db=None):
         return None
 
 
-# -----------------------------------------------------------
+# ---------------------------------------------------------
 # CREATE POSTGRES DATABASE + USER
-# -----------------------------------------------------------
+# ---------------------------------------------------------
 def setup_postgres_database():
     print("➡ Checking PostgreSQL...")
 
     # must be installed + running
+    
     if not postgres_running():
         print("❌ PostgreSQL is not running.")
         return False

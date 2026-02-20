@@ -1,6 +1,6 @@
 @echo off
 REM ==========================================
-REM Sys_Logger One-Click Installer
+REM Sys_Logger Installer
 REM Wraps PowerShell setup script to run silently
 REM ==========================================
 

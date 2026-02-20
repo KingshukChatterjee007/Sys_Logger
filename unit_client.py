@@ -22,7 +22,7 @@ except ImportError:
 # Configuration
 CONFIG_FILE = 'unit_client_config.json'
 CACHE_FILE = 'cached_usage.json'
-DEFAULT_SERVER_URL = 'http://10.5.171.78:5001'  # Change this to your central server URL
+DEFAULT_SERVER_URL = 'http://203.193.145.59:5010'  # Change this to your central server URL
 COLLECTION_INTERVAL = 1  # seconds - updated for 1-second updates
 RECONNECT_INTERVAL = 300  # seconds (5 minutes)
 MAX_RETRIES = 3
