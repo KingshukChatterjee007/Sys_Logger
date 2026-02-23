@@ -13,7 +13,7 @@ import {
     Monitor, Server, Database, Activity, Globe,
     ChevronRight, Layout, Download,
     Cpu, HardDrive, Wifi, Zap, Clock,
-    Share2, Check
+    Share2, Check, Pencil, Trash2, X
 } from 'lucide-react'
 
 function cn(...inputs: ClassValue[]) {
@@ -27,8 +27,16 @@ interface DashboardViewProps {
 export default function DashboardView({ orgId: propOrgId }: DashboardViewProps) {
     const [viewOrgId] = useState<string | null>(propOrgId || null)
     const { data: usageData, loading, setSelectedUnitId, selectedUnitId } = useUsageData(viewOrgId || undefined)
-    const { units } = useUnits(viewOrgId || undefined)
+    const { units, deleteUnit, updateUnit, deleteOrg, updateOrg } = useUnits(viewOrgId || undefined)
     const [selectedUnit, setSelectedUnit] = useState<Unit | null>(null)
+
+    // Management State
+    const [editingUnit, setEditingUnit] = useState<Unit | null>(null)
+    const [deletingUnit, setDeletingUnit] = useState<Unit | null>(null)
+    const [editingOrg, setEditingOrg] = useState<string | null>(null)
+    const [deletingOrg, setDeletingOrg] = useState<string | null>(null)
+    const [newName, setNewName] = useState('')
+
     const [currentTime, setCurrentTime] = useState<string>('')
     const [startDate, setStartDate] = useState<string>('')
     const [endDate, setEndDate] = useState<string>('')
@@ -70,6 +78,41 @@ export default function DashboardView({ orgId: propOrgId }: DashboardViewProps) 
             url += `?range=1d`
         }
         window.open(url, '_blank')
+    }
+
+    const onUnitDelete = async (e: React.MouseEvent, unit: Unit) => {
+        e.stopPropagation()
+        if (window.confirm(`Are you sure you want to delete ${unit.name}? This will clear its telemetry data.`)) {
+            await deleteUnit(unit.id)
+            if (selectedUnit?.id === unit.id) clearSelection()
+        }
+    }
+
+    const onOrgDelete = async () => {
+        const orgId = viewOrgId || selectedUnit?.org_id
+        if (!orgId) return
+        if (window.confirm(`Are you sure you want to delete the entire organization "${orgId}"? This will remove ALL associated units.`)) {
+            await deleteOrg(orgId)
+            clearSelection()
+        }
+    }
+
+    const onUnitUpdate = async () => {
+        if (!editingUnit) return
+        const success = await updateUnit(editingUnit.id, { name: newName })
+        if (success) {
+            setEditingUnit(null)
+            setNewName('')
+        }
+    }
+
+    const onOrgUpdate = async () => {
+        if (!editingOrg) return
+        const success = await updateOrg(editingOrg, newName)
+        if (success) {
+            setEditingOrg(null)
+            setNewName('')
+        }
     }
 
     const activeUnits = units.filter(u => u.status === 'online').length
@@ -140,13 +183,37 @@ export default function DashboardView({ orgId: propOrgId }: DashboardViewProps) 
                                 <Clock className="w-4 h-4 text-slate-500" />
                                 <span className="text-xl font-light font-mono leading-none tracking-tight">{currentTime}</span>
                             </div>
-                            <span className="text-[9px] uppercase tracking-[0.2em] text-emerald-400 flex items-center gap-1.5 mt-1 font-bold">
-                                <span className="relative flex h-2 w-2">
-                                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-40"></span>
-                                    <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                            <div className="flex items-center gap-3 mt-1">
+                                {(viewOrgId || selectedUnit?.org_id) && (
+                                    <div className="flex items-center gap-2 pr-3 border-r border-white/10">
+                                        <button
+                                            onClick={() => {
+                                                const org = viewOrgId || selectedUnit?.org_id || null;
+                                                if (org) {
+                                                    setEditingOrg(org);
+                                                    setNewName(org);
+                                                }
+                                            }}
+                                            className="p-1 text-slate-500 hover:text-blue-400 transition-colors"
+                                        >
+                                            <Pencil size={12} />
+                                        </button>
+                                        <button
+                                            onClick={onOrgDelete}
+                                            className="p-1 text-slate-500 hover:text-red-400 transition-colors"
+                                        >
+                                            <Trash2 size={12} />
+                                        </button>
+                                    </div>
+                                )}
+                                <span className="text-[9px] uppercase tracking-[0.2em] text-emerald-400 flex items-center gap-1.5 font-bold">
+                                    <span className="relative flex h-2 w-2">
+                                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-40"></span>
+                                        <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                                    </span>
+                                    Link Active
                                 </span>
-                                Link Active
-                            </span>
+                            </div>
                         </div>
                     </div>
                 </motion.header>
@@ -232,13 +299,29 @@ export default function DashboardView({ orgId: propOrgId }: DashboardViewProps) 
                                                     </div>
                                                     <div>
                                                         <div className={cn(
-                                                            "text-xs font-bold transition-colors",
+                                                            "text-xs font-bold transition-colors mb-0.5",
                                                             selectedUnit?.id === unit.id ? 'text-white' : 'text-slate-300 group-hover:text-white'
                                                         )}>
                                                             {unit.name}
                                                         </div>
-                                                        <div className="text-[9px] text-slate-500 font-mono mt-0.5 flex items-center gap-1 opacity-70">
-                                                            <Globe size={8} /> {unit.ip || 'DHCP-LEASE'}
+                                                        <div className="flex items-center gap-2">
+                                                            <div className="text-[9px] text-slate-500 font-mono flex items-center gap-1 opacity-70">
+                                                                <Globe size={8} /> {unit.ip || 'DHCP-LEASE'}
+                                                            </div>
+                                                            <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity pl-2 border-l border-white/10">
+                                                                <button
+                                                                    onClick={(e) => { e.stopPropagation(); setEditingUnit(unit); setNewName(unit.name) }}
+                                                                    className="text-slate-500 hover:text-blue-400 p-0.5"
+                                                                >
+                                                                    <Pencil size={10} />
+                                                                </button>
+                                                                <button
+                                                                    onClick={(e) => onUnitDelete(e, unit)}
+                                                                    className="text-slate-500 hover:text-red-400 p-0.5"
+                                                                >
+                                                                    <Trash2 size={10} />
+                                                                </button>
+                                                            </div>
                                                         </div>
                                                     </div>
                                                 </div>
@@ -459,6 +542,61 @@ export default function DashboardView({ orgId: propOrgId }: DashboardViewProps) 
                     </main>
                 </div>
             </div>
+
+            {/* Modals */}
+            <AnimatePresence>
+                {(editingUnit || editingOrg) && (
+                    <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm"
+                    >
+                        <motion.div
+                            initial={{ scale: 0.95, opacity: 0 }}
+                            animate={{ scale: 1, opacity: 1 }}
+                            className="bg-slate-900/90 border border-white/10 p-8 rounded-3xl w-full max-w-md shadow-2xl relative overflow-hidden"
+                        >
+                            <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-600 to-cyan-400" />
+                            <button
+                                onClick={() => { setEditingUnit(null); setEditingOrg(null) }}
+                                className="absolute top-4 right-4 text-slate-500 hover:text-white transition-colors"
+                            >
+                                <X size={20} />
+                            </button>
+
+                            <h3 className="text-xl font-black text-white uppercase italic tracking-tight mb-2">
+                                {editingUnit ? 'Rename Client PC' : 'Rename Organization'}
+                            </h3>
+                            <p className="text-xs text-slate-500 font-bold uppercase tracking-widest mb-6">
+                                {editingUnit ? `Editing node: ${editingUnit.id}` : `Changing ID for: ${editingOrg}`}
+                            </p>
+
+                            <div className="space-y-4">
+                                <div className="space-y-2">
+                                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest pl-1">Display Name / Org ID</label>
+                                    <input
+                                        autoFocus
+                                        type="text"
+                                        value={newName}
+                                        onChange={(e) => setNewName(e.target.value)}
+                                        onKeyDown={(e) => e.key === 'Enter' && (editingUnit ? onUnitUpdate() : onOrgUpdate())}
+                                        className="w-full bg-slate-950 border border-white/5 rounded-xl px-4 py-3 text-white font-bold focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none transition-all placeholder:text-slate-800"
+                                        placeholder="Enter new name..."
+                                    />
+                                </div>
+
+                                <button
+                                    onClick={editingUnit ? onUnitUpdate : onOrgUpdate}
+                                    className="w-full bg-blue-600 hover:bg-blue-500 text-white font-black uppercase tracking-[0.2em] py-4 rounded-xl shadow-lg shadow-blue-600/20 active:scale-[0.98] transition-all"
+                                >
+                                    Confirm Update
+                                </button>
+                            </div>
+                        </motion.div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
         </div>
     )
 }

@@ -120,7 +120,7 @@ pm2 delete sys-logger-client 2>$null
 
 # Start with ecosystem config (windowsHide:true keeps it background)
 Set-Location $deployDir
-pm2 start ecosystem.config.js
+pm2 start ecosystem.config.js --silent
 
 # Save the process list (needed for pm2 resurrect on boot)
 pm2 save --force

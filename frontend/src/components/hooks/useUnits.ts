@@ -63,7 +63,7 @@ export const useUnits = (orgId?: string) => {
     try {
       const response = await apiFetch(`/api/alerts/${alertId}/acknowledge`, {
         method: 'POST'
-      } as any)
+      })
       if (!response.ok) {
         throw new Error('Failed to acknowledge alert')
       }
@@ -78,6 +78,64 @@ export const useUnits = (orgId?: string) => {
     }
   }, [])
 
+  const deleteUnit = useCallback(async (unitId: string) => {
+    try {
+      const response = await apiFetch(`/api/units/${unitId}`, {
+        method: 'DELETE'
+      })
+      if (!response.ok) throw new Error('Failed to delete unit')
+      await fetchUnits()
+      return true
+    } catch (err) {
+      console.error('Error deleting unit:', err)
+      return false
+    }
+  }, [fetchUnits])
+
+  const updateUnit = useCallback(async (unitId: string, data: Partial<Unit>) => {
+    try {
+      const response = await apiFetch(`/api/units/${unitId}`, {
+        method: 'PUT',
+        body: JSON.stringify(data)
+      })
+      if (!response.ok) throw new Error('Failed to update unit')
+      await fetchUnits()
+      return true
+    } catch (err) {
+      console.error('Error updating unit:', err)
+      return false
+    }
+  }, [fetchUnits])
+
+  const deleteOrg = useCallback(async (orgId: string) => {
+    try {
+      const response = await apiFetch(`/api/orgs/${orgId}`, {
+        method: 'DELETE'
+      })
+      if (!response.ok) throw new Error('Failed to delete organization')
+      await fetchUnits()
+      return true
+    } catch (err) {
+      console.error('Error deleting organization:', err)
+      return false
+    }
+  }, [fetchUnits])
+
+  const updateOrg = useCallback(async (orgId: string, newOrgId: string) => {
+    try {
+      const response = await apiFetch(`/api/orgs/${orgId}`, {
+        method: 'PUT',
+        body: JSON.stringify({ new_org_id: newOrgId })
+      })
+      if (!response.ok) throw new Error('Failed to rename organization')
+      await fetchUnits()
+      return true
+    } catch (err) {
+      console.error('Error updating organization:', err)
+      return false
+    }
+  }, [fetchUnits])
+
   return {
     units,
     alerts,
@@ -86,6 +144,10 @@ export const useUnits = (orgId?: string) => {
     isConnected,
     refetchUnits: fetchUnits,
     refetchAlerts: fetchAlerts,
-    acknowledgeAlert
+    acknowledgeAlert,
+    deleteUnit,
+    updateUnit,
+    deleteOrg,
+    updateOrg
   }
 }
