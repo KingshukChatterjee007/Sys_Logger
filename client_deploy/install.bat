@@ -1,10 +1,14 @@
 @echo off
 REM ==========================================
-REM Sys_Logger Installer
-REM Wraps PowerShell setup script to run silently
+REM Sys_Logger Client - One-Click Installer
+REM Run as Administrator for auto-start setup
 REM ==========================================
 
-echo Starting Sys_Logger Setup...
+echo.
+echo ==========================================
+echo   Sys_Logger Client - Installer
+echo ==========================================
+echo.
 
 REM Check if running as Admin
 net session >nul 2>&1
@@ -16,10 +20,17 @@ if %errorLevel% == 0 (
     exit /b
 )
 
-REM Run setup script bypassing execution policy
+REM Run the PowerShell setup script
+echo Starting setup...
+echo.
 powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0setup_windows.ps1"
 
 echo.
-echo Installation process completed.
-echo You can close this window.
+echo ==========================================
+echo   Installation Complete!
+echo ==========================================
+echo.
+echo   The client is now running and will
+echo   auto-start on every system boot.
+echo.
 pause

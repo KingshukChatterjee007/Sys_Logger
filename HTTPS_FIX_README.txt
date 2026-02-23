@@ -102,3 +102,85 @@ If graphs still don't appear after deployment:
    - Incorrect: http://203.193.145.59:5010/  (trailing slash)
 
 =============================================================================
+
+
+=============================================================================
+       CLIENT AUTO-START (PM2) — WHAT WAS DONE & WHAT NEEDS TO BE DONE
+=============================================================================
+
+THE PROBLEM
+-----------
+After deploying the client on a target machine, users had to manually start
+unit_client.py every time the system rebooted. There was no persistence.
+
+
+WHAT WAS DONE (Code Changes)
+-----------------------------
+All changes are in: client_deploy/
+
+1. UPDATED: ecosystem.config.js
+   - Dynamic venv Python path resolution (Windows/Linux/Mac)
+   - Runs unit_client.py with --silent flag
+   - Auto-restart on crash (max 10 retries, 500MB memory limit)
+   - Structured logging to logs/err.log and logs/out.log
+
+2. REWRITTEN: setup_windows.ps1
+   - Checks prerequisites (Node.js, PM2, Python)
+   - Creates Python venv and installs dependencies
+   - Starts client via PM2 (pm2 start ecosystem.config.js)
+   - Saves process list (pm2 save)
+   - Registers Windows Task Scheduler entry: "pm2 resurrect" on boot
+   - Same pattern as Krishi Sahayak's setup_pm2_autostart.ps1
+
+3. REWRITTEN: setup_linux_mac.sh
+   - Same prerequisite checks
+   - Creates Python venv and installs dependencies
+   - Starts client via PM2
+   - Runs "pm2 startup" to generate systemd/launchd auto-start service
+   - Saves process list (pm2 save)
+
+4. UPDATED: install.bat
+   - One-click installer wrapper for Windows
+   - Auto-elevates to Administrator
+   - Calls setup_windows.ps1
+
+HOW IT WORKS:
+  First time:  User runs install.bat (Windows) or setup_linux_mac.sh (Linux/Mac)
+  Every boot:  Task Scheduler → pm2 resurrect → client starts automatically
+  On crash:    PM2 auto-restarts the client (up to 10 times)
+
+
+WHAT NEEDS TO BE DONE (Deployment Steps)
+-----------------------------------------
+
+Step 1: Copy client_deploy/ folder to the target machine
+
+Step 2: Run the installer
+   - Windows: Double-click install.bat (will request Admin privileges)
+   - Linux/Mac: chmod +x setup_linux_mac.sh && sudo ./setup_linux_mac.sh
+
+Step 3: Verify
+   - Run: pm2 status
+   - "sys-logger-client" should show status "online"
+
+Step 4: Test auto-start
+   - Reboot the machine
+   - Run: pm2 status
+   - Client should be running again automatically
+
+PREREQUISITES (must be installed on target machine)
+---------------------------------------------------
+   - Python 3.10+
+   - Node.js 20+ (needed for PM2)
+   - Internet connection (for pip and npm installs during setup)
+
+USEFUL PM2 COMMANDS
+-------------------
+   pm2 status                      → see all running processes
+   pm2 logs sys-logger-client      → view client logs
+   pm2 monit                       → real-time monitoring dashboard
+   pm2 stop sys-logger-client      → stop the client
+   pm2 restart sys-logger-client   → restart the client
+   pm2 delete sys-logger-client    → fully remove the client from PM2
+
+=============================================================================
