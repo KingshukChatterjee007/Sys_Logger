@@ -8,7 +8,7 @@ const os = require('os');
 // Resolve the correct Python path based on OS
 const isWindows = os.platform() === 'win32';
 const venvPython = isWindows
-  ? path.join(__dirname, 'venv', 'Scripts', 'pythonw.exe')
+  ? path.join(__dirname, 'venv', 'Scripts', 'python.exe')
   : path.join(__dirname, 'venv', 'bin', 'python');
 
 module.exports = {
@@ -31,7 +31,6 @@ module.exports = {
 
       // --- Background / Hidden Window ---
       windowsHide: true,         // suppress console window on Windows
-      min_uptime: "20s",         // must run 20s to count as "stable"
       watch: false,
 
       env: {

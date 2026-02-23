@@ -443,42 +443,6 @@ def update_unit(unit_id):
     socketio.emit('units_update', UnitStore.get_all_units())
     return jsonify(unit), 200
 
-@app.route('/api/orgs/<org_id>', methods=['DELETE'])
-def delete_organization(org_id):
-    """Delete all units belonging to an organization"""
-    units_to_delete = UnitStore.get_units_by_org(org_id)
-    if not units_to_delete:
-        return jsonify({'error': 'Organization not found or has no units'}), 404
-    
-    for unit in units_to_delete:
-        UnitStore.delete_unit(unit['id'])
-    
-    # Broadcast update
-    socketio.emit('units_update', UnitStore.get_all_units())
-    return jsonify({'status': 'deleted', 'count': len(units_to_delete)}), 200
-
-@app.route('/api/orgs/<org_id>', methods=['PUT'])
-def update_organization(org_id):
-    """Rename an organization (updates org_id for all child units)"""
-    data = request.get_json()
-    new_org_id = data.get('new_org_id')
-    if not new_org_id:
-        return jsonify({'error': 'new_org_id required'}), 400
-    
-    units_to_update = UnitStore.get_units_by_org(org_id)
-    if not units_to_update:
-        return jsonify({'error': 'Organization not found or has no units'}), 404
-    
-    for unit in units_to_update:
-        unit['org_id'] = new_org_id
-        # Update display name if it follows the org/comp pattern
-        if unit.get('name') == f"{org_id}/{unit['comp_id']}":
-            unit['name'] = f"{new_org_id}/{unit['comp_id']}"
-        UnitStore.save_unit(unit['id'], unit)
-    
-    socketio.emit('units_update', UnitStore.get_all_units())
-    return jsonify({'status': 'updated', 'count': len(units_to_update), 'new_org_id': new_org_id}), 200
-
 # --- DEPLOYMENT GENERATOR ---
 
 @app.route('/api/deploy/client_source', methods=['GET'])
