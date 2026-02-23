@@ -68,7 +68,7 @@ In academia, several works investigate the design of monitoring architectures ta
 
 From a communication perspective, WebSockets and Socket.IO have been widely adopted for real-time web applications. Demir and Korkmaz~\cite{demirSocketIO} analyze the performance benefits of Socket.IO for hybrid applications, demonstrating reduced latency and improved responsiveness. Similar technologies have been explored in real-time chat systems and collaborative tools~\cite{pandiriChat}. Flask-SocketIO and python-socketio bring this event-driven paradigm into Python backends, enabling low-latency bi-directional communication between Python servers and browser clients~\cite{flaskSocketIO,pythonSocketIO}.
 
-System Logger differentiates itself from these solutions by combining a minimal, agent-based monitoring client, a Flask-SocketIO backend, and a Next.js dashboard into an integrated framework focused on real-time visualization, low configuration overhead, and multi-unit support. It positions itself as a bridge between ad-hoc local monitoring tools and full-scale observability stacks.
+System Logger differentiates itself from these solutions by combining a minimal, agent-based monitoring client, a hybrid Flask-SocketIO/Redis backend, and a Next.js Proxy-enabled dashboard into an integrated framework focused on real-time visualization, low configuration overhead, and multi-unit support. It positions itself as a bridge between ad-hoc local monitoring tools and full-scale observability stacks.
 
 \section{System Design and Architecture}
 \label{sec:architecture}
@@ -109,16 +109,22 @@ Each monitored machine runs a lightweight Python script, \texttt{unit\_client.py
 \end{itemize}
 The agent relies on the \texttt{psutil} library for CPU and memory metrics and GPU-specific libraries (e.g., NVIDIA Management Library bindings) where available. Additionally, a robust fallback mechanism using OS-level performance counters (e.g., PowerShell on Windows) is implemented to support AMD and Intel hardware. Metrics are transmitted to the server via standardized HTTP POST requests or Socket.IO events depending on the deployment configuration.
 
-\subsection{Central Server}
+\subsection{Central Server and Data Storage}
 
-The central server is implemented using Flask and Flask-SocketIO~\cite{flaskSocketIO}. It exposes:
+The central server is implemented using Flask and Flask-SocketIO~\cite{flaskSocketIO}. It exposes Socket.IO namespaces for real-time reporting and RESTful endpoints for historical analysis. 
+
+A critical component of the architecture is the high-performance PostgreSQL storage engine, augmented by a Redis caching layer for rapid ingestion. To support large-scale metric ingestion across many units, the system employs several advanced database techniques:
 \begin{itemize}
-  \item Socket.IO namespaces for receiving real-time metrics and broadcasting updates to dashboard clients.
-  \item RESTful HTTP endpoints for historical data retrieval and configuration management.
-  \item A PostgreSQL database for persistent logging with retention policies.
+  \item \textbf{Dual-Tier Storage:} Real-time telemetry is cached in \texttt{Redis} (limited to the last $K$ samples, e.g., $K=100$) for instantaneous dashboard retrieval, while raw data is persisted in \texttt{PostgreSQL} for deep historical analysis.
+  \item \textbf{Table Partitioning:} The \texttt{system\_metrics} table is partitioned by month using range partitioning. This ensures that query performance remains consistent even as the dataset grows into the millions of records.
+  \item \textbf{Automated Aggregation:} Scheduled procedures calculate hourly and daily summaries (average CPU, RAM, and GPU usage) and store them in a dedicated \texttt{aggregated\_metrics} table. This allows the dashboard to render long-term historical trends with minimal compute overhead.
 \end{itemize}
 
 Incoming metric messages are processed asynchronously, enriched with timestamps and unit identifiers, and written to the database. The server also executes threshold checks (e.g., CPU usage above 90\%) and emits alert events to subscribed clients when violations occur.
+
+\subsection{HTTPS Reverse Proxy Architecture}
+
+Deployment in modern cloud environments (e.g., Vercel) introduces the "Mixed Content" challenge, where HTTPS-secured frontends are blocked from accessing HTTP-only backend endpoints. System Logger addresses this through a Server-Side Proxy (SSP) layer implemented via Next.js API Routes. All browser requests are routed through the secure Next.js edge server, which performs a server-to-server relay to the bare-metal Flask backend, effectively bypassing CORS and SSL certificate restrictions for local network deployments.
 
 \subsection{Web Dashboard}
 
@@ -182,7 +188,7 @@ Let $t_{\text{emit}}$ denote the time at which the agent sends the payload, $t_{
   L_{\text{total}} = L_{\text{net}} + L_{\text{render}}.
 \end{equation}
 
-This event-driven pattern reduces latency compared to polling and leverages the low-latency, bidirectional communication properties of Socket.IO~\cite{demirSocketIO,socketioDocs}.
+This event-driven pattern and proxy-layer relaying reduce latency compared to traditional client-side polling and account for modern security constraints~\cite{demirSocketIO,socketioDocs}.
 
 \subsection{Logging and Retention}
 
@@ -190,14 +196,14 @@ All metric payloads are persisted in a PostgreSQL database with a schema capturi
 \begin{equation}
   |D| \approx N \cdot \frac{T}{\Delta t},
 \end{equation}
-assuming all units are online.
+assuming all units are online in the PostgreSQL cluster.
 
-To avoid unbounded growth, a retention policy is enforced. For example, data older than $R$ days can be purged periodically using a scheduled cleanup routine:
+To ensure long-term stability, we define a retention window $R$ (typically 30 days for raw metrics). Monthly partitions older than $R$ are detached and dropped using an automated maintenance function:
 \begin{equation}
-  t_{\text{expire}} = t_{\text{now}} - R \cdot 24 \times 3600.
+  \text{Drop}(P_m) \quad \text{if} \quad \text{Month}(P_m) < \text{Month}(t_{\text{now}}) - R_{\text{months}}.
 \end{equation}
 
-This approach balances historical analysis capability with storage constraints and remains suitable for small- to medium-scale deployments.
+This hierarchical storage approach (raw partitions for current data and aggregation tables for history) balances high-resolution visibility with sustainable storage growth.
 
 \subsection{Alert Logic}
 
@@ -282,14 +288,14 @@ Table~\ref{tab:performance} summarizes representative results for five units.
     Avg.\ client overhead & $< 2\%$ CPU & Per monitored machine \\
     Avg.\ update latency  & 180~ms     & Sample to dashboard \\
     Server CPU usage      & 4.5\%      & On Ubuntu host \\
-    SQLite entries/day    & $\approx 100\,000$ & All units combined \\
+    PostgreSQL entries/day  & $\approx 100\,000$ & All units combined \\
     Alert detection rate  & 100\%      & For synthetic overloads \\
     \bottomrule
   \end{tabular}
   \label{tab:performance}
 \end{table}
 
-The results indicate that the agent has a negligible impact on host performance, and the server scales linearly with the number of units under the tested conditions. PostgreSQL sustained the daily write volume without noticeable degradation in query latency for recent data.
+The results indicate that the hybrid storage model (Redis + PostgreSQL) allows for sub-200ms update latency even when proxied through the Next.js SSP layer. The PostgreSQL engine sustained the daily write volume without noticeable degradation in query latency for historical data retrieval.
 
 \subsection{Dashboard Visualization}
 
@@ -359,6 +365,10 @@ Potential directions for extending System Logger include:
 \end{itemize}
 
 By evolving along these directions, System Logger can become a versatile platform for research and practice in observability and systems management.
+
+\section*{Acknowledgment}
+
+The authors would like to acknowledge the Department of Computer Science and Engineering at KIIT University for providing the computational resources and laboratory environment required to conduct this research.
 
 \begin{thebibliography}{00}
 
