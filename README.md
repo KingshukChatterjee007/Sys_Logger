@@ -172,6 +172,11 @@ For detailed deployment instructions, see [DEPLOYMENT.md](./DEPLOYMENT.md).
 - **Linux**: CPU/RAM monitoring (GPU may require additional setup)
 - **macOS**: CPU/RAM monitoring (GPU support limited)
 
+## Prerequisites
+
+- **Python**: 3.10+
+- **Node.js**: 20+
+
 ## Contributing
 
 1. Fork the repository
