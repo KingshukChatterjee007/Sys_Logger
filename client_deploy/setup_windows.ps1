@@ -44,18 +44,18 @@ if (!(Get-Command npm -ErrorAction SilentlyContinue)) {
 }
 Write-Host "  OK npm found: $(npm -v)"
 
-# Check/Install PM2
+# Check PM2 (Required: User must install it manually to avoid permission issues)
 if (!(Get-Command pm2 -ErrorAction SilentlyContinue)) {
-    Write-Host "  Installing PM2 globally..."
-    npm install -g pm2
-    if ($LASTEXITCODE -ne 0) {
-        Write-Host "  ERROR: Failed to install PM2 globally."
-        exit 1
-    }
-    # Refresh PATH in current session
-    $env:PATH = [System.Environment]::GetEnvironmentVariable("Path", "Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path", "User")
+    Write-Host ""
+    Write-Host "  CRITICAL ERROR: PM2 not found!"
+    Write-Host "  To avoid permission errors, please install PM2 manually:"
+    Write-Host "  1. Open a NEW terminal as Administrator"
+    Write-Host "  2. Run: npm install -g pm2"
+    Write-Host "  3. Close that terminal and re-run this install script."
+    Write-Host ""
+    exit 1
 }
-Write-Host "  OK PM2 found (Global installation confirmed)"
+Write-Host "  OK PM2 found"
 
 # ==========================================
 # Step 2: Setup Python Virtual Environment
