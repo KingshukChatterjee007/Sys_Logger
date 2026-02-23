@@ -1,0 +1,49 @@
+=============================================================================
+         SYS_LOGGER - ARCHITECTURE & CONTEXT FOR NEXT AI AGENT
+=============================================================================
+
+PROJECT OVERVIEW:
+- Backend: Python Flask + PostgreSQL (Running on Bare Metal PC: 203.193.145.59:5010)
+- Frontend: Next.js (Deployed on Vercel: https)
+- Client: Python script (unit_client.py) running on remote laptops/PCs
+
+-----------------------------------------------------------------------------
+FIX 1: HTTPS/HTTP MIXED CONTENT (Frontend Fix)
+-----------------------------------------------------------------------------
+- ISSUE: Vercel (HTTPS) could not talk to Backend (HTTP) due to browser blocking.
+- SOLUTION: Created Next.js API route handlers to act as a Server-Side Proxy.
+- KEY FILES:
+  - `frontend/src/app/api/proxyUtils.ts`: Shared logic for proxying.
+  - `frontend/src/app/api/...`: All API routes now use `proxyGet`/`proxyPost`.
+- IMPORTANT BUGS FIXED:
+  - Pluralization: Fixed `/api/unit/` -> `/api/units/` usage endpoint.
+  - SocketIO: Removed SocketIO dependency in `useUsageData.ts` (unreliable on Vercel).
+  - Polling: Switched to 2-second HTTP polling for "real-time" visuals.
+
+-----------------------------------------------------------------------------
+FIX 2: CLIENT AUTO-START (PM2 Persistence)
+-----------------------------------------------------------------------------
+- ISSUE: Client needed to manually start every reboot.
+- SOLUTION: Implemented PM2 management with startup hooks (Krishi Sahayak pattern).
+- KEY FILES:
+  - `client_deploy/ecosystem.config.js`: PM2 process configuration.
+  - `client_deploy/setup_windows.ps1`: Registers Task Scheduler for "pm2 resurrect".
+  - `client_deploy/setup_linux_mac.sh`: Runs "pm2 startup" for systemd persistence.
+- WORKFLOW: User runs `install.bat` once -> System boot always starts client.
+
+-----------------------------------------------------------------------------
+DEBUGGING & NEXT STEPS FOR AGENT
+-----------------------------------------------------------------------------
+If the user reports "Graphs are not working":
+1. Verify `NEXT_PUBLIC_API_URL` in Vercel settings (Must be: http://203.193.145.59:5010).
+2. Check backend health: `curl http://203.193.145.59:5010/health`.
+3. Check Browser Network Tab: Look for 500 errors on `/api/units/...` routes.
+4. Check PostgreSQL: If API is 200 OK but returns `[]`, the DB is failing or empty.
+
+If the user reports "Client is not starting":
+1. Have the user run `pm2 status` on the client machine.
+2. Check `client_deploy/logs/err.log` for Python errors.
+3. Ensure Node.js and PM2 are installed on the target laptop.
+
+REFERENCE: "Krishi Sahayak" project was used as the blueprint for PM2 auto-start.
+=============================================================================
