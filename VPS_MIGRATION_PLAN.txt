@@ -1,0 +1,82 @@
+=============================================================================
+             SYS_LOGGER - VPS MIGRATION & UPGRADE PLAN
+=============================================================================
+
+This document outlines the steps to move Sys_Logger from the current 
+Vercel/Bare Metal hybrid setup to a dedicated VPS (DigitalOcean, AWS, etc.).
+
+BENEFITS OF MIGRATION:
+1. Restore WebSockets: Perfectly smooth, instant graphs (no 2s delay).
+2. Centralization: Frontend and Backend live on the same persistent server.
+3. Reliability: 99.9% uptime and a permanent Public IP by default.
+
+-----------------------------------------------------------------------------
+PHASE 1: THE SERVER SETUP
+-----------------------------------------------------------------------------
+1. Rent a VPS: Recommend Ubuntu 22.04 LTS (min 2GB RAM).
+2. Point a Domain:
+   - Buy a domain (e.g., syslogger.xyz).
+   - Point the DNS "A Record" to your VPS Public IP.
+3. Setup Firewall (UFW):
+   - sudo ufw allow 22, 80, 443, 5010
+   - sudo ufw enable
+
+-----------------------------------------------------------------------------
+PHASE 2: THE BACKEND (Same as now)
+-----------------------------------------------------------------------------
+1. Install Python, PostgreSQL, and Redis on the VPS.
+2. Clone the repo and set up the venv.
+3. Start the backend with PM2 to ensure auto-restart:
+   - pm2 start backend/ecosystem.config.js
+
+-----------------------------------------------------------------------------
+PHASE 3: THE FRONTEND (Restoring WebSockets)
+-----------------------------------------------------------------------------
+When moving to a VPS, you can undo the "polling" limitation I added for Vercel.
+
+1. RE-ENABLE WEBSOCKETS in `frontend/src/components/hooks/useUsageData.ts`:
+   - Change `io(socketUrl, { transports: ['polling'] })` back to the default
+     Socket.IO configuration.
+   - Remove the `setInterval(fetchData, 2000)` polling fallback.
+2. BUILD THE FRONTEND:
+   - npm run build
+3. RUN FRONTEND WITH PM2:
+   - pm2 start "npm run start" --name "sys-logger-frontend"
+
+-----------------------------------------------------------------------------
+PHASE 4: HTTPS & SSL (Caddy Reverse Proxy)
+-----------------------------------------------------------------------------
+Caddy is the easiest way to get permanent, free HTTPS for your backend.
+
+1. Install Caddy on your VPS.
+2. Create a `Caddyfile`:
+   ```caddy
+   syslogger.xyz {
+       reverse_proxy localhost:3000
+   }
+
+   api.syslogger.xyz {
+       reverse_proxy localhost:5010
+   }
+   ```
+3. Restart Caddy. It will automatically fetch SSL certificates from 
+   Let's Encrypt and handle all HTTPS traffic.
+
+-----------------------------------------------------------------------------
+PHASE 5: DATABASE MIGRATION
+-----------------------------------------------------------------------------
+1. Dump your current PostgreSQL data from the Bare Metal PC:
+   - pg_dump -U postgres sys_logger > backup.sql
+2. Restore it on the VPS:
+   - psql -U postgres sys_logger < backup.sql
+
+-----------------------------------------------------------------------------
+SUMMARY OF POST-MIGRATION ARCHITECTURE:
+-----------------------------------------------------------------------------
+- Browser (HTTPS) ↔ VPS (Nginx/Caddy) ↔ Frontend (Node.js/PM2)
+                                       ↔ Backend (Flask/PM2/WebSockets)
+                                       ↔ Database (PostgreSQL)
+
+Clients everywhere will now report to: http://api.syslogger.xyz:5010
+Users will view the dashboard at: https://syslogger.xyz
+=============================================================================
