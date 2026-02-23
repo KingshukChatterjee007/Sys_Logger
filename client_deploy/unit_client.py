@@ -42,53 +42,8 @@ RETRY_DELAY = 10  # seconds
 MAX_CACHE_SIZE = 1000  # Max records to cache offline
 SYNC_BATCH_SIZE = 10   # Number of records to sync at once
 
-def prompt_server_url():
-    """Prompt user for server URL/IP and validate connection"""
-    print("Sys_Logger Unit Client - Server Configuration")
-    print("=" * 50)
-
-    while True:
-        server_url = input("Enter server URL or IP (default: http://203.193.145.59:5010): ").strip()
-        if not server_url:
-            server_url = DEFAULT_SERVER_URL
-            print(f"Using default server URL: {server_url}")
-
-        # Validate URL format
-        if not server_url.startswith(('http://', 'https://')):
-            server_url = f"http://{server_url}"
-
-        # Try to connect to server
-        print(f"Testing connection to {server_url}...")
-        try:
-            response = requests.get(f"{server_url}/api/health", timeout=10)
-            if response.status_code == 200:
-                print("✓ Server connection successful!")
-                return server_url
-            else:
-                print(f"⚠ Server responded with status {response.status_code}")
-                retry = input("Continue anyway? (y/n): ").lower().strip()
-                if retry == 'y':
-                    return server_url
-        except requests.RequestException as e:
-            print(f"ERROR: Cannot connect to server: {e}")
-
-        retry = input("Try different server URL? (y/n): ").lower().strip()
-        if retry != 'y':
-            print("Using default server URL...")
-            return DEFAULT_SERVER_URL
-
-def prompt_org_info(silent=False):
-    """Prompt user for Organization ID and Computer ID or use defaults"""
-    if silent:
-        return "default_org", socket.gethostname()
-        
-    print("\nSys_Logger Unit Client - Unit Identification")
-    print("-" * 50)
-    
-    org_id = input("Enter Organization ID (e.g., org1): ").strip() or "default_org"
-    comp_id = input("Enter Computer ID (e.g., comp1): ").strip() or socket.gethostname()
-    
-    return org_id, comp_id
+# Configuration prompting is handled by configure.py (run at install time).
+# unit_client.py always runs in --silent mode under PM2 and reads from config file.
 
 class UnitClient:
     def __init__(self, silent=False):
@@ -101,9 +56,22 @@ class UnitClient:
         # Hardcode server URL as requested by user
         self.server_url = DEFAULT_SERVER_URL
         
-        if not self.org_id or not self.comp_id:
-            self.org_id, self.comp_id = prompt_org_info(silent)
-            self.save_config()
+        if not self.org_id or self.org_id == 'default_org' or not self.comp_id:
+            if silent:
+                # Running under PM2 — config must be set up by configure.py / install.bat first
+                print(
+                    "ERROR: org_id or comp_id not configured.\n"
+                    "  Please run install.bat (Windows) or configure.py to set up this unit.",
+                    flush=True
+                )
+                sys.exit(1)
+            else:
+                # Manual / developer run — prompt interactively
+                print("\nSys_Logger Unit Client - Unit Identification")
+                print("-" * 50)
+                self.org_id = input("Enter Organization ID (e.g., org1): ").strip() or "default_org"
+                self.comp_id = input("Enter Computer/Unit ID: ").strip() or socket.gethostname()
+                self.save_config()
 
         self.unit_id = None
         self.registered = False
@@ -504,39 +472,17 @@ class UnitClient:
         if not self.silent:
             print("Unit client stopped")
 
-def install_service():
-    """Install the client as a Windows background task"""
-    if platform.system() != 'Windows':
-        print("Service installation is only supported on Windows.")
-        return
-
-    script_path = os.path.abspath(__file__)
-    python_exe = sys.executable
-    task_name = "Sys_Logger_Client"
-    
-    # PowerShell command to create a scheduled task that runs on startup
-    command = f'Register-ScheduledTask -TaskName "{task_name}" -Action (New-ScheduledTaskAction -Execute "{python_exe}" -Argument "{script_path} --silent") -Trigger (New-ScheduledTaskTrigger -AtStartup) -Settings (New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -ExecutionTimeLimit 0) -User "SYSTEM" -RunLevel Highest -Force'
-    
-    try:
-        subprocess.check_call(["powershell", "-Command", command])
-        print(f"✓ Background service '{task_name}' installed successfully.")
-        print("It will now start automatically with Windows.")
-    except subprocess.CalledProcessError as e:
-        print(f"FAILED to install service: {e}")
-        print("Try running this command in an Administrator terminal.")
-
 def main():
     is_silent = "--silent" in sys.argv
-    if "--install-service" in sys.argv:
-        install_service()
-    else:
-        client = UnitClient(silent=is_silent)
+    client = UnitClient(silent=is_silent)
+    if not is_silent:
         print("Running unit client. Press Ctrl+C to stop.")
-        try:
-            client.run()
-        except KeyboardInterrupt:
+    try:
+        client.run()
+    except KeyboardInterrupt:
+        if not is_silent:
             print("\nStopping...")
-            client.stop()
+        client.stop()
 
 if __name__ == "__main__":
     main()

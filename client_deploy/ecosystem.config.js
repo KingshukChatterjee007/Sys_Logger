@@ -20,15 +20,24 @@ module.exports = {
       interpreter: venvPython,
       cwd: __dirname,
       instances: 1,
+
+      // --- Crash Recovery ---
       autorestart: true,
-      watch: false,
+      max_restarts: 0,           // 0 = unlimited restarts (never give up)
+      restart_delay: 3000,       // wait 3s before restarting on crash
+      exp_backoff_restart_delay: 100, // exponential back-off: 100ms → 200 → 400... cap at ~15s
+      min_uptime: "10s",         // must run 10s to count as "stable"
       max_memory_restart: "500M",
-      min_uptime: "10s",
-      max_restarts: 10,
+
+      // --- Background / Hidden Window ---
+      windowsHide: true,         // suppress console window on Windows
+      watch: false,
+
       env: {
         PYTHONUNBUFFERED: "1",
         PYTHONIOENCODING: "utf-8",
       },
+
       error_file: path.join(__dirname, "logs", "err.log"),
       out_file: path.join(__dirname, "logs", "out.log"),
       log_date_format: "YYYY-MM-DD HH:mm:ss Z",
