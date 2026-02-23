@@ -7,16 +7,16 @@
 # =====================================
 
 Write-Host ""
-Write-Host "======================================" -ForegroundColor Cyan
-Write-Host "  Sys_Logger Client - Windows Setup   " -ForegroundColor Cyan
-Write-Host "======================================" -ForegroundColor Cyan
+Write-Host "======================================"
+Write-Host "  Sys_Logger Client - Windows Setup   "
+Write-Host "======================================"
 Write-Host ""
 
 # --- Check Administrator ---
 $isAdmin = ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 if (-not $isAdmin) {
-    Write-Host "ERROR: This script requires Administrator privileges!" -ForegroundColor Red
-    Write-Host "  Right-click PowerShell and select 'Run as Administrator'" -ForegroundColor Yellow
+    Write-Host "ERROR: This script requires Administrator privileges!"
+    Write-Host "  Right-click PowerShell and select 'Run as Administrator'"
     exit 1
 }
 
@@ -25,37 +25,37 @@ $deployDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 # ==========================================
 # Step 1: Check Prerequisites (Node.js, PM2)
 # ==========================================
-Write-Host "[Step 1/6] Checking prerequisites..." -ForegroundColor Yellow
+Write-Host "[Step 1/6] Checking prerequisites..."
 
 # Check Node.js
 if (!(Get-Command node -ErrorAction SilentlyContinue)) {
-    Write-Host "  ERROR: Node.js not found!" -ForegroundColor Red
-    Write-Host "  Download from: https://nodejs.org/" -ForegroundColor Yellow
-    Write-Host "  Install Node.js LTS, then re-run this script." -ForegroundColor Yellow
+    Write-Host "  ERROR: Node.js not found!"
+    Write-Host "  Download from: https://nodejs.org/"
+    Write-Host "  Install Node.js LTS, then re-run this script."
     exit 1
 }
-Write-Host "  OK Node.js found: $(node -v)" -ForegroundColor Green
+Write-Host "  OK Node.js found: $(node -v)"
 
 # Check/Install PM2
 if (!(Get-Command pm2 -ErrorAction SilentlyContinue)) {
-    Write-Host "  Installing PM2..." -ForegroundColor Yellow
+    Write-Host "  Installing PM2..."
     npm install -g pm2
     if ($LASTEXITCODE -ne 0) {
-        Write-Host "  ERROR: Failed to install PM2." -ForegroundColor Red
+        Write-Host "  ERROR: Failed to install PM2."
         exit 1
     }
 }
-Write-Host "  OK PM2 found" -ForegroundColor Green
+Write-Host "  OK PM2 found"
 
 # ==========================================
 # Step 2: Setup Python Virtual Environment
 # ==========================================
 Write-Host ""
-Write-Host "[Step 2/6] Setting up Python..." -ForegroundColor Yellow
+Write-Host "[Step 2/6] Setting up Python..."
 
 if (!(Get-Command python -ErrorAction SilentlyContinue)) {
-    Write-Host "  ERROR: Python not found!" -ForegroundColor Red
-    Write-Host "  Download from: https://python.org/" -ForegroundColor Yellow
+    Write-Host "  ERROR: Python not found!"
+    Write-Host "  Download from: https://python.org/"
     exit 1
 }
 
@@ -63,43 +63,43 @@ $venvPath = Join-Path $deployDir "venv"
 $venvPython = Join-Path $venvPath "Scripts\python.exe"
 
 if (!(Test-Path $venvPython)) {
-    Write-Host "  Creating virtual environment..." -ForegroundColor Yellow
+    Write-Host "  Creating virtual environment..."
     python -m venv $venvPath
 }
-Write-Host "  OK Python venv ready" -ForegroundColor Green
+Write-Host "  OK Python venv ready"
 
 # ==========================================
 # Step 3: Install Dependencies
 # ==========================================
 Write-Host ""
-Write-Host "[Step 3/6] Installing dependencies..." -ForegroundColor Yellow
+Write-Host "[Step 3/6] Installing dependencies..."
 
 $reqFile = Join-Path $deployDir "requirements.txt"
 & $venvPython -m pip install -r $reqFile --quiet
-Write-Host "  OK Dependencies installed" -ForegroundColor Green
+Write-Host "  OK Dependencies installed"
 
 # ==========================================
 # Step 4: Configure Unit Identity
 # ==========================================
 Write-Host ""
-Write-Host "[Step 4/6] Configuring unit identity..." -ForegroundColor Yellow
-Write-Host "  You will be asked for your Organization ID and Computer ID." -ForegroundColor White
-Write-Host "  These are saved once and used every time the client runs." -ForegroundColor White
+Write-Host "[Step 4/6] Configuring unit identity..."
+Write-Host "  You will be asked for your Organization ID and Computer ID."
+Write-Host "  These are saved once and used every time the client runs."
 Write-Host ""
 
 & $venvPython "$deployDir\configure.py"
 
 if ($LASTEXITCODE -ne 0) {
-    Write-Host "  ERROR: Configuration wizard failed. Cannot continue." -ForegroundColor Red
+    Write-Host "  ERROR: Configuration wizard failed. Cannot continue."
     exit 1
 }
-Write-Host "  OK Unit identity configured" -ForegroundColor Green
+Write-Host "  OK Unit identity configured"
 
 # ==========================================
 # Step 5: Start Client via PM2
 # ==========================================
 Write-Host ""
-Write-Host "[Step 5/6] Starting client via PM2..." -ForegroundColor Yellow
+Write-Host "[Step 5/6] Starting client via PM2..."
 
 # Create logs directory
 $logsDir = Join-Path $deployDir "logs"
@@ -115,13 +115,13 @@ pm2 start ecosystem.config.js
 # Save the process list (needed for pm2 resurrect on boot)
 pm2 save --force
 
-Write-Host "  OK Client is running (hidden background process)" -ForegroundColor Green
+Write-Host "  OK Client is running (hidden background process)"
 
 # ==========================================
 # Step 6: Register Auto-Start on Boot
 # ==========================================
 Write-Host ""
-Write-Host "[Step 6/6] Registering auto-start on boot..." -ForegroundColor Yellow
+Write-Host "[Step 6/6] Registering auto-start on boot..."
 
 $pm2Path = (Get-Command pm2 -ErrorAction SilentlyContinue).Source
 $currentUser = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name
@@ -149,35 +149,35 @@ try {
         -Principal $principal `
         -Description "Auto-start Sys_Logger client on Windows boot via PM2"
 
-    Write-Host "  OK Auto-start registered! (runs on boot, no login required)" -ForegroundColor Green
+    Write-Host "  OK Auto-start registered! (runs on boot, no login required)"
 }
 catch {
-    Write-Host "  WARNING: Could not register auto-start: $($_.Exception.Message)" -ForegroundColor Yellow
-    Write-Host "  Manual setup — open Task Scheduler (taskschd.msc):" -ForegroundColor Yellow
-    Write-Host "    Action:  $pm2Path resurrect" -ForegroundColor White
-    Write-Host "    Trigger: At system startup" -ForegroundColor White
+    Write-Host "  WARNING: Could not register auto-start: $($_.Exception.Message)"
+    Write-Host "  Manual setup - open Task Scheduler (taskschd.msc):"
+    Write-Host "    Action:  $pm2Path resurrect"
+    Write-Host "    Trigger: At system startup"
 }
 
 # ==========================================
 # Verify & Done
 # ==========================================
 Write-Host ""
-Write-Host "Verifying PM2 status..." -ForegroundColor Yellow
+Write-Host "Verifying PM2 status..."
 Start-Sleep -Seconds 3
 pm2 status
 Write-Host ""
 
-Write-Host "======================================" -ForegroundColor Green
-Write-Host "  Setup Complete!                     " -ForegroundColor Green
-Write-Host "======================================" -ForegroundColor Green
+Write-Host "======================================"
+Write-Host "  Setup Complete!                     "
+Write-Host "======================================"
 Write-Host ""
-Write-Host "  Status:     pm2 status"                         -ForegroundColor White
-Write-Host "  Logs:       pm2 logs sys-logger-client"         -ForegroundColor White
-Write-Host "  Monitor:    pm2 monit"                          -ForegroundColor White
-Write-Host "  Stop:       pm2 stop sys-logger-client"         -ForegroundColor White
-Write-Host "  Restart:    pm2 restart sys-logger-client"      -ForegroundColor White
-Write-Host "  Uninstall:  pm2 delete sys-logger-client"       -ForegroundColor White
+Write-Host "  Status:     pm2 status"
+Write-Host "  Logs:       pm2 logs sys-logger-client"
+Write-Host "  Monitor:    pm2 monit"
+Write-Host "  Stop:       pm2 stop sys-logger-client"
+Write-Host "  Restart:    pm2 restart sys-logger-client"
+Write-Host "  Uninstall:  pm2 delete sys-logger-client"
 Write-Host ""
-Write-Host "  Runs silently in the background on every boot." -ForegroundColor Cyan
-Write-Host "  No console window will appear."                  -ForegroundColor Cyan
+Write-Host "  Runs silently in the background on every boot."
+Write-Host "  No console window will appear."
 Write-Host ""
