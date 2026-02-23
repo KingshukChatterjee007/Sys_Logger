@@ -313,30 +313,25 @@ class UnitClient:
             
             response = requests.post(url, json=data, timeout=30)
             
-            if not self.silent:
-                print(f"DEBUG: Server response: {response.status_code}")
-                if response.status_code != 200:
-                    print(f"DEBUG: Error response: {response.text}")
+            print(f"DEBUG: Server response: {response.status_code}")
+            if response.status_code != 200:
+                print(f"DEBUG: Error response: {response.text}")
 
             if response.status_code == 404:
                 # Server forgot us (likely restarted), force re-registration
-                if not self.silent:
-                    print("Server responded with 404 (Unit Not Found). Re-registering...")
+                print("Server responded with 404 (Unit Not Found). Re-registering...")
                 self.registered = False
                 return False
             
             if response.status_code != 200:
-                 if not self.silent:
-                    print(f"Data submission failed with status: {response.status_code}")
+                print(f"Data submission failed with status: {response.status_code}")
             return response.status_code == 200
         except requests.RequestException as e:
-            if not self.silent:
-                print(f"Data submission error: {e}")
+            print(f"Data submission error: {e}")
             return False
 
     def sync_offline_data(self):
-        if not self.silent:
-            print("Sync thread started.")
+        print("Sync thread started.")
             
         while self.running:
             # 1. Build a batch
