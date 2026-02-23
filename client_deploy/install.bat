@@ -20,28 +20,8 @@ if %errorLevel% == 0 (
     exit /b
 )
 
-REM ==========================================
-REM Step 1: Collect org_id and comp_id
-REM (uses system Python - runs before venv)
-REM ==========================================
-echo.
-echo Collecting unit configuration...
-echo.
-python "%~dp0first_run_wizard.py"
-if %errorLevel% neq 0 (
-    echo.
-    echo ERROR: Configuration wizard failed.
-    echo Make sure Python is installed and on PATH.
-    pause
-    exit /b 1
-)
-
-REM ==========================================
-REM Step 2: Install dependencies and register
-REM         service (hidden, auto-start, etc.)
-REM ==========================================
-echo.
-echo Registering background service...
+REM Run the PowerShell setup script
+echo Starting setup...
 echo.
 powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0setup_windows.ps1"
 
@@ -50,8 +30,7 @@ echo ==========================================
 echo   Installation Complete!
 echo ==========================================
 echo.
-echo   The client is now running silently in
-echo   the background and will auto-start on
-echo   every system boot.
+echo   The client is now running and will
+echo   auto-start on every system boot.
 echo.
 pause
