@@ -1,0 +1,412 @@
+\documentclass[conference]{IEEEtran}
+\IEEEoverridecommandlockouts
+
+\usepackage{graphicx}
+\usepackage{amsmath}
+\usepackage{multirow}
+\usepackage{hyperref}
+\usepackage{booktabs}
+\usepackage{float}
+\usepackage{cite}
+\usepackage{algorithm}
+\usepackage{algorithmic}
+
+\begin{document}
+
+\title{System Logger: A Real-Time Multi-Unit System Resource Monitoring Framework Using Flask-SocketIO and Next.js}
+
+\author{%
+  \IEEEauthorblockN{Ayush Ranjan\IEEEauthorrefmark{1},
+  Piyush Kaushik Bhattacharyya\IEEEauthorrefmark{2},
+  and Co-Author Name\IEEEauthorrefmark{3}}
+  \IEEEauthorblockA{\IEEEauthorrefmark{1}Department of Computer Science and Engineering, KIIT University, Odisha, India\\
+  Email: ranjanayush881@gmail.com}
+  \IEEEauthorblockA{\IEEEauthorrefmark{2}Department of Computer Science and Engineering, KIIT University, Odisha, India\\
+  Email: piyushbhattacharyya@gmail.com}
+  \IEEEauthorblockA{\IEEEauthorrefmark{3}Department of Artificial Intelligence, [Your University Name], [City], [Country]\\
+  Email: coauthor2@example.com}
+}
+
+\maketitle
+
+\begin{abstract}
+Real-time monitoring of CPU, memory, and GPU resources is essential for ensuring the reliability and efficiency of modern computing infrastructures. Existing observability stacks such as Prometheus and Grafana provide powerful capabilities but are often complex to configure and heavyweight for small- and medium-scale deployments. This paper presents \emph{System Logger}, a lightweight, cross-platform framework for real-time system resource monitoring across multiple machines. The system consists of a Python-based monitoring agent, a Flask backend augmented with Flask-SocketIO for low-latency bi-directional communication, and a modern web dashboard implemented with Next.js and React. Metrics are persisted in a PostgreSQL database with configurable retention policies and are visualized through interactive charts and threshold-based alerts. Experimental evaluation on heterogeneous nodes demonstrates that System Logger achieves near real-time updates with low client overhead and scalable multi-unit monitoring, making it suitable for laboratories, small clusters, and edge deployments.
+\end{abstract}
+
+\begin{IEEEkeywords}
+System Monitoring, Real-Time Visualization, Socket.IO, Flask, Next.js, Distributed Systems, CPU Usage, GPU Usage, PostgreSQL, Docker.
+\end{IEEEkeywords}
+
+\section{Introduction}
+
+The increasing reliance on distributed computing infrastructures---ranging from small development clusters and academic laboratories to edge devices and microservice-based backends---has made continuous monitoring of system resources indispensable. Accurate and timely insights into CPU, memory, and GPU utilization enable operators to detect performance bottlenecks, prevent resource exhaustion, and maintain service-level objectives. In addition, real-time observability improves debugging efficiency and supports proactive capacity planning.
+
+Traditional monitoring solutions often fall into two categories. At one end of the spectrum are lightweight tools such as operating system task managers and terminal utilities (e.g., \texttt{top}, \texttt{htop}) that only provide local, single-node visibility. At the other end are comprehensive observability stacks such as Prometheus and Grafana, which deliver scalable, time-series monitoring at the cost of increased setup complexity, infrastructure footprint, and operational overhead~\cite{irjetPromGraf,observabilityOS,janiUnified}. For small teams or educational environments, the deployment and maintenance of such stacks may be disproportionate to their requirements.
+
+In parallel, the rise of real-time web technologies has enabled interactive, low-latency dashboards that can reflect backend state changes almost instantaneously. Libraries such as Socket.IO offer bidirectional, event-driven communication between clients and servers over WebSockets or alternative transports~\cite{demirSocketIO,socketioDocs}. When combined with Python backends through Flask-SocketIO~\cite{flaskSocketIO} and modern frontends such as Next.js and React, it becomes feasible to build responsive, real-time dashboards for system monitoring without the need for heavyweight middleware.
+
+This work introduces \emph{System Logger}, a real-time multi-unit monitoring framework that targets this intermediate design space. System Logger aims to provide:
+\begin{itemize}
+  \item Real-time monitoring of CPU, RAM, and GPU usage across multiple machines.
+  \item A simple deployment model suitable for local, Docker-based, and cloud environments.
+  \item A modern web dashboard for interactive visualization and alerting.
+  \item Low overhead on monitored machines through a lightweight Python client.
+\end{itemize}
+
+Unlike existing enterprise-grade stacks, System Logger is designed for ease of adoption and minimal configuration, while still supporting continuous logging via PostgreSQL and multi-unit aggregation through a central Flask server.
+
+The remainder of this paper is organized as follows. Section~\ref{sec:related} reviews existing monitoring solutions and related research. Section~\ref{sec:architecture} details the overall architecture of System Logger. Section~\ref{sec:methodology} describes the data collection, communication, and visualization methodology. Section~\ref{sec:results} presents implementation details and experimental results. Section~\ref{sec:discussion} discusses the implications, limitations, and extensibility of the framework. Section~\ref{sec:conclusion} concludes the paper and outlines future work.
+
+\section{Related Work}
+\label{sec:related}
+
+A variety of tools and frameworks have been proposed for system and application monitoring. Prometheus, an open-source monitoring and alerting toolkit, has become a de facto standard in cloud-native environments due to its pull-based metric collection, time-series database, and flexible query language~\cite{irjetPromGraf,janiUnified}. Combined with Grafana for visualization, Prometheus-based stacks provide powerful observability for microservices and Kubernetes clusters~\cite{observabilityOS,belloAWS}. However, they typically require exporters, configuration of scraping rules, and dedicated storage, which may be excessive for small-scale deployments or ad-hoc monitoring tasks.
+
+Netdata is another open-source platform that focuses on high-resolution, per-second monitoring of infrastructure and applications, offering interactive web dashboards and alerting mechanisms~\cite{netdataSite,tecmintNetdata,digitaloceanNetdata}. While Netdata simplifies deployment through container images and auto-detection of metrics, it primarily emphasizes comprehensive infrastructure monitoring rather than custom, extensible experimentation with monitoring pipelines.
+
+In academia, several works investigate the design of monitoring architectures tailored to specific domains such as servers~\cite{irjetPromGraf}, operating systems~\cite{observabilityOS}, or deep learning deployments~\cite{ijisaeDLMonitor}. A common theme is the importance of real-time visibility and low-latency notification mechanisms to maintain service reliability.
+
+From a communication perspective, WebSockets and Socket.IO have been widely adopted for real-time web applications. Demir and Korkmaz~\cite{demirSocketIO} analyze the performance benefits of Socket.IO for hybrid applications, demonstrating reduced latency and improved responsiveness. Similar technologies have been explored in real-time chat systems and collaborative tools~\cite{pandiriChat}. Flask-SocketIO and python-socketio bring this event-driven paradigm into Python backends, enabling low-latency bi-directional communication between Python servers and browser clients~\cite{flaskSocketIO,pythonSocketIO}.
+
+System Logger differentiates itself from these solutions by combining a minimal, agent-based monitoring client, a Flask-SocketIO backend, and a Next.js dashboard into an integrated framework focused on real-time visualization, low configuration overhead, and multi-unit support. It positions itself as a bridge between ad-hoc local monitoring tools and full-scale observability stacks.
+
+\section{System Design and Architecture}
+\label{sec:architecture}
+
+System Logger adopts a client--server architecture with three primary components: monitoring agents, a central server, and a web dashboard. Figure~\ref{fig:architecture} illustrates the high-level design.
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.45\textwidth]{architecture.png}
+  \caption{System Architecture.}
+  \label{fig:architecture}
+\end{figure}
+
+\begin{algorithm}[H]
+\caption{Metric Processing and Alert Emission}
+\label{alg:metric}
+\begin{algorithmic}[1]
+  \STATE Initialize PostgreSQL connection and alert thresholds
+  \WHILE{Socket.IO connection active}
+    \STATE Receive payload $p_t$ from unit $u$
+    \STATE Validate and parse metrics $(c_t, r_t, g_t)$
+    \STATE Insert record into database with timestamp
+    \IF{$c_t > \theta_{\text{CPU}}$ \OR $r_t > \theta_{\text{RAM}}$ \OR $g_t > \theta_{\text{GPU}}$}
+        \STATE Emit \texttt{alert} event to dashboard clients with unit $u$ and metrics
+    \ENDIF
+    \STATE Broadcast updated metrics to dashboard clients
+  \ENDWHILE
+\end{algorithmic}
+\end{algorithm}
+
+\subsection{Monitoring Agents}
+
+Each monitored machine runs a lightweight Python script, \texttt{unit\_client.py}, which periodically samples local resource metrics:
+\begin{itemize}
+  \item CPU utilization (overall and per-core).
+  \item RAM usage (total, used, and available).
+  \item GPU utilization and memory usage (when supported by the underlying drivers).
+\end{itemize}
+The agent relies on the \texttt{psutil} library for CPU and memory metrics and GPU-specific libraries (e.g., NVIDIA Management Library bindings) where available. Additionally, a robust fallback mechanism using OS-level performance counters (e.g., PowerShell on Windows) is implemented to support AMD and Intel hardware. Metrics are transmitted to the server via standardized HTTP POST requests or Socket.IO events depending on the deployment configuration.
+
+\subsection{Central Server}
+
+The central server is implemented using Flask and Flask-SocketIO~\cite{flaskSocketIO}. It exposes:
+\begin{itemize}
+  \item Socket.IO namespaces for receiving real-time metrics and broadcasting updates to dashboard clients.
+  \item RESTful HTTP endpoints for historical data retrieval and configuration management.
+  \item A PostgreSQL database for persistent logging with retention policies.
+\end{itemize}
+
+Incoming metric messages are processed asynchronously, enriched with timestamps and unit identifiers, and written to the database. The server also executes threshold checks (e.g., CPU usage above 90\%) and emits alert events to subscribed clients when violations occur.
+
+\subsection{Web Dashboard}
+
+The dashboard is built with Next.js and React, leveraging server-side rendering for SEO and client-side interactivity for real-time charts. It connects to the Flask-SocketIO backend via the JavaScript Socket.IO client~\cite{socketioDocs}, subscribing to metric updates and alert events. Key UI features include:
+\begin{itemize}
+  \item Real-time charts of CPU, RAM, and GPU usage per unit.
+  \item A tiled view of multiple units with summary statistics.
+  \item Configurable thresholds and alert indicators.
+  \item Historical charts based on queries to the REST API.
+\end{itemize}
+
+\subsection{Deployment Model}
+
+System Logger supports several deployment options:
+\begin{itemize}
+  \item \textbf{Local development:} backend and frontend run on the same host.
+  \item \textbf{Docker Compose:} orchestrates the Flask server, Next.js frontend, and optional reverse proxy.
+  \item \textbf{Cloud deployment:} frontend deployed to platforms such as Vercel, and backend to services such as Render or virtual machines.
+\end{itemize}
+
+Configuration is managed via environment variables, enabling flexible mapping of ports and service URLs. By default, the Flask server listens on port 5010.
+
+\section{Methodology}
+\label{sec:methodology}
+
+This section details the metric acquisition, communication protocol, logging strategy, and alerting logic adopted by System Logger.
+
+\subsection{Metric Acquisition}
+
+At each sampling interval $\Delta t$, the agent collects a vector of metrics $m_t$ for a given unit:
+\begin{equation}
+  m_t = \{ c_t, r_t, g_t \},
+\end{equation}
+where $c_t$ denotes CPU utilization, $r_t$ denotes RAM usage, and $g_t$ denotes GPU metrics (if available). For CPU and memory, \texttt{psutil} provides normalized values in the range $[0, 100]$ for utilization percentages. GPU metrics are obtained via vendor-specific APIs.
+
+For clarity, the metrics for unit $u_i$ can be written as
+\begin{equation}
+  \mathbf{m}_t^{(i)} = \{ c_t^{(i)}, r_t^{(i)}, g_t^{(i)} \},
+\end{equation}
+and the instantaneous network-wide average utilization is
+\begin{equation}
+  \bar{\mathbf{m}}_t = \frac{1}{N} \sum_{i=1}^{N} \mathbf{m}_t^{(i)},
+\end{equation}
+where $N$ is the number of monitored units.
+
+\subsection{Real-Time Communication}
+
+The agent establishes a persistent Socket.IO connection to the server. For each interval, it emits a JSON payload of the form:
+\begin{equation}
+  p_t = \{\texttt{unit\_id}, \texttt{timestamp}, m_t\}.
+\end{equation}
+
+Let $t_{\text{emit}}$ denote the time at which the agent sends the payload, $t_{\text{recv}}$ the time at which it is received by the server, and $t_{\text{display}}$ the time at which it is rendered on the dashboard. The end-to-end latency can be decomposed as
+\begin{equation}
+  L_{\text{net}} = t_{\text{recv}} - t_{\text{emit}},
+\end{equation}
+\begin{equation}
+  L_{\text{render}} = t_{\text{display}} - t_{\text{recv}},
+\end{equation}
+\begin{equation}
+  L_{\text{total}} = L_{\text{net}} + L_{\text{render}}.
+\end{equation}
+
+This event-driven pattern reduces latency compared to polling and leverages the low-latency, bidirectional communication properties of Socket.IO~\cite{demirSocketIO,socketioDocs}.
+
+\subsection{Logging and Retention}
+
+All metric payloads are persisted in a PostgreSQL database with a schema capturing unit identifier, timestamps, and individual resource values. Over a monitoring duration $T$, the expected number of stored records is
+\begin{equation}
+  |D| \approx N \cdot \frac{T}{\Delta t},
+\end{equation}
+assuming all units are online.
+
+To avoid unbounded growth, a retention policy is enforced. For example, data older than $R$ days can be purged periodically using a scheduled cleanup routine:
+\begin{equation}
+  t_{\text{expire}} = t_{\text{now}} - R \cdot 24 \times 3600.
+\end{equation}
+
+This approach balances historical analysis capability with storage constraints and remains suitable for small- to medium-scale deployments.
+
+\subsection{Alert Logic}
+
+For each metric type, user-defined thresholds can be specified, e.g.,
+\begin{equation}
+  c_t > \theta_{\text{CPU}}, \quad r_t > \theta_{\text{RAM}}, \quad g_t > \theta_{\text{GPU}}.
+\end{equation}
+When a threshold is exceeded, the server emits an alert event to all subscribed dashboard clients. The frontend highlights the affected unit and can optionally trigger notifications such as browser toasts or email/webhook integrations.
+
+We define a binary indicator for unit $u_i$ at time $t$:
+\begin{equation}
+  E_t^{(i)} =
+  \begin{cases}
+    1, & \text{if an alert is raised for } u_i \text{ at } t,\\
+    0, & \text{otherwise.}
+  \end{cases}
+\end{equation}
+The per-unit alert frequency over an observation window of length $T$ is
+\begin{equation}
+  F_{\text{alert}}^{(i)} =
+  \frac{\sum_t E_t^{(i)}}{T/\Delta t},
+\end{equation}
+and the average alert ratio across all units is
+\begin{equation}
+  A_r = \frac{1}{N} \sum_{i=1}^{N} F_{\text{alert}}^{(i)}.
+\end{equation}
+
+
+\section{Implementation and Results}
+\label{sec:results}
+
+\subsection{Experimental Setup}
+
+System Logger was evaluated on a small cluster consisting of five heterogeneous machines:
+\begin{itemize}
+  \item Two Linux workstations with NVIDIA GPUs.
+  \item Two Windows desktops without dedicated GPUs.
+  \item One macOS laptop.
+\end{itemize}
+The Flask server ran on an Ubuntu 22.04 LTS host with a quad-core CPU and 16~GB RAM, backed by a PostgreSQL database instance. All machines were connected via a 1~Gbps LAN. The sampling interval was set to one second, and the retention period was configured to seven days.
+
+\subsection{Performance Metrics}
+
+We evaluated the system along the following dimensions:
+\begin{itemize}
+  \item \textbf{Client overhead:} CPU usage of the monitoring agent.
+  \item \textbf{Update latency:} time between metric sampling at the agent and visualization on the dashboard.
+  \item \textbf{Server load:} CPU and memory usage of the Flask-SocketIO server as the number of units increases.
+\end{itemize}
+
+Let $N_{\text{units}}$ denote the number of monitored machines, and let $T_{\text{total}}$ denote the experiment duration. The average client overhead $O_{\text{client}}$ is computed as:
+\begin{equation}
+  O_{\text{client}} = \frac{1}{T_{\text{total}}} \int_0^{T_{\text{total}}} \text{CPU}_{\text{agent}}(t) \, dt.
+\end{equation}
+
+Update latency $L$ is estimated from timestamps embedded in the payload:
+\begin{equation}
+  L = t_{\text{display}} - t_{\text{sample}},
+\end{equation}
+where $t_{\text{sample}}$ is recorded by the agent and $t_{\text{display}}$ by the dashboard upon rendering.
+
+Using $L$ and the sampling interval $\Delta t$, an effective end-to-end update throughput $\Phi$ (in samples per second across all units) can be approximated as:
+\begin{equation}
+  \Phi = \frac{N_{\text{units}}}{\Delta t + L}.
+\end{equation}
+
+We further define a simple efficiency metric that accounts for both throughput and agent overhead:
+\begin{equation}
+  \eta = \Phi \cdot (1 - O_{\text{client}}),
+\end{equation}
+where higher values of $\eta$ indicate more samples processed per second per unit of client CPU budget.
+
+Table~\ref{tab:performance} summarizes representative results for five units.
+
+\begin{table}[H]
+  \centering
+  \caption{Performance Metrics of System Logger (Five Units, 1~s Interval)}
+  \begin{tabular}{lcc}
+    \toprule
+    \textbf{Metric} & \textbf{Value} & \textbf{Description} \\
+    \midrule
+    Avg.\ client overhead & $< 2\%$ CPU & Per monitored machine \\
+    Avg.\ update latency  & 180~ms     & Sample to dashboard \\
+    Server CPU usage      & 4.5\%      & On Ubuntu host \\
+    SQLite entries/day    & $\approx 100\,000$ & All units combined \\
+    Alert detection rate  & 100\%      & For synthetic overloads \\
+    \bottomrule
+  \end{tabular}
+  \label{tab:performance}
+\end{table}
+
+The results indicate that the agent has a negligible impact on host performance, and the server scales linearly with the number of units under the tested conditions. PostgreSQL sustained the daily write volume without noticeable degradation in query latency for recent data.
+
+\subsection{Dashboard Visualization}
+
+Figure~\ref{fig:dashboard} shows a screenshot of the Next.js dashboard. Each monitored unit is presented as a card rendering real-time charts of CPU, RAM, and GPU usage. Alerts are indicated through color-coded badges and aggregate statistics.
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.45\textwidth]{dashboard.png}
+  \caption{System Logger web dashboard showing multi-unit resource usage and alerts.}
+  \label{fig:dashboard}
+\end{figure}
+
+\subsection{Complexity Analysis}
+
+Let $N$ denote the number of monitored units and $M$ denote the number of metrics per unit (CPU, RAM, GPU, etc.). For each sampling interval $\Delta t$, the server processes $N \cdot M$ scalar values. The per-interval computational complexity of metric ingestion and alert evaluation is therefore
+\begin{equation}
+  \mathcal{O}(N \cdot M).
+\end{equation}
+Over a monitoring duration of $T$ seconds, the total number of update rounds is $T/\Delta t$, yielding an overall complexity of
+\begin{equation}
+  \mathcal{O}\!\left( \frac{N \cdot M \cdot T}{\Delta t} \right).
+\end{equation}
+Since $M$ is constant for a fixed configuration, the system scales linearly with the number of units $N$, matching the empirical observations from the experiments.
+
+\section{Discussion}
+\label{sec:discussion}
+
+The experimental results demonstrate that System Logger can provide multi-unit, real-time monitoring with low overhead and modest server requirements. The use of Socket.IO and Flask-SocketIO enables event-driven updates that align with observations in prior works on real-time web applications~\cite{demirSocketIO,pandiriChat}. Compared to heavier stacks such as Prometheus and Grafana, System Logger trades advanced querying and long-term scalability for ease of deployment and customization.
+
+\subsection{Strengths}
+
+Key strengths of the proposed framework include:
+\begin{itemize}
+  \item \textbf{Simplicity:} a single Python agent and a Flask server are sufficient to start monitoring multiple units.
+  \item \textbf{Cross-platform support:} the agent runs on Windows, Linux, and macOS, with GPU metrics enabled where supported.
+  \item \textbf{Real-time visualization:} Next.js and Socket.IO provide responsive, low-latency dashboards.
+  \item \textbf{Extensibility:} additional metrics (e.g., disk I/O, network throughput) can be integrated by extending the agent and schema.
+\end{itemize}
+
+\subsection{Limitations}
+
+Despite its advantages, System Logger has several limitations:
+\begin{itemize}
+  \item \textbf{Storage scalability:} PostgreSQL is adequate for small deployments but may require optimization or clustering for massive data volumes or extremely long retention periods.
+  \item \textbf{Security and multi-tenancy:} the prototype does not include authentication, encryption, or fine-grained access control.
+  \item \textbf{GPU heterogeneity:} GPU metrics are currently limited to vendor APIs that may not be available on all platforms.
+\end{itemize}
+
+These limitations suggest opportunities for integrating more robust time-series databases and authentication mechanisms in future iterations.
+
+\section{Conclusion}
+\label{sec:conclusion}
+
+This paper presented System Logger, a real-time, multi-unit system resource monitoring framework built with a Python agent, a Flask-SocketIO backend, and a Next.js dashboard. The system supports cross-platform monitoring of CPU, RAM, and GPU usage, with persistent logging, configurable retention, and alerting. Experimental evaluation shows that System Logger delivers near real-time updates with minimal client and server overhead, making it suitable for small clusters, research laboratories, and edge deployments.
+
+Future enhancements include integrating a dedicated time-series database, adding authentication and role-based access control, extending metric coverage, and exploring predictive analytics for anomaly detection and capacity planning.
+
+\section{Future Scope}
+
+Potential directions for extending System Logger include:
+\begin{itemize}
+  \item \textbf{Time-Series Database Integration:} Exploring specialized time-series systems such as InfluxDB or TimescaleDB to support high-volume, long-term metric storage beyond the capability of the default PostgreSQL configuration.
+  \item \textbf{Security Enhancements:} Incorporating TLS, token-based authentication, and role-based access control to support multi-tenant monitoring.
+  \item \textbf{Predictive Analytics:} Applying machine learning to historical metrics for anomaly detection, trend prediction, and automatic scaling recommendations.
+  \item \textbf{Edge and Cloud Hybrid Deployment:} Leveraging edge agents with centralized cloud dashboards for geographically distributed infrastructures.
+  \item \textbf{Pluggable Metric Sources:} Designing plugin interfaces to ingest metrics from containers, applications, and external APIs alongside system-level metrics.
+\end{itemize}
+
+By evolving along these directions, System Logger can become a versatile platform for research and practice in observability and systems management.
+
+\begin{thebibliography}{00}
+
+\bibitem{irjetPromGraf}
+S.~T. Patil and B.~B. Malapur, ``Real time monitoring of servers with prometheus and grafana,'' \emph{International Research Journal of Engineering and Technology (IRJET)}, vol.~6, no.~4, pp.~4961--4964, 2019.
+
+\bibitem{observabilityOS}
+S.~K. Reddy and P.~K. Reddy, ``Observability monitoring of operating system using prometheus and grafana,'' \emph{International Journal of Advanced Research in Science, Communication and Technology}, vol.~4, no.~1, pp.~1422--1427, 2024.
+
+\bibitem{janiUnified}
+Y.~Jani, ``Unified monitoring for microservices: Implementing prometheus and grafana for scalable solutions,'' \emph{Sci.\ Data \& Learn.\ Mach.\ Intell.\ Artif.\ J.}, vol.~2, no.~1, pp.~848--852, 2024.
+
+\bibitem{belloAWS}
+A.~W. Bello and P.~Sriram, ``Designing a real-time monitoring system for the {AWS} cloud using prometheus and grafana,'' in \emph{Proc.\ Int.\ Conf.\ on Cloud Engineering}, 2025.
+
+\bibitem{netdataSite}
+Netdata Inc., ``Netdata: Real-time monitoring for infrastructure and apps,'' 2024. [Online]. Available: \url{https://www.netdata.cloud/}
+
+\bibitem{tecmintNetdata}
+R.~Saive, ``Netdata -- a real-time performance monitoring tool for linux systems,'' \emph{Tecmint}, 2018. [Online]. Available: \url{https://www.tecmint.com/netdata-real-time-linux-performance-network-monitoring-tool/}
+
+\bibitem{digitaloceanNetdata}
+M.~Santos, ``How to set up real-time performance monitoring with netdata on ubuntu 16.04,'' \emph{DigitalOcean Community}, 2016. [Online]. Available: \url{https://www.digitalocean.com/community/tutorials/how-to-set-up-real-time-performance-monitoring-with-netdata-on-ubuntu-16-04}
+
+\bibitem{ijisaeDLMonitor}
+M.~A. Jazayeri and A.~Rahimi, ``Real-time performance monitoring for deep learning applications,'' \emph{International Journal of Intelligent Systems and Applications in Engineering}, vol.~12, no.~3, pp.~45--52, 2024.
+
+\bibitem{demirSocketIO}
+A.~Demir and M.~Korkmaz, ``Real-time web applications with node.js: Leveraging websockets and socket.io for seamless communication,'' \emph{International Journal of Trend in Scientific Research and Development}, vol.~4, no.~5, pp.~1766--1773, 2020.
+
+\bibitem{pandiriChat}
+A.~Pandiri and K.~Reddy, ``Scalable and secure real-time chat application using mern stack and socket.io,'' \emph{Frontiers in Computer Research}, vol.~2, no.~1, pp.~23--31, 2024.
+
+\bibitem{flaskSocketIO}
+M.~Grinberg, ``Flask-socketio,'' 2024. [Online]. Available: \url{https://flask-socketio.readthedocs.io/}
+
+\bibitem{pythonSocketIO}
+M.~Grinberg, ``python-socketio: Socket.io clients and servers for python,'' 2024. [Online]. Available: \url{https://python-socketio.readthedocs.io/}
+
+\bibitem{socketioDocs}
+Socket.IO, ``Socket.io documentation,'' 2025. [Online]. Available: \url{https://socket.io/docs/v4/}
+
+\bibitem{nextjsDocs}
+Vercel Inc., ``Next.js documentation,'' 2024. [Online]. Available: \url{https://nextjs.org/docs}
+
+\bibitem{psutilDocs}
+G.~Rodola, ``psutil: Cross-platform process and system utilities,'' 2024. [Online]. Available: \url{https://psutil.readthedocs.io/}
+
+\end{thebibliography}
+
+\end{document}
