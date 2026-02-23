@@ -89,9 +89,8 @@ class UnitClient:
         signal.signal(signal.SIGINT, self.signal_handler)
         signal.signal(signal.SIGTERM, self.signal_handler)
 
-        if not silent:
-            logging.info(f"Unit Client initialized: {self.org_id}/{self.comp_id}")
-            print(f"Unit Client initialized: {self.org_id}/{self.comp_id}")
+        logging.info(f"Unit Client initialized: {self.org_id}/{self.comp_id}")
+        print(f"Unit Client initialized: {self.org_id}/{self.comp_id}")
 
     def signal_handler(self, signum, frame):
         """Handle shutdown signals gracefully"""
@@ -178,19 +177,15 @@ class UnitClient:
                 self.registered = True
                 try:
                     self.unit_id = response.json().get('unit_id')
-                    if not self.silent:
-                        print(f"DEBUG: Assigned unit_id: {self.unit_id}")
+                    print(f"DEBUG: Assigned unit_id: {self.unit_id}")
                 except: pass
 
-                if not self.silent:
-                    print(f"Unit registered successfully (Status: {response.status_code})")
+                print(f"Unit registered successfully (Status: {response.status_code})")
                 return True
             else:
-                if not self.silent:
-                    print(f"Registration failed with status: {response.status_code}")
+                print(f"Registration failed with status: {response.status_code}")
         except requests.RequestException as e:
-            if not self.silent:
-                print(f"Registration error: {e}")
+            print(f"Registration error: {e}")
         return False
 
     def get_gpu_usage(self):
@@ -382,8 +377,8 @@ class UnitClient:
                 # Attempt Send
                 if self.submit_data(batch):
                     sent = True
-                    if not self.silent:
-                         print(f"✓ Synced batch of {len(batch)} records. Queue size: {self.data_queue.qsize()}")
+                    # Log even in silent mode so PM2 captures it
+                    print(f"  OK Synced batch of {len(batch)} records. Queue size: {self.data_queue.qsize()}")
                     
                     # Mark all as done
                     for _ in batch:
@@ -393,8 +388,8 @@ class UnitClient:
                     if self.data_queue.qsize() == 0:
                         self.save_cache_from_queue()
                 else:
-                    if not self.silent:
-                        print(f"⚠ Sync failed for batch of {len(batch)}. Retrying in {RETRY_DELAY}s...")
+                    # Log even in silent mode so PM2 captures it
+                    print(f"  FAILED Sync failed for batch of {len(batch)}. Retrying in {RETRY_DELAY}s...")
                     time.sleep(RETRY_DELAY)
 
     def save_cache_from_queue(self):
@@ -406,8 +401,7 @@ class UnitClient:
         except: pass
 
     def run(self):
-        if not self.silent:
-            print(f"Running unit client. Press Ctrl+C to stop.")
+        print(f"Unit client loop started (Silent: {self.silent})")
 
         while self.running:
             # 1. Ensure registration
@@ -441,14 +435,14 @@ class UnitClient:
                                 item['unit_id'] = self.unit_id
 
                         if self.submit_data(batch if len(batch) > 1 else batch[0]):
-                            if not self.silent:
-                                print(f"✓ Submitted {len(batch)} records")
+                            # Log even in silent mode so PM2 captures it
+                            print(f"  OK Submitted {len(batch)} records")
                             # Mark as done
                             for _ in batch:
                                 self.data_queue.task_done()
                         else:
-                            if not self.silent:
-                                print(f"⚠ Submission failed - keeping {len(batch)} records in queue")
+                            # Log even in silent mode so PM2 captures it
+                            print(f"  FAILED Submission failed - keeping {len(batch)} records in queue")
                             # Put them back (at the front if possible, but Queue is FIFO)
                             # Actually, for simplicity on failure, we stop trying to clear queue this interval
                             for item in batch:
@@ -473,6 +467,7 @@ class UnitClient:
             print("Unit client stopped")
 
 def main():
+    print(f"--- Sys_Logger Unit Client Starting (Time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}) ---")
     is_silent = "--silent" in sys.argv
     client = UnitClient(silent=is_silent)
     if not is_silent:

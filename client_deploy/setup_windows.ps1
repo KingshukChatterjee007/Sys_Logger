@@ -36,16 +36,26 @@ if (!(Get-Command node -ErrorAction SilentlyContinue)) {
 }
 Write-Host "  OK Node.js found: $(node -v)"
 
+# Check NPM
+if (!(Get-Command npm -ErrorAction SilentlyContinue)) {
+    Write-Host "  ERROR: npm not found! NPM is required to install PM2."
+    Write-Host "  NPM is usually included with Node.js. Please repair your Node.js installation."
+    exit 1
+}
+Write-Host "  OK npm found: $(npm -v)"
+
 # Check/Install PM2
 if (!(Get-Command pm2 -ErrorAction SilentlyContinue)) {
-    Write-Host "  Installing PM2..."
+    Write-Host "  Installing PM2 globally..."
     npm install -g pm2
     if ($LASTEXITCODE -ne 0) {
-        Write-Host "  ERROR: Failed to install PM2."
+        Write-Host "  ERROR: Failed to install PM2 globally."
         exit 1
     }
+    # Refresh PATH in current session
+    $env:PATH = [System.Environment]::GetEnvironmentVariable("Path", "Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path", "User")
 }
-Write-Host "  OK PM2 found"
+Write-Host "  OK PM2 found (Global installation confirmed)"
 
 # ==========================================
 # Step 2: Setup Python Virtual Environment
@@ -87,7 +97,7 @@ Write-Host "  You will be asked for your Organization ID and Computer ID."
 Write-Host "  These are saved once and used every time the client runs."
 Write-Host ""
 
-& $venvPython "$deployDir\configure.py"
+& $venvPython "$deployDir\first_run_wizard.py"
 
 if ($LASTEXITCODE -ne 0) {
     Write-Host "  ERROR: Configuration wizard failed. Cannot continue."
