@@ -11,8 +11,8 @@ import { twMerge } from 'tailwind-merge'
 import { Unit } from '@/components/types'
 import {
     Monitor, Server, Database, Activity, Globe,
-    ChevronRight, Layout, Download,
-    Cpu, HardDrive, Wifi, Zap, Clock,
+    ChevronRight, ChevronDown, Layout, Download,
+    Folder, Cpu, HardDrive, Wifi, Zap, Clock,
     Share2, Check, Pencil, Trash2, X, Save
 } from 'lucide-react'
 
@@ -36,6 +36,7 @@ export default function DashboardView({ orgId: propOrgId }: DashboardViewProps) 
     const [isEditing, setIsEditing] = useState(false)
     const [editModeData, setEditModeData] = useState({ org_id: '', comp_id: '' })
     const [isDeleting, setIsDeleting] = useState(false)
+    const [expandedFolders, setExpandedFolders] = useState<Record<string, boolean>>({})
 
     useEffect(() => {
         const interval = setInterval(() => {
@@ -128,23 +129,19 @@ export default function DashboardView({ orgId: propOrgId }: DashboardViewProps) 
 
             <div className="relative z-10 container mx-auto p-4 lg:p-6 max-w-[1600px] flex flex-col h-screen">
 
-                {/* Modern Navbar */}
+                {/* Professional Header */}
                 <motion.header
                     initial={{ y: -20, opacity: 0 }}
                     animate={{ y: 0, opacity: 1 }}
-                    className="flex justify-between items-center mb-6 glass-panel-rich p-4 rounded-2xl"
+                    className="flex justify-between items-center mb-6 glass-panel-rich px-6 py-4 rounded-xl border-white/5"
                 >
-                    <div className="flex items-center gap-4">
-                        <div className="relative group">
-                            <div className="absolute -inset-1 bg-gradient-to-r from-blue-600 to-cyan-400 rounded-xl blur opacity-25 group-hover:opacity-50 transition duration-1000"></div>
-                            <div className="relative p-2.5 bg-slate-900 rounded-xl border border-white/10">
-                                <Activity className="w-6 h-6 text-blue-400" />
-                            </div>
-                        </div>
-                        <div>
+                    <div className="flex items-center gap-6">
+                        <div className="flex flex-col gap-1 pr-6 border-r border-white/10">
                             <div className="flex items-center gap-2">
-                                <h1 className="text-xl font-bold tracking-tight text-white">Sys_Logger <span className="text-blue-400">Prime</span></h1>
-                                <span className="px-1.5 py-0.5 rounded-md bg-blue-500/10 border border-blue-500/20 text-[10px] font-bold text-blue-400 tracking-widest uppercase">V2.0</span>
+                                <h1 className="text-xl font-bold tracking-tight text-white flex items-center gap-2">
+                                    System Logger <span className="text-blue-500">Enterprise</span>
+                                </h1>
+                                <span className="px-1.5 py-0.5 rounded-md bg-transparent border border-blue-500/30 text-[10px] font-bold text-blue-500 tracking-widest uppercase">v2.0</span>
                             </div>
                             <div className="flex items-center gap-3">
                                 <p className="text-[10px] text-slate-400 font-semibold tracking-[0.2em] uppercase opacity-60">Fleet Telemetry Matrix</p>
@@ -161,35 +158,27 @@ export default function DashboardView({ orgId: propOrgId }: DashboardViewProps) 
                                 )}
                             </div>
                         </div>
+
+                        <div className="hidden lg:flex items-center gap-4 bg-white/10 p-1.5 rounded-lg border border-white/5">
+                            <div className="bg-white p-1 rounded-sm">
+                                <img src="/India-AI_logo.jpeg" alt="India AI" className="h-8 w-auto object-contain" />
+                            </div>
+                            <div className="bg-white p-1 rounded-sm">
+                                <img src="/Nielit_logo.jpeg" alt="NIELIT" className="h-8 w-auto object-contain" />
+                            </div>
+                        </div>
                     </div>
 
                     <div className="flex items-center gap-8">
-                        <div className="hidden lg:flex items-center gap-6 pr-6 border-r border-white/5">
-                            <img src="/India-AI_logo.jpeg" alt="India AI" className="h-8 w-auto object-contain opacity-80 hover:opacity-100 transition-opacity" />
-                            <img src="/Nielit_logo.jpeg" alt="NIELIT" className="h-8 w-auto object-contain opacity-80 hover:opacity-100 transition-opacity" />
-                        </div>
-                        <div className="hidden lg:flex items-center gap-6 pr-6 border-r border-white/5">
-                            <div className="text-right">
-                                <p className="text-[10px] text-slate-500 uppercase font-bold tracking-wider mb-0.5">Network Load</p>
-                                <div className="flex items-center gap-1.5 justify-end">
-                                    <div className="w-12 h-1 bg-slate-800 rounded-full overflow-hidden">
-                                        <div className="h-full bg-blue-500 w-[45%]" />
-                                    </div>
-                                    <span className="text-xs font-mono text-blue-400">45%</span>
-                                </div>
-                            </div>
-                        </div>
+
                         <div className="flex flex-col items-end">
-                            <div className="flex items-center gap-2 text-white/90">
-                                <Clock className="w-4 h-4 text-slate-500" />
-                                <span className="text-xl font-light font-mono leading-none tracking-tight">{currentTime}</span>
+                            <div className="flex items-center gap-2 text-white/80">
+                                <Clock className="w-3.5 h-3.5 text-slate-500" />
+                                <span className="text-lg font-mono font-medium tracking-tight">{currentTime}</span>
                             </div>
-                            <span className="text-[9px] uppercase tracking-[0.2em] text-emerald-400 flex items-center gap-1.5 mt-1 font-bold">
-                                <span className="relative flex h-2 w-2">
-                                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-40"></span>
-                                    <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-                                </span>
-                                Link Active
+                            <span className="text-[10px] text-slate-500 flex items-center gap-1.5 mt-0.5 font-medium">
+                                <div className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                                System Connected
                             </span>
                         </div>
                     </div>
@@ -205,31 +194,26 @@ export default function DashboardView({ orgId: propOrgId }: DashboardViewProps) 
                         className="lg:col-span-3 flex flex-col gap-4 min-h-0"
                     >
                         {/* Fleet Summary Card */}
-                        <div className="glass-panel-rich p-5 rounded-2xl relative overflow-hidden group border-white/5">
-                            <div className="absolute -right-4 -top-4 text-white/[0.02] transition-transform duration-700 group-hover:scale-110 group-hover:rotate-6">
-                                <Server size={120} />
+                        <div className="glass-panel-rich p-5 rounded-xl border-white/5">
+                            <h3 className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider mb-4">Operational Status</h3>
+                            <div className="flex justify-between items-end">
+                                <div className="space-y-1">
+                                    <p className="text-3xl font-bold text-white tracking-tight">
+                                        {activeUnits}<span className="text-slate-500 text-lg font-normal ml-1">/ {totalUnits}</span>
+                                    </p>
+                                    <p className="text-[10px] text-slate-400 font-medium uppercase tracking-wide">Online Nodes</p>
+                                </div>
+                                <div className="text-right">
+                                    <p className="text-xl font-mono font-medium text-blue-400">{avgCpu.toFixed(0)}%</p>
+                                    <p className="text-[9px] text-slate-500 uppercase font-medium tracking-wide">Avg CPU</p>
+                                </div>
                             </div>
-                            <div className="relative z-10">
-                                <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-4">Operational Status</h3>
-                                <div className="flex justify-between items-end">
-                                    <div className="space-y-1">
-                                        <p className="text-4xl font-bold text-white tracking-tighter">
-                                            {activeUnits}<span className="text-slate-600 text-xl font-medium ml-1">/ {totalUnits}</span>
-                                        </p>
-                                        <p className="text-[10px] text-emerald-400 font-bold uppercase tracking-wider">Online Nodes</p>
-                                    </div>
-                                    <div className="text-right">
-                                        <p className="text-2xl font-mono text-white/80">{avgCpu.toFixed(0)}%</p>
-                                        <p className="text-[9px] text-slate-500 uppercase font-bold tracking-wider">Avg CPU</p>
-                                    </div>
-                                </div>
-                                <div className="mt-4 h-1 w-full bg-white/5 rounded-full overflow-hidden">
-                                    <motion.div
-                                        initial={{ width: 0 }}
-                                        animate={{ width: `${(activeUnits / (totalUnits || 1)) * 100}%` }}
-                                        className="h-full bg-gradient-to-r from-blue-500 via-cyan-400 to-emerald-400"
-                                    />
-                                </div>
+                            <div className="mt-4 h-1 w-full bg-slate-800 rounded-full overflow-hidden">
+                                <motion.div
+                                    initial={{ width: 0 }}
+                                    animate={{ width: `${(activeUnits / (totalUnits || 1)) * 100}%` }}
+                                    className="h-full bg-blue-500"
+                                />
                             </div>
                         </div>
 
@@ -244,70 +228,119 @@ export default function DashboardView({ orgId: propOrgId }: DashboardViewProps) 
                                     {totalUnits} TOTAL
                                 </span>
                             </div>
-                            <div className="overflow-y-auto p-2 space-y-1 custom-scrollbar flex-1">
+                            <div className="overflow-y-auto overflow-x-hidden p-2 space-y-1 custom-scrollbar flex-1 min-h-0">
                                 <AnimatePresence mode='popLayout'>
                                     {loading ? (
                                         <div className="flex flex-col items-center justify-center p-12 text-slate-500 gap-3">
                                             <div className="w-8 h-8 border-2 border-blue-500/20 border-t-blue-500 rounded-full animate-spin"></div>
                                             <span className="text-[10px] font-bold uppercase tracking-widest">Scanning Network...</span>
                                         </div>
-                                    ) : units.map((unit, idx) => (
-                                        <motion.button
-                                            layout
-                                            initial={{ opacity: 0, y: 10 }}
-                                            animate={{ opacity: 1, y: 0 }}
-                                            transition={{ delay: idx * 0.05 }}
-                                            key={unit.id}
-                                            onClick={() => handleUnitSelect(unit)}
-                                            className={cn(
-                                                "w-full text-left p-3.5 rounded-xl transition-all duration-300 border relative group",
-                                                selectedUnit?.id === unit.id
-                                                    ? 'bg-blue-600/10 border-blue-500/40 aura-blue'
-                                                    : 'bg-white/[0.01] border-white/5 hover:bg-white/[0.04] hover:border-white/10'
-                                            )}
-                                        >
-                                            <div className="flex justify-between items-center relative z-10">
-                                                <div className="flex items-center gap-3">
-                                                    <div className={cn(
-                                                        "p-2 rounded-lg transition-colors",
-                                                        selectedUnit?.id === unit.id ? 'bg-blue-500/20 text-blue-400' : 'bg-white/5 text-slate-500 group-hover:text-slate-300'
-                                                    )}>
-                                                        <Monitor size={16} />
-                                                    </div>
-                                                    <div>
-                                                        <div className={cn(
-                                                            "text-xs font-bold transition-colors",
-                                                            selectedUnit?.id === unit.id ? 'text-white' : 'text-slate-300 group-hover:text-white'
-                                                        )}>
-                                                            {unit.name}
+                                    ) : (
+                                        Object.entries(
+                                            units.reduce((acc, unit) => {
+                                                const orgId = unit.org_id || 'Other';
+                                                if (!acc[orgId]) acc[orgId] = [];
+                                                acc[orgId].push(unit);
+                                                return acc;
+                                            }, {} as Record<string, Unit[]>)
+                                        ).map(([orgId, groupUnits], groupIdx) => (
+                                            <div key={orgId} className="flex flex-col gap-1">
+                                                <button
+                                                    onClick={() => setExpandedFolders(prev => ({ ...prev, [orgId]: !prev[orgId] }))}
+                                                    className="w-full flex items-center justify-between p-2 hover:bg-white/5 rounded-lg transition-colors group/folder"
+                                                >
+                                                    <div className="flex items-center gap-2">
+                                                        <div className="text-slate-500 group-hover/folder:text-blue-400">
+                                                            {expandedFolders[orgId] ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
                                                         </div>
-                                                        <div className="text-[9px] text-slate-500 font-mono mt-0.5 flex items-center gap-1 opacity-70">
-                                                            <Globe size={8} /> {unit.ip || 'DHCP-LEASE'}
-                                                        </div>
+                                                        <Folder size={14} className={cn("transition-colors", expandedFolders[orgId] ? "text-blue-500" : "text-slate-500")} />
+                                                        <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 group-hover/folder:text-white transition-colors">
+                                                            {orgId}
+                                                        </span>
                                                     </div>
-                                                </div>
-                                                <div className="flex flex-col items-end gap-1">
-                                                    <div className={cn(
-                                                        "w-1.5 h-1.5 rounded-full",
-                                                        unit.status === 'online' ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]' : 'bg-slate-600'
-                                                    )} />
-                                                    <span className="text-[8px] font-bold text-slate-600 uppercase tracking-tighter">
-                                                        {unit.status === 'online' ? 'LIVE' : 'OFFLINE'}
+                                                    <span className="text-[9px] font-bold text-slate-600 bg-white/5 px-1.5 py-0.5 rounded-full border border-white/5">
+                                                        {groupUnits.length}
                                                     </span>
-                                                </div>
+                                                </button>
+
+                                                <AnimatePresence>
+                                                    {expandedFolders[orgId] && (
+                                                        <motion.div
+                                                            initial={{ height: 0, opacity: 0 }}
+                                                            animate={{ height: 'auto', opacity: 1 }}
+                                                            exit={{ height: 0, opacity: 0 }}
+                                                            className="overflow-hidden flex flex-col gap-1 pl-4"
+                                                        >
+                                                            {groupUnits.map((unit, idx) => (
+                                                                <motion.button
+                                                                    layout
+                                                                    initial={{ opacity: 0, x: -5 }}
+                                                                    animate={{ opacity: 1, x: 0 }}
+                                                                    transition={{ delay: idx * 0.03 }}
+                                                                    key={unit.id}
+                                                                    onClick={() => handleUnitSelect(unit)}
+                                                                    className={cn(
+                                                                        "w-full text-left p-2.5 rounded-lg transition-all duration-300 border relative group",
+                                                                        selectedUnit?.id === unit.id
+                                                                            ? 'bg-blue-600/10 border-blue-500/40'
+                                                                            : 'bg-white/[0.01] border-white/5 hover:bg-white/[0.04] hover:border-white/10'
+                                                                    )}
+                                                                >
+                                                                    <div className="flex justify-between items-center relative z-10">
+                                                                        <div className="flex items-center gap-2.5">
+                                                                            <div className={cn(
+                                                                                "p-1.5 rounded-md transition-colors",
+                                                                                selectedUnit?.id === unit.id ? 'bg-blue-500/20 text-blue-400' : 'bg-white/5 text-slate-500'
+                                                                            )}>
+                                                                                <Monitor size={14} />
+                                                                            </div>
+                                                                            <div className="min-w-0 flex-1">
+                                                                                <div className={cn(
+                                                                                    "text-[11px] font-bold truncate transition-colors",
+                                                                                    selectedUnit?.id === unit.id ? 'text-white' : 'text-slate-300 group-hover:text-white'
+                                                                                )}>
+                                                                                    {unit.name.includes('/') ? unit.name.split('/')[1] : unit.name}
+                                                                                </div>
+                                                                                <div className="text-[8px] text-slate-500 font-mono mt-0.5 flex items-center gap-1 opacity-70">
+                                                                                    <Globe size={7} /> {unit.ip || 'DHCP'}
+                                                                                </div>
+                                                                            </div>
+                                                                        </div>
+                                                                        <div className="flex flex-col items-end">
+                                                                            <div className={cn(
+                                                                                "w-1 h-1 rounded-full",
+                                                                                unit.status === 'online' ? 'bg-emerald-500 shadow-[0_0_6px_rgba(16,185,129,0.5)]' : 'bg-slate-600'
+                                                                            )} />
+                                                                        </div>
+                                                                    </div>
+                                                                </motion.button>
+                                                            ))}
+                                                        </motion.div>
+                                                    )}
+                                                </AnimatePresence>
                                             </div>
-                                        </motion.button>
-                                    ))}
+                                        ))
+                                    )}
                                 </AnimatePresence>
                             </div>
                         </div>
 
-                        <div className="mt-auto pt-4 px-4 pb-4 border-t border-white/5 flex flex-col items-center gap-3">
-                            <img src="/tname.png" alt="Team Logo" className="h-8 w-auto object-contain opacity-60 hover:opacity-100 transition-opacity" />
-                            <p className="text-[9px] font-black uppercase tracking-[0.2em] text-slate-500 leading-relaxed text-center opacity-40 hover:opacity-100 transition-opacity">
-                                Developed by <span className="text-blue-400">Krishi Sahayogi Team</span><br />
-                                NIELIT Bhubaneshwar
-                            </p>
+                        <div className="mt-auto pt-6 px-4 pb-4 border-t border-white/5 flex flex-col items-center gap-4">
+                            <div
+                                className="bg-white/5 backdrop-blur-md rounded-xl border border-white/10 shadow-2xl w-24 h-16 flex items-center justify-center overflow-hidden"
+                                style={{
+                                    backgroundImage: 'url(/tname.png)',
+                                    backgroundSize: '110%',
+                                    backgroundPosition: '40% 40%',
+                                    backgroundRepeat: 'no-repeat'
+                                }}
+                            />
+                            <div className="text-center">
+                                <p className="text-[10px] font-medium uppercase tracking-wider text-slate-400 mb-1">
+                                    Developed by <span className="text-blue-500 font-bold">Krishi Sahayogi Team</span>
+                                </p>
+                                <p className="text-[9px] text-slate-500 font-bold tracking-widest uppercase">NIELIT Bhubaneshwar</p>
+                            </div>
                         </div>
                     </motion.aside>
 
@@ -424,20 +457,20 @@ export default function DashboardView({ orgId: propOrgId }: DashboardViewProps) 
                                     {/* Advanced Metric Grid */}
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 flex-1 min-h-0 overflow-y-auto pr-1 pb-4 custom-scrollbar">
                                         {/* CPU CARD */}
-                                        <div className="glass-card p-6 !bg-blue-500/[0.02] border-blue-500/10 hover:border-blue-500/30 group/card aura-blue">
+                                        <div className="glass-card p-6 border-white/5 hover:border-blue-500/20 group/card aura-blue">
                                             <div className="flex justify-between items-start mb-6">
                                                 <div className="flex items-center gap-3">
-                                                    <div className="p-2.5 bg-blue-500/10 text-blue-400 rounded-xl group-hover/card:scale-110 transition-transform">
-                                                        <Cpu size={20} />
+                                                    <div className="p-2.5 bg-blue-500/10 text-blue-500 rounded-lg group-hover/card:scale-105 transition-transform">
+                                                        <Cpu size={18} />
                                                     </div>
                                                     <div>
-                                                        <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-blue-400/80">Processor</h3>
-                                                        <p className="font-bold text-white italic">CPU USAGE</p>
+                                                        <h3 className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">Processor</h3>
+                                                        <p className="font-bold text-white">CPU Usage</p>
                                                     </div>
                                                 </div>
                                                 <div className="text-right">
-                                                    <span className="text-3xl font-mono font-bold text-white tracking-tighter">
-                                                        {(lastData?.cpu ?? lastData?.cpu_usage ?? 0).toFixed(1)}<span className="text-sm text-blue-500/50 ml-0.5">%</span>
+                                                    <span className="text-2xl font-mono font-semibold text-white tracking-tight">
+                                                        {(lastData?.cpu ?? lastData?.cpu_usage ?? 0).toFixed(1)}<span className="text-xs text-slate-500 ml-1">%</span>
                                                     </span>
                                                 </div>
                                             </div>
@@ -447,21 +480,21 @@ export default function DashboardView({ orgId: propOrgId }: DashboardViewProps) 
                                         </div>
 
                                         {/* GPU CARD */}
-                                        <div className="glass-card p-6 !bg-emerald-500/[0.02] border-emerald-500/10 hover:border-emerald-500/30 group/card aura-emerald">
+                                        <div className="glass-card p-6 border-white/5 hover:border-emerald-500/20 group/card aura-success">
                                             <div className="flex justify-between items-start mb-6">
                                                 <div className="flex items-center gap-3">
-                                                    <div className="p-2.5 bg-emerald-500/10 text-emerald-400 rounded-xl group-hover/card:scale-110 transition-transform">
-                                                        <Zap size={20} />
+                                                    <div className="p-2.5 bg-emerald-500/10 text-emerald-500 rounded-lg group-hover/card:scale-105 transition-transform">
+                                                        <Zap size={18} />
                                                     </div>
                                                     <div>
-                                                        <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-emerald-400/80">Graphics</h3>
-                                                        <p className="font-bold text-white italic">GPU USAGE</p>
+                                                        <h3 className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">Graphics</h3>
+                                                        <p className="font-bold text-white">GPU Usage</p>
                                                     </div>
                                                 </div>
                                                 <div className="text-right">
-                                                    <span className="text-3xl font-mono font-bold text-white tracking-tighter">
+                                                    <span className="text-2xl font-mono font-semibold text-white tracking-tight">
                                                         {typeof lastData?.gpu === 'number' ? lastData.gpu.toFixed(1) : (lastData?.gpu_load ?? 0).toFixed(1)}
-                                                        <span className="text-sm text-emerald-500/50 ml-0.5">%</span>
+                                                        <span className="text-xs text-slate-500 ml-1">%</span>
                                                     </span>
                                                 </div>
                                             </div>
@@ -471,20 +504,20 @@ export default function DashboardView({ orgId: propOrgId }: DashboardViewProps) 
                                         </div>
 
                                         {/* RAM CARD */}
-                                        <div className="glass-card p-6 !bg-purple-500/[0.02] border-purple-500/10 hover:border-purple-500/30 group/card aura-purple">
+                                        <div className="glass-card p-6 border-white/5 hover:border-blue-500/20 group/card aura-blue">
                                             <div className="flex justify-between items-start mb-6">
                                                 <div className="flex items-center gap-3">
-                                                    <div className="p-2.5 bg-purple-500/10 text-purple-400 rounded-xl group-hover/card:scale-110 transition-transform">
-                                                        <HardDrive size={20} />
+                                                    <div className="p-2.5 bg-blue-500/10 text-blue-500 rounded-lg group-hover/card:scale-105 transition-transform">
+                                                        <HardDrive size={18} />
                                                     </div>
                                                     <div>
-                                                        <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-purple-400/80">Memory</h3>
-                                                        <p className="font-bold text-white italic">RAM USAGE</p>
+                                                        <h3 className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">Memory</h3>
+                                                        <p className="font-bold text-white">RAM Usage</p>
                                                     </div>
                                                 </div>
                                                 <div className="text-right">
-                                                    <span className="text-3xl font-mono font-bold text-white tracking-tighter">
-                                                        {(lastData?.ram ?? lastData?.ram_usage ?? 0).toFixed(1)}<span className="text-sm text-purple-500/50 ml-0.5">%</span>
+                                                    <span className="text-2xl font-mono font-semibold text-white tracking-tight">
+                                                        {(lastData?.ram ?? lastData?.ram_usage ?? 0).toFixed(1)}<span className="text-xs text-slate-500 ml-1">%</span>
                                                     </span>
                                                 </div>
                                             </div>
@@ -494,20 +527,20 @@ export default function DashboardView({ orgId: propOrgId }: DashboardViewProps) 
                                         </div>
 
                                         {/* NETWORK CARD */}
-                                        <div className="glass-card p-6 !bg-cyan-500/[0.02] border-cyan-500/10 hover:border-cyan-500/30 group/card shadow-[0_0_40px_rgba(6,182,212,0.15)]">
+                                        <div className="glass-card p-6 border-white/5 hover:border-blue-500/20 group/card aura-blue">
                                             <div className="flex justify-between items-start mb-6">
                                                 <div className="flex items-center gap-3">
-                                                    <div className="p-2.5 bg-cyan-500/10 text-cyan-400 rounded-xl group-hover/card:scale-110 transition-transform">
-                                                        <Wifi size={20} />
+                                                    <div className="p-2.5 bg-blue-500/10 text-blue-500 rounded-lg group-hover/card:scale-105 transition-transform">
+                                                        <Wifi size={18} />
                                                     </div>
                                                     <div>
-                                                        <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-cyan-400/80">Interface</h3>
-                                                        <p className="font-bold text-white italic">NETWORK THROUGHPUT</p>
+                                                        <h3 className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">Interface</h3>
+                                                        <p className="font-bold text-white">Network Rates</p>
                                                     </div>
                                                 </div>
                                                 <div className="text-right">
-                                                    <span className="text-3xl font-mono font-bold text-white tracking-tighter">
-                                                        {(lastData?.network_rx ?? 0).toFixed(1)}<span className="text-[10px] text-cyan-500/50 ml-1 font-sans font-black uppercase">kb/s</span>
+                                                    <span className="text-2xl font-mono font-semibold text-white tracking-tight">
+                                                        {(lastData?.network_rx ?? 0).toFixed(1)}<span className="text-[10px] text-slate-500 ml-1 font-medium">KB/s</span>
                                                     </span>
                                                 </div>
                                             </div>
@@ -521,32 +554,29 @@ export default function DashboardView({ orgId: propOrgId }: DashboardViewProps) 
                                 <motion.div
                                     initial={{ opacity: 0 }}
                                     animate={{ opacity: 1 }}
-                                    className="flex-1 flex flex-col items-center justify-center p-12 glass-panel-rich rounded-[2rem] border-dashed border-2 border-white/5 relative group"
+                                    className="flex-1 flex flex-col items-center justify-center p-12 glass-panel-rich rounded-xl border border-white/5 relative overflow-hidden"
                                 >
-                                    <div className="absolute inset-0 bg-blue-600/[0.02] animate-pulse rounded-[2rem] pointer-events-none" />
-                                    <div className="relative">
-                                        <div className="absolute -inset-8 bg-blue-500/10 blur-[50px] rounded-full animate-float" />
-                                        <div className="relative p-8 bg-slate-800/80 rounded-3xl border border-white/10 shadow-2xl">
-                                            <Layout className="w-16 h-16 text-blue-400" />
-                                        </div>
+                                    <div className="absolute inset-0 bg-blue-500/[0.02] pointer-events-none" />
+                                    <div className="relative mb-8 p-6 bg-slate-800/30 rounded-2xl border border-white/5">
+                                        <Layout className="w-12 h-12 text-slate-500" />
                                     </div>
-                                    <h2 className="text-3xl font-black text-white mt-8 tracking-tighter uppercase italic">Ready for Uplink</h2>
-                                    <p className="text-slate-500 text-center max-w-sm mt-4 font-bold text-xs uppercase tracking-widest leading-relaxed">
-                                        Select a node from the telemetry matrix to initiate high-frequency data streaming and unit analysis.
+                                    <h2 className="text-2xl font-semibold text-white tracking-tight">Ready for Telemetry</h2>
+                                    <p className="text-slate-500 text-center max-w-sm mt-3 text-xs font-medium leading-relaxed">
+                                        Select a node from the network matrix to initiate data streaming and unit analysis.
                                     </p>
 
                                     <div className="grid grid-cols-3 gap-12 mt-16 w-full max-w-lg">
-                                        <div className="text-center group/stat">
-                                            <div className="text-3xl font-mono font-black text-emerald-400 group-hover/stat:scale-110 transition-transform">10<span className="text-xs">Hz</span></div>
-                                            <div className="text-[9px] text-slate-600 font-bold uppercase tracking-[0.2em] mt-2">Matrix Polling</div>
+                                        <div className="text-center">
+                                            <div className="text-2xl font-mono font-semibold text-blue-500/80">1 Hz</div>
+                                            <div className="text-[9px] text-slate-600 font-semibold uppercase tracking-wider mt-2">Polling Rate</div>
                                         </div>
-                                        <div className="text-center group/stat">
-                                            <div className="text-3xl font-mono font-black text-blue-400 group-hover/stat:scale-110 transition-transform">~0<span className="text-xs">ms</span></div>
-                                            <div className="text-[9px] text-slate-600 font-bold uppercase tracking-[0.2em] mt-2">Latency Info</div>
+                                        <div className="text-center">
+                                            <div className="text-2xl font-mono font-semibold text-slate-400">Low</div>
+                                            <div className="text-[9px] text-slate-600 font-semibold uppercase tracking-wider mt-2">Latency</div>
                                         </div>
-                                        <div className="text-center group/stat">
-                                            <div className="text-3xl font-mono font-black text-purple-400 group-hover/stat:scale-110 transition-transform">{totalUnits}</div>
-                                            <div className="text-[9px] text-slate-600 font-bold uppercase tracking-[0.2em] mt-2">Active Slots</div>
+                                        <div className="text-center">
+                                            <div className="text-2xl font-mono font-semibold text-blue-500/80">{totalUnits}</div>
+                                            <div className="text-[9px] text-slate-600 font-semibold uppercase tracking-wider mt-2">Total Slots</div>
                                         </div>
                                     </div>
                                 </motion.div>

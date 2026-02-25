@@ -128,13 +128,13 @@ export const UsageGraph: React.FC<UsageGraphProps> = ({
 
     const getMetricColor = () => {
       switch (metric) {
-        case 'cpu': return { border: '#3b82f6', bg: 'rgba(59, 130, 246, 0.2)' }
-        case 'ram': return { border: '#8b5cf6', bg: 'rgba(139, 92, 246, 0.2)' }
-        case 'gpu': return { border: '#10b981', bg: 'rgba(16, 185, 129, 0.2)' }
-        case 'network_rx': return { border: '#06b6d4', bg: 'rgba(6, 182, 212, 0.2)' }
-        case 'network_tx': return { border: '#0ea5e9', bg: 'rgba(14, 165, 233, 0.2)' }
-        case 'temperature': return { border: '#f59e0b', bg: 'rgba(245, 158, 11, 0.2)' }
-        default: return { border: '#64748b', bg: 'rgba(100, 116, 139, 0.2)' }
+        case 'cpu': return { border: '#3b82f6', bg: 'rgba(59, 130, 246, 0.1)' }
+        case 'ram': return { border: '#6366f1', bg: 'rgba(99, 102, 241, 0.1)' }
+        case 'gpu': return { border: '#10b981', bg: 'rgba(16, 185, 129, 0.1)' }
+        case 'network_rx': return { border: '#3b82f6', bg: 'rgba(59, 130, 246, 0.1)' }
+        case 'network_tx': return { border: '#64748b', bg: 'rgba(100, 116, 139, 0.1)' }
+        case 'temperature': return { border: '#f59e0b', bg: 'rgba(245, 158, 11, 0.1)' }
+        default: return { border: '#3b82f6', bg: 'rgba(59, 130, 246, 0.1)' }
       }
     }
 
@@ -179,11 +179,11 @@ export const UsageGraph: React.FC<UsageGraphProps> = ({
       legend: { display: false },
       tooltip: {
         enabled: true,
-        backgroundColor: 'rgba(2, 6, 23, 0.9)',
+        backgroundColor: 'rgba(15, 23, 42, 0.95)',
         titleColor: '#94a3b8',
-        bodyColor: '#fff',
-        titleFont: { size: 10, weight: 'bold' as const },
-        bodyFont: { size: 12, family: 'monospace', weight: 'bold' as const },
+        bodyColor: '#f8fafc',
+        titleFont: { size: 10, weight: 600 as any },
+        bodyFont: { size: 12, family: 'monospace', weight: 600 as any },
         borderColor: 'rgba(255, 255, 255, 0.1)',
         borderWidth: 1,
         cornerRadius: 8,
