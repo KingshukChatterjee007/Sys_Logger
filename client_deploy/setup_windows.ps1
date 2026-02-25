@@ -128,21 +128,32 @@ pm2 save --force
 Write-Host "  OK Client is running (hidden background process)"
 
 # ==========================================
-# Step 6: Register Auto-Start on Boot
+# Step 6: Create Auto-Start Task (Silent)
 # ==========================================
 Write-Host ""
-Write-Host "[Step 6/6] Registering auto-start on boot..."
+Write-Host "[Step 6/6] Registering auto-start..."
 
-$pm2Path = (Get-Command pm2 -ErrorAction SilentlyContinue).Source
+# Create the Ghost Launcher VBScript
+$vbsPath = Join-Path $deployDir "launcher.vbs"
+$vbsContent = @"
+' Sys_Logger - Ghost Launcher
+' Runs PM2 resurrect with zero console visibility
+Set WshShell = CreateObject("WScript.Shell")
+WshShell.Run "pm2 resurrect", 0, False
+"@
+Set-Content -Path $vbsPath -Value $vbsContent
+
+$taskName = "Sys_Logger_Client_AutoStart"
 $currentUser = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name
-$taskName = "PM2-AutoStart-SysLogger"
+$wscriptPath = "C:\Windows\System32\wscript.exe"
 
 try {
     # Remove existing task if present
     Unregister-ScheduledTask -TaskName $taskName -Confirm:$false -ErrorAction SilentlyContinue
 
     # S4U logon: runs on boot even before user logs in, no password stored
-    $action   = New-ScheduledTaskAction -Execute $pm2Path -Argument "resurrect" -WorkingDirectory $env:USERPROFILE
+    # Use wscript.exe to run the .vbs file - this ensures ZERO console window
+    $action   = New-ScheduledTaskAction -Execute $wscriptPath -Argument "`"$vbsPath`"" -WorkingDirectory $deployDir
     $trigger  = New-ScheduledTaskTrigger -AtStartup
     $settings = New-ScheduledTaskSettingsSet `
         -AllowStartIfOnBatteries `
@@ -157,15 +168,14 @@ try {
         -Trigger $trigger `
         -Settings $settings `
         -Principal $principal `
-        -Description "Auto-start Sys_Logger client on Windows boot via PM2"
+        -Description "Auto-start Sys_Logger client invisibly on Windows boot via VBS Launcher"
 
-    Write-Host "  OK Auto-start registered! (runs on boot, no login required)"
+    Write-Host "  OK Auto-start registered! (Invisible background service)"
 }
 catch {
     Write-Host "  WARNING: Could not register auto-start: $($_.Exception.Message)"
     Write-Host "  Manual setup - open Task Scheduler (taskschd.msc):"
     Write-Host "    Action:  $pm2Path resurrect"
-    Write-Host "    Trigger: At system startup"
 }
 
 # ==========================================

@@ -46,8 +46,7 @@ SYNC_BATCH_SIZE = 10   # Number of records to sync at once
 # unit_client.py always runs in --silent mode under PM2 and reads from config file.
 
 class UnitClient:
-    def __init__(self, silent=False):
-        self.silent = silent
+    def __init__(self):
         self.config = self.load_config()
         self.system_id = self.config.get('system_id')
         self.org_id = self.config.get('org_id')
@@ -57,21 +56,13 @@ class UnitClient:
         self.server_url = DEFAULT_SERVER_URL
         
         if not self.org_id or self.org_id == 'default_org' or not self.comp_id:
-            if silent:
-                # Running under PM2 — config must be set up by configure.py / install.bat first
-                print(
-                    "ERROR: org_id or comp_id not configured.\n"
-                    "  Please run install.bat (Windows) or configure.py to set up this unit.",
-                    flush=True
-                )
-                sys.exit(1)
-            else:
-                # Manual / developer run — prompt interactively
-                print("\nSys_Logger Unit Client - Unit Identification")
-                print("-" * 50)
-                self.org_id = input("Enter Organization ID (e.g., org1): ").strip() or "default_org"
-                self.comp_id = input("Enter Computer/Unit ID: ").strip() or socket.gethostname()
-                self.save_config()
+            # Under PM2/Boot — config must be set up by first_run_wizard.py / install.bat first
+            print(
+                "ERROR: org_id or comp_id not configured.\n"
+                "  Please run install.bat (Windows) or first_run_wizard.py to set up this unit.",
+                flush=True
+            )
+            sys.exit(1)
 
         self.unit_id = None
         self.registered = False
@@ -236,8 +227,7 @@ class UnitClient:
                     # Cap at 100% just in case of counter oddities
                     return min(100.0, usage)
         except Exception as e:
-            if not self.silent:
-                logging.debug(f"Failed to get Windows GPU usage: {e}")
+            logging.debug(f"Failed to get Windows GPU usage: {e}")
         return 0.0
 
     def get_temperature(self):
@@ -290,6 +280,9 @@ class UnitClient:
                 'system_id': self.system_id,
                 'org_id': self.org_id,
                 'comp_id': self.comp_id,
+                'hostname': socket.gethostname(),
+                'platform': platform.system(),
+                'os_release': platform.release(),
                 'timestamp': datetime.now(timezone.utc).isoformat(),
                 'cpu_usage': cpu_usage,
                 'ram_usage': ram_usage,
@@ -307,8 +300,7 @@ class UnitClient:
         """Submit usage data to the central server"""
         url = f"{self.server_url}/api/report_usage"
         try:
-            if not self.silent:
-                print(f"DEBUG: Submitting data to {url}")
+            print(f"DEBUG: Submitting data to {url}")
                 # print(f"DEBUG: Payload: {json.dumps(data, indent=2)}")
             
             response = requests.post(url, json=data, timeout=30)
@@ -396,7 +388,7 @@ class UnitClient:
         except: pass
 
     def run(self):
-        print(f"Unit client loop started (Silent: {self.silent})")
+        print(f"Unit client loop started")
 
         while self.running:
             # 1. Ensure registration
@@ -409,8 +401,7 @@ class UnitClient:
                 # Add to queue for buffering/caching
                 self.data_queue.put(data)
                 
-                if not self.silent:
-                    print(f"DEBUG: Collected data, queue size: {self.data_queue.qsize()}")
+                print(f"DEBUG: Collected data, queue size: {self.data_queue.qsize()}")
                 
                 # 3. Synchronous submission of current item (and any queued data)
                 # In this simplified single-threaded mode, we try to clear the queue
@@ -463,15 +454,12 @@ class UnitClient:
 
 def main():
     print(f"--- Sys_Logger Unit Client Starting (Time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}) ---")
-    is_silent = "--silent" in sys.argv
-    client = UnitClient(silent=is_silent)
-    if not is_silent:
-        print("Running unit client. Press Ctrl+C to stop.")
+    client = UnitClient()
+    print("Running unit client. Press Ctrl+C to stop.")
     try:
         client.run()
     except KeyboardInterrupt:
-        if not is_silent:
-            print("\nStopping...")
+        print("\nStopping...")
         client.stop()
 
 if __name__ == "__main__":

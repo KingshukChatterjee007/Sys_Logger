@@ -564,10 +564,15 @@ def register_unit():
 
         if existing_unit:
             unit_id = existing_unit['id']
+            # Logic to handle machine renames or org moves
+            if existing_unit.get('org_id') != org_id or existing_unit.get('comp_id') != comp_id:
+                print(f"Unit {unit_id} identity updated: {existing_unit.get('org_id')}/{existing_unit.get('comp_id')} -> {org_id}/{comp_id}")
+                existing_unit['org_id'] = org_id
+                existing_unit['comp_id'] = comp_id
+                existing_unit['name'] = f"{org_id}/{comp_id}"
+
             existing_unit['last_seen'] = datetime.now().isoformat()
             existing_unit['status'] = 'online'
-            existing_unit['org_id'] = org_id
-            existing_unit['comp_id'] = comp_id
             existing_unit['ip'] = request.remote_addr
             
             if hostname != 'Unknown': existing_unit['hostname'] = hostname
@@ -578,6 +583,9 @@ def register_unit():
             if network_interfaces != '{}': existing_unit['network_interfaces'] = network_interfaces
             
             UnitStore.save_unit(unit_id, existing_unit)
+            
+            # Broadcast update because identities might have changed
+            socketio.emit('units_update', UnitStore.get_all_units())
             return jsonify({'unit_id': unit_id, 'org_id': org_id, 'comp_id': comp_id}), 200
 
         # New Unit
@@ -629,15 +637,23 @@ def process_usage_record(data):
 
     unit['last_seen'] = datetime.now().isoformat()
     unit['status'] = 'online'
-    # Update metadata if changed
-    if 'org_id' in data:
+    
+    # Update metadata if it has changed (e.g. rename or org move)
+    changed = False
+    if 'org_id' in data and data['org_id'] != unit.get('org_id'):
         unit['org_id'] = data['org_id']
-    if 'comp_id' in data:
-        unit['name'] = f"{data.get('org_id', 'unknown')}/{data.get('comp_id', 'unknown')}"
-        unit['hostname'] = data.get('hostname', unit.get('hostname'))
-        unit['ip'] = data.get('ip', request.remote_addr)
+        changed = True
+    if 'comp_id' in data and data['comp_id'] != unit.get('comp_id'):
+        unit['comp_id'] = data['comp_id']
+        unit['name'] = f"{unit.get('org_id', 'unknown')}/{data['comp_id']}"
+        changed = True
+    
+    if 'hostname' in data: unit['hostname'] = data['hostname']
+    unit['ip'] = request.remote_addr
 
-    UnitStore.save_unit(unit_id, unit) # Updates last_seen and metadata
+    UnitStore.save_unit(unit_id, unit)
+    if changed:
+        socketio.emit('units_update', UnitStore.get_all_units())
     UnitStore.add_usage(unit_id, data)
 
     socketio.emit('usage_update', {'unit_id': unit_id, 'data': data})

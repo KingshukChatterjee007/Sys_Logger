@@ -30,7 +30,29 @@ def main():
     print("")
 
     existing = load_existing_config()
+    
+    # --- Clone/Rename Detection ---
+    hostname = socket.gethostname()
+    existing_comp = existing.get('comp_id', '')
     system_id = existing.get('system_id', str(uuid.uuid4()))
+    is_clone = False
+
+    if existing_comp and existing_comp != hostname:
+        print(f"  WARNING: Detected name mismatch!")
+        print(f"    Current Hostname: {hostname}")
+        print(f"    Configured Name : {existing_comp}")
+        print("")
+        print("  Is this a NEW MACHINE (cloned folder) or just a RENAME?")
+        print("  1) NEW MACHINE (Generates a new unique identity - recommended for clones)")
+        print("  2) RENAME (Keeps the same identity but updates the name)")
+        
+        choice = input("\n  Select option [1/2, default 1]: ").strip()
+        if choice == '2':
+            print("  -> Mode: Rename (Identity maintained)")
+        else:
+            print("  -> Mode: New Machine (Identity reset to prevent collisions)")
+            system_id = str(uuid.uuid4())
+            is_clone = True
 
     # --- Org ID ---
     existing_org = existing.get('org_id', '')
@@ -44,9 +66,7 @@ def main():
         org_id = existing_org if existing_org else 'default_org'
 
     # --- Computer / Unit ID ---
-    hostname = socket.gethostname()
-    existing_comp = existing.get('comp_id', '')
-    default_comp = existing_comp if existing_comp else hostname
+    default_comp = hostname if is_clone else (existing_comp if existing_comp else hostname)
     comp_id = input(f"Enter Computer / Unit ID [{default_comp}]: ").strip()
     if not comp_id:
         comp_id = default_comp

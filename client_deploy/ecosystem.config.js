@@ -16,7 +16,7 @@ module.exports = {
     {
       name: "sys-logger-client",
       script: "unit_client.py",
-      args: "--silent",
+      args: "",
       interpreter: venvPython,
       cwd: __dirname,
       instances: 1,
