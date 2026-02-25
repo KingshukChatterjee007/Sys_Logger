@@ -206,17 +206,19 @@ class UnitStore:
             timestamp = usage_data.get('timestamp')
             if timestamp.endswith('Z'): timestamp = timestamp[:-1]
             
-            # Extract UUID from payload (client sends 'system_id' as UUID)
+            # Extract metadata from payload
             sys_uuid = usage_data.get('system_id') 
+            hostname = usage_data.get('hostname', 'unknown_host')
             
             cur.execute("""
                 INSERT INTO systems (system_name, system_uuid, hostname, last_seen)
-                VALUES (%s, %s, 'dynamic_host', %s)
+                VALUES (%s, %s, %s, %s)
                 ON CONFLICT (system_name) DO UPDATE SET 
                     last_seen = EXCLUDED.last_seen,
-                    system_uuid = COALESCE(EXCLUDED.system_uuid, systems.system_uuid)
+                    system_uuid = COALESCE(EXCLUDED.system_uuid, systems.system_uuid),
+                    hostname = EXCLUDED.hostname
                 RETURNING system_id
-            """, (unit_id, sys_uuid, timestamp))
+            """, (unit_id, sys_uuid, hostname, timestamp))
             
             sys_int_id = cur.fetchone()[0]
             
