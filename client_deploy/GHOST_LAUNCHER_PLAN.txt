@@ -34,4 +34,4 @@ PROPOSED CHANGES:
 
 VERIFICATION:
 - Check 'logs/out.log' for activity.
-- Confirm 'pm2 status' shows online without any terminal window open.
+- Confirm 'pm2 status' shows online without any terminal window open
