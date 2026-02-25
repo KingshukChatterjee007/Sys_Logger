@@ -13,7 +13,7 @@ import {
     Monitor, Server, Database, Activity, Globe,
     ChevronRight, Layout, Download,
     Cpu, HardDrive, Wifi, Zap, Clock,
-    Share2, Check
+    Share2, Check, Pencil, Trash2, X, Save
 } from 'lucide-react'
 
 function cn(...inputs: ClassValue[]) {
@@ -33,6 +33,9 @@ export default function DashboardView({ orgId: propOrgId }: DashboardViewProps) 
     const [startDate, setStartDate] = useState<string>('')
     const [endDate, setEndDate] = useState<string>('')
     const [copied, setCopied] = useState(false)
+    const [isEditing, setIsEditing] = useState(false)
+    const [editModeData, setEditModeData] = useState({ org_id: '', comp_id: '' })
+    const [isDeleting, setIsDeleting] = useState(false)
 
     useEffect(() => {
         const interval = setInterval(() => {
@@ -70,6 +73,43 @@ export default function DashboardView({ orgId: propOrgId }: DashboardViewProps) 
             url += `?range=1d`
         }
         window.open(url, '_blank')
+    }
+
+    const handleUpdateUnit = async () => {
+        if (!selectedUnit) return
+        try {
+            const response = await fetch(`/api/units/${selectedUnit.id}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(editModeData)
+            })
+            if (response.ok) {
+                const updatedUnit = await response.json()
+                setSelectedUnit(updatedUnit)
+                setIsEditing(false)
+            }
+        } catch (err) {
+            console.error('Failed to update unit:', err)
+        }
+    }
+
+    const handleDeleteUnit = async () => {
+        if (!selectedUnit) return
+        if (!confirm(`Are you sure you want to permanently delete ${selectedUnit.name}? All history will be lost.`)) return
+
+        setIsDeleting(true)
+        try {
+            const response = await fetch(`/api/units/${selectedUnit.id}`, {
+                method: 'DELETE'
+            })
+            if (response.ok) {
+                clearSelection()
+            }
+        } catch (err) {
+            console.error('Failed to delete unit:', err)
+        } finally {
+            setIsDeleting(false)
+        }
     }
 
     const activeUnits = units.filter(u => u.status === 'online').length
@@ -280,49 +320,101 @@ export default function DashboardView({ orgId: propOrgId }: DashboardViewProps) 
                                 >
                                     {/* Active Unit Header */}
                                     <div className="flex justify-between items-end pb-2">
-                                        <div>
+                                        <div className="flex-1">
                                             <button
                                                 onClick={clearSelection}
                                                 className="text-[10px] font-bold text-blue-400 hover:text-blue-300 mb-3 flex items-center gap-1.5 uppercase tracking-widest transition-all hover:-translate-x-1"
                                             >
                                                 <ChevronRight className="w-3 h-3 rotate-180" /> Back to Matrix
                                             </button>
-                                            <div className="flex items-center gap-3">
-                                                <h2 className="text-4xl font-black text-white tracking-tighter uppercase italic">{selectedUnit.name}</h2>
-                                                <div className={cn(
-                                                    "px-2.5 py-1 rounded-md text-[10px] font-black uppercase tracking-widest border",
-                                                    selectedUnit.status === 'online' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-red-500/10 text-red-400 border-red-500/20'
-                                                )}>
-                                                    {selectedUnit.status}
+
+                                            {isEditing ? (
+                                                <div className="flex flex-col gap-4 bg-white/5 p-4 rounded-2xl border border-white/10 aura-blue mb-4 max-w-xl">
+                                                    <div className="grid grid-cols-2 gap-4">
+                                                        <div>
+                                                            <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1.5 block">Organization ID</label>
+                                                            <input
+                                                                type="text"
+                                                                value={editModeData.org_id}
+                                                                onChange={(e) => setEditModeData({ ...editModeData, org_id: e.target.value })}
+                                                                className="w-full bg-slate-900 border border-white/10 rounded-lg p-2 text-xs font-bold text-white focus:border-blue-500 outline-none"
+                                                            />
+                                                        </div>
+                                                        <div>
+                                                            <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1.5 block">Computer ID</label>
+                                                            <input
+                                                                type="text"
+                                                                value={editModeData.comp_id}
+                                                                onChange={(e) => setEditModeData({ ...editModeData, comp_id: e.target.value })}
+                                                                className="w-full bg-slate-900 border border-white/10 rounded-lg p-2 text-xs font-bold text-white focus:border-blue-500 outline-none"
+                                                            />
+                                                        </div>
+                                                    </div>
+                                                    <div className="flex gap-2">
+                                                        <button
+                                                            onClick={handleUpdateUnit}
+                                                            className="flex-1 bg-blue-600 hover:bg-blue-500 text-white rounded-lg py-2 text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2 transition-colors"
+                                                        >
+                                                            <Save size={14} /> Save Changes
+                                                        </button>
+                                                        <button
+                                                            onClick={() => setIsEditing(false)}
+                                                            className="px-4 bg-white/5 hover:bg-white/10 text-slate-400 rounded-lg py-2 text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2 transition-colors"
+                                                        >
+                                                            <X size={14} /> Cancel
+                                                        </button>
+                                                    </div>
                                                 </div>
-                                            </div>
-                                            <div className="flex items-center gap-5 mt-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider">
-                                                <span className="flex items-center gap-2 border-r border-white/10 pr-5 italic opacity-80"><Globe className="w-3 h-3" /> {selectedUnit.ip}</span>
-                                                <span className="flex items-center gap-2 italic opacity-80"><Database className="w-3 h-3" /> UID: {selectedUnit.id.substring(0, 12)}</span>
-                                            </div>
+                                            ) : (
+                                                <>
+                                                    <div className="flex items-center gap-3">
+                                                        <h2 className="text-4xl font-black text-white tracking-tighter uppercase italic">{selectedUnit.name}</h2>
+                                                        <div className={cn(
+                                                            "px-2.5 py-1 rounded-md text-[10px] font-black uppercase tracking-widest border",
+                                                            selectedUnit.status === 'online' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-red-500/10 text-red-400 border-red-500/20'
+                                                        )}>
+                                                            {selectedUnit.status}
+                                                        </div>
+                                                    </div>
+                                                    <div className="flex items-center gap-5 mt-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                                                        <span className="flex items-center gap-2 border-r border-white/10 pr-5 italic opacity-80"><Globe className="w-3 h-3" /> {selectedUnit.ip}</span>
+                                                        <span className="flex items-center gap-2 italic opacity-80"><Database className="w-3 h-3" /> UID: {selectedUnit.id.substring(0, 12)}</span>
+                                                    </div>
+                                                </>
+                                            )}
                                         </div>
 
-                                        {/* Export Controls 
-                                        <div className="flex gap-2 items-center bg-white/[0.02] p-2 rounded-xl border border-white/5 group hover:border-white/10 transition-colors">
-                                            <div className="flex items-center gap-2">
-                                                <div className="flex flex-col px-2">
-                                                    <span className="text-[8px] text-slate-500 font-black uppercase mb-0.5">Start</span>
-                                                    <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="bg-transparent text-[10px] font-bold text-white border-none focus:ring-0 p-0 [color-scheme:dark]" />
-                                                </div>
-                                                <div className="w-[1px] h-6 bg-white/5" />
-                                                <div className="flex flex-col px-2">
-                                                    <span className="text-[8px] text-slate-500 font-black uppercase mb-0.5">End</span>
-                                                    <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="bg-transparent text-[10px] font-bold text-white border-none focus:ring-0 p-0 [color-scheme:dark]" />
-                                                </div>
-                                            </div>
+                                        {/* Management Controls */}
+                                        <div className="flex gap-2 items-center">
+                                            {!isEditing && (
+                                                <button
+                                                    onClick={() => {
+                                                        setEditModeData({ org_id: selectedUnit.org_id || '', comp_id: selectedUnit.comp_id || '' })
+                                                        setIsEditing(true)
+                                                    }}
+                                                    className="p-3 bg-white/[0.03] border border-white/5 hover:bg-white/[0.08] hover:border-blue-500/30 text-slate-400 hover:text-blue-400 rounded-xl transition-all group"
+                                                    title="Edit Unit Identity"
+                                                >
+                                                    <Pencil className="w-4 h-4" />
+                                                </button>
+                                            )}
+                                            <button
+                                                onClick={handleDeleteUnit}
+                                                disabled={isDeleting}
+                                                className="p-3 bg-red-500/5 border border-red-500/10 hover:bg-red-500/10 hover:border-red-500/40 text-red-400/60 hover:text-red-400 rounded-xl transition-all group disabled:opacity-50"
+                                                title="Delete Unit Permanently"
+                                            >
+                                                <Trash2 className="w-4 h-4" />
+                                            </button>
+                                            <div className="w-[1px] h-8 bg-white/5 mx-2" />
                                             <button
                                                 onClick={handleCustomDownload}
-                                                className="p-3 bg-blue-600 hover:bg-blue-500 text-white rounded-lg transition-all shadow-xl shadow-blue-600/20 active:scale-95 group"
+                                                className="p-3 bg-blue-600 hover:bg-blue-500 text-white rounded-xl transition-all shadow-xl shadow-blue-600/20 active:scale-95 group"
+                                                title="Export Usage Data"
                                             >
                                                 <Download className="w-4 h-4 transition-transform group-hover:-translate-y-0.5" />
                                             </button>
                                         </div>
-                                        */}
                                     </div>
 
                                     {/* Advanced Metric Grid */}

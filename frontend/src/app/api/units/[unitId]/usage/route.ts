@@ -6,5 +6,15 @@ export async function GET(
     { params }: { params: Promise<{ unitId: string }> }
 ) {
     const { unitId } = await params
-    return proxyGet(`/api/units/${unitId}/usage`)
+
+    // Manual proxying for consistency across methods
+    const url = `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5010'}/api/units/${unitId}/usage`
+    const response = await fetch(url, {
+        method: 'GET',
+        headers: { 'Content-Type': 'application/json' },
+        cache: 'no-store'
+    })
+
+    const data = await response.json().catch(() => ({}))
+    return Response.json(data, { status: response.status })
 }

@@ -132,6 +132,24 @@ class UnitStore:
 
     @staticmethod
     def delete_unit(unit_id):
+        # 1. Clean up PostgreSQL if enabled
+        unit = UnitStore.get_unit(unit_id)
+        if unit and 'system_id' in unit:
+            system_uuid = unit['system_id']
+            conn = get_db_connection()
+            if conn:
+                try:
+                    cur = conn.cursor()
+                    # Delete metrics first due to FK
+                    cur.execute("DELETE FROM system_metrics WHERE system_id IN (SELECT system_id FROM systems WHERE system_uuid = %s)", (system_uuid,))
+                    cur.execute("DELETE FROM systems WHERE system_uuid = %s", (system_uuid,))
+                    conn.commit()
+                    cur.close()
+                    conn.close()
+                except Exception as e:
+                    print(f"Error cleaning up PostgreSQL for unit {unit_id}: {e}")
+
+        # 2. Clean up in-memory/JSON storage
         if USE_REDIS:
             redis_client.hdel('units', unit_id)
             redis_client.delete(f'usage:{unit_id}')
@@ -435,11 +453,17 @@ def update_unit(unit_id):
     if not unit:
         return jsonify({'error': 'Unit not found'}), 404
     
-    if 'comp_id' in data: unit['comp_id'] = data['comp_id']
-    if 'org_id' in data: unit['org_id'] = data['org_id']
+    if 'comp_id' in data: 
+        unit['comp_id'] = data['comp_id']
+        unit['name'] = f"{unit.get('org_id', 'unknown')}/{data['comp_id']}"
+    if 'org_id' in data: 
+        unit['org_id'] = data['org_id']
+        unit['name'] = f"{data['org_id']}/{unit.get('comp_id', 'unknown')}"
     if 'name' in data: unit['name'] = data['name']
     
     UnitStore.save_unit(unit_id, unit)
+    
+    # Broadcast to all so sidebar updates immediately
     socketio.emit('units_update', UnitStore.get_all_units())
     return jsonify(unit), 200
 
