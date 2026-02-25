@@ -137,18 +137,14 @@ Write-Host "[Step 6/6] Registering auto-start..."
 $pm2Path = Get-Command pm2.cmd -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Source
 if (!$pm2Path) { $pm2Path = "pm2" }
 
-# Create the Ghost Launcher VBScript
-$vbsPath = Join-Path $deployDir "launcher.vbs"
-$vbsContent = @"
-' Sys_Logger - Ghost Launcher
-' Runs PM2 resurrect with zero console visibility
-' Wait for network/services to stabilize
-WScript.Sleep 30000 
-Set WshShell = CreateObject("WScript.Shell")
-WshShell.Run "$($pm2Path.Replace('\', '\\')) resurrect", 0, False
-"@
-Set-Content -Path $vbsPath -Value $vbsContent
+# Inject absolute PM2 path into boot_start.bat for maximum reliability
+$batPath = Join-Path $deployDir "boot_start.bat"
+$batContent = Get-Content $batPath
+$batContent = $batContent -replace 'pm2 start', "`"$pm2Path`" start"
+$batContent = $batContent -replace 'pm2 resurrect', "`"$pm2Path`" resurrect"
+Set-Content -Path $batPath -Value $batContent
 
+$vbsPath = Join-Path $deployDir "ghost_runner.vbs"
 $taskName = "Sys_Logger_Client_AutoStart"
 $currentUser = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name
 $wscriptPath = "C:\Windows\System32\wscript.exe"
