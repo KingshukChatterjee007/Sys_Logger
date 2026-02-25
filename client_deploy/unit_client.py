@@ -81,7 +81,7 @@ class UnitClient:
         signal.signal(signal.SIGTERM, self.signal_handler)
 
         logging.info(f"Unit Client initialized: {self.org_id}/{self.comp_id}")
-        print(f"Unit Client initialized: {self.org_id}/{self.comp_id}")
+        print(f"Unit Client initialized: {self.org_id}/{self.comp_id}", flush=True)
 
     def signal_handler(self, signum, frame):
         """Handle shutdown signals gracefully"""
@@ -149,7 +149,7 @@ class UnitClient:
                 'network_interfaces': json.dumps({})
             }
         except Exception as e:
-            print(f"Error getting system info: {e}")
+            print(f"Error getting system info: {e}", flush=True)
             return None
 
     def register_unit(self):
@@ -168,15 +168,15 @@ class UnitClient:
                 self.registered = True
                 try:
                     self.unit_id = response.json().get('unit_id')
-                    print(f"DEBUG: Assigned unit_id: {self.unit_id}")
+                    print(f"DEBUG: Assigned unit_id: {self.unit_id}", flush=True)
                 except: pass
 
-                print(f"Unit registered successfully (Status: {response.status_code})")
+                print(f"Unit registered successfully (Status: {response.status_code})", flush=True)
                 return True
             else:
-                print(f"Registration failed with status: {response.status_code}")
+                print(f"Registration failed with status: {response.status_code}", flush=True)
         except requests.RequestException as e:
-            print(f"Registration error: {e}")
+            print(f"Registration error: {e}", flush=True)
         return False
 
     def get_gpu_usage(self):
@@ -293,37 +293,37 @@ class UnitClient:
             }
             return data
         except Exception as e:
-            print(f"Error collecting usage data: {e}")
+            print(f"Error collecting usage data: {e}", flush=True)
             return None
 
     def submit_data(self, data):
         """Submit usage data to the central server"""
         url = f"{self.server_url}/api/report_usage"
         try:
-            print(f"DEBUG: Submitting data to {url}")
+            print(f"DEBUG: Submitting data to {url}", flush=True)
                 # print(f"DEBUG: Payload: {json.dumps(data, indent=2)}")
             
             response = requests.post(url, json=data, timeout=30)
             
-            print(f"DEBUG: Server response: {response.status_code}")
+            print(f"DEBUG: Server response: {response.status_code}", flush=True)
             if response.status_code != 200:
-                print(f"DEBUG: Error response: {response.text}")
+                print(f"DEBUG: Error response: {response.text}", flush=True)
 
             if response.status_code == 404:
                 # Server forgot us (likely restarted), force re-registration
-                print("Server responded with 404 (Unit Not Found). Re-registering...")
+                print("Server responded with 404 (Unit Not Found). Re-registering...", flush=True)
                 self.registered = False
                 return False
             
             if response.status_code != 200:
-                print(f"Data submission failed with status: {response.status_code}")
+                print(f"Data submission failed with status: {response.status_code}", flush=True)
             return response.status_code == 200
         except requests.RequestException as e:
-            print(f"Data submission error: {e}")
+            print(f"Data submission error: {e}", flush=True)
             return False
 
     def sync_offline_data(self):
-        print("Sync thread started.")
+        print("Sync thread started.", flush=True)
             
         while self.running:
             # 1. Build a batch
@@ -365,7 +365,7 @@ class UnitClient:
                 if self.submit_data(batch):
                     sent = True
                     # Log even in silent mode so PM2 captures it
-                    print(f"  OK Synced batch of {len(batch)} records. Queue size: {self.data_queue.qsize()}")
+                    print(f"  OK Synced batch of {len(batch)} records. Queue size: {self.data_queue.qsize()}", flush=True)
                     
                     # Mark all as done
                     for _ in batch:
@@ -376,7 +376,7 @@ class UnitClient:
                         self.save_cache_from_queue()
                 else:
                     # Log even in silent mode so PM2 captures it
-                    print(f"  FAILED Sync failed for batch of {len(batch)}. Retrying in {RETRY_DELAY}s...")
+                    print(f"  FAILED Sync failed for batch of {len(batch)}. Retrying in {RETRY_DELAY}s...", flush=True)
                     time.sleep(RETRY_DELAY)
 
     def save_cache_from_queue(self):
@@ -388,12 +388,17 @@ class UnitClient:
         except: pass
 
     def run(self):
-        print(f"Unit client loop started")
+        print(f"Unit client loop started", flush=True)
 
         while self.running:
             # 1. Ensure registration
             if not self.registered:
-                self.register_unit()
+                success = self.register_unit()
+                if not success:
+                    # During boot/restart, network might not be ready. Wait and retry.
+                    print("Registration failed. Waiting for network...", flush=True)
+                    time.sleep(5)
+                    continue
             
             # 2. Collect data
             data = self.collect_usage_data()
@@ -401,7 +406,7 @@ class UnitClient:
                 # Add to queue for buffering/caching
                 self.data_queue.put(data)
                 
-                print(f"DEBUG: Collected data, queue size: {self.data_queue.qsize()}")
+                print(f"DEBUG: Collected data, queue size: {self.data_queue.qsize()}", flush=True)
                 
                 # 3. Synchronous submission of current item (and any queued data)
                 # In this simplified single-threaded mode, we try to clear the queue
@@ -422,13 +427,13 @@ class UnitClient:
 
                         if self.submit_data(batch if len(batch) > 1 else batch[0]):
                             # Log even in silent mode so PM2 captures it
-                            print(f"  OK Submitted {len(batch)} records")
+                            print(f"  OK Submitted {len(batch)} records", flush=True)
                             # Mark as done
                             for _ in batch:
                                 self.data_queue.task_done()
                         else:
                             # Log even in silent mode so PM2 captures it
-                            print(f"  FAILED Submission failed - keeping {len(batch)} records in queue")
+                            print(f"  FAILED Submission failed - keeping {len(batch)} records in queue", flush=True)
                             # Put them back (at the front if possible, but Queue is FIFO)
                             # Actually, for simplicity on failure, we stop trying to clear queue this interval
                             for item in batch:
@@ -449,13 +454,12 @@ class UnitClient:
         self.running = False
         if self.sync_thread:
             self.sync_thread.join(timeout=5)
-        if not self.silent:
-            print("Unit client stopped")
+        print("Unit client stopped", flush=True)
 
 def main():
-    print(f"--- Sys_Logger Unit Client Starting (Time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}) ---")
+    print(f"--- Sys_Logger Unit Client Starting (Time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}) ---", flush=True)
     client = UnitClient()
-    print("Running unit client. Press Ctrl+C to stop.")
+    print("Running unit client. Press Ctrl+C to stop.", flush=True)
     try:
         client.run()
     except KeyboardInterrupt:

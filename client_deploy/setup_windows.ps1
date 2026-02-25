@@ -133,13 +133,19 @@ Write-Host "  OK Client is running (hidden background process)"
 Write-Host ""
 Write-Host "[Step 6/6] Registering auto-start..."
 
+# Find absolute path to pm2.cmd (essential for Task Scheduler)
+$pm2Path = Get-Command pm2.cmd -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Source
+if (!$pm2Path) { $pm2Path = "pm2" }
+
 # Create the Ghost Launcher VBScript
 $vbsPath = Join-Path $deployDir "launcher.vbs"
 $vbsContent = @"
 ' Sys_Logger - Ghost Launcher
 ' Runs PM2 resurrect with zero console visibility
+' Wait for network/services to stabilize
+WScript.Sleep 30000 
 Set WshShell = CreateObject("WScript.Shell")
-WshShell.Run "pm2 resurrect", 0, False
+WshShell.Run "$($pm2Path.Replace('\', '\\')) resurrect", 0, False
 "@
 Set-Content -Path $vbsPath -Value $vbsContent
 

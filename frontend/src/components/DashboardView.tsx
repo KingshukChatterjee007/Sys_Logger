@@ -165,6 +165,10 @@ export default function DashboardView({ orgId: propOrgId }: DashboardViewProps) 
 
                     <div className="flex items-center gap-8">
                         <div className="hidden lg:flex items-center gap-6 pr-6 border-r border-white/5">
+                            <img src="/India-AI_logo.jpeg" alt="India AI" className="h-8 w-auto object-contain opacity-80 hover:opacity-100 transition-opacity" />
+                            <img src="/Nielit_logo.jpeg" alt="NIELIT" className="h-8 w-auto object-contain opacity-80 hover:opacity-100 transition-opacity" />
+                        </div>
+                        <div className="hidden lg:flex items-center gap-6 pr-6 border-r border-white/5">
                             <div className="text-right">
                                 <p className="text-[10px] text-slate-500 uppercase font-bold tracking-wider mb-0.5">Network Load</p>
                                 <div className="flex items-center gap-1.5 justify-end">
@@ -298,9 +302,9 @@ export default function DashboardView({ orgId: propOrgId }: DashboardViewProps) 
                             </div>
                         </div>
 
-                        {/* Developer Credit */}
-                        <div className="mt-auto pt-4 px-4 pb-2 border-t border-white/5 opacity-40 hover:opacity-100 transition-opacity">
-                            <p className="text-[9px] font-black uppercase tracking-[0.2em] text-slate-500 leading-relaxed text-center">
+                        <div className="mt-auto pt-4 px-4 pb-4 border-t border-white/5 flex flex-col items-center gap-3">
+                            <img src="/tname.png" alt="Team Logo" className="h-8 w-auto object-contain opacity-60 hover:opacity-100 transition-opacity" />
+                            <p className="text-[9px] font-black uppercase tracking-[0.2em] text-slate-500 leading-relaxed text-center opacity-40 hover:opacity-100 transition-opacity">
                                 Developed by <span className="text-blue-400">Krishi Sahayogi Team</span><br />
                                 NIELIT Bhubaneshwar
                             </p>
