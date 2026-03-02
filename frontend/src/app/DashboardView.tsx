@@ -12,8 +12,8 @@ import { twMerge } from 'tailwind-merge'
 import { Unit } from './components/types'
 import {
     Monitor, Server, Database, Globe,
-    ChevronRight, Download, Cpu, HardDrive, 
-    Wifi, Zap, Clock, AlertTriangle, 
+    ChevronRight, Download, Cpu, HardDrive,
+    Wifi, Zap, Clock, AlertTriangle,
     Terminal, Pencil, Trash2, X, Save, Activity, Menu, ArrowLeft, Shield
 } from 'lucide-react'
 
@@ -25,40 +25,27 @@ interface DashboardViewProps {
     orgId?: string
 }
 
-// ==========================================
-// 🔴 SET THIS TO FALSE WHEN USING REAL SERVER
-// ==========================================
-const DEMO_MODE = true; 
-
-const DEMO_UNITS: Unit[] = [
-    { id: 'demo-node-01', name: 'SYS/Rig alpha', ip: '192.168.1.105', status: 'online', org_id: 'KRISHI' },
-    { id: 'demo-node-02', name: 'SYS/GPU-Compute-Rig', ip: '10.0.0.52', status: 'online', org_id: 'NIELIT' },
-    { id: 'demo-node-03', name: 'SYS/Database', ip: '172.16.0.4', status: 'offline', org_id: 'KRISHI' },
-];
 
 export default function DashboardView({ orgId: propOrgId }: DashboardViewProps) {
     const [viewOrgId] = useState<string | null>(propOrgId || null)
-    
+
     // Real API Hooks
     const apiUsage = useUsageData(viewOrgId || undefined)
     const apiUnits = useUnits(viewOrgId || undefined)
-    
-    // Demo State
-    const [demoUsageData, setDemoUsageData] = useState<any[]>([])
-    
-    // Determine which data to use based on DEMO_MODE flag
-    const units = DEMO_MODE ? DEMO_UNITS : apiUnits.units
-    const loading = DEMO_MODE ? false : apiUnits.loading
-    const usageData = DEMO_MODE ? demoUsageData : apiUsage.data
-    const selectedUnitId = DEMO_MODE ? apiUsage.selectedUnitId : apiUsage.selectedUnitId
+
+    // Determine which data to use
+    const units = apiUnits.units
+    const loading = apiUnits.loading
+    const usageData = apiUsage.data
+    const selectedUnitId = apiUsage.selectedUnitId
 
     const [selectedUnit, setSelectedUnit] = useState<Unit | null>(null)
     const [currentTime, setCurrentTime] = useState<string>('')
     const [activeTab, setActiveTab] = useState<'metrics' | 'logs'>('metrics')
-    
+
     // Track the selected component metric
     const [selectedMetric, setSelectedMetric] = useState<'cpu' | 'gpu' | 'ram' | 'network_rx'>('cpu')
-    
+
     const [isEditing, setIsEditing] = useState(false)
     const [editModeData, setEditModeData] = useState({ org_id: '', comp_id: '' })
     const [isDeleting, setIsDeleting] = useState(false)
@@ -77,7 +64,7 @@ export default function DashboardView({ orgId: propOrgId }: DashboardViewProps) 
     // Clock and Carousel Timers
     useEffect(() => {
         const timeInterval = setInterval(() => setCurrentTime(new Date().toLocaleTimeString()), 1000)
-        
+
         const logoInterval = setInterval(() => {
             setLogoIndex((prev) => (prev + 1) % logos.length)
         }, 3000)
@@ -94,33 +81,6 @@ export default function DashboardView({ orgId: propOrgId }: DashboardViewProps) 
             if (updatedUnit) setSelectedUnit(updatedUnit)
         }
     }, [units, selectedUnitId])
-
-    useEffect(() => {
-        if (!DEMO_MODE || !selectedUnitId) return;
-        
-        const initialData = Array.from({ length: 30 }).map((_, i) => ({
-            timestamp: new Date(Date.now() - (30 - i) * 1000).toISOString(),
-            cpu_usage: 20 + Math.random() * 60,
-            gpu_load: 10 + Math.random() * 40,
-            ram_usage: 45 + Math.random() * 20,
-            network_rx: 100 + Math.random() * 800,
-        }))
-        setDemoUsageData(initialData)
-
-        const interval = setInterval(() => {
-            setDemoUsageData(prev => {
-                const newData = [...prev.slice(1), {
-                    timestamp: new Date().toISOString(),
-                    cpu_usage: 20 + Math.random() * 60,
-                    gpu_load: 10 + Math.random() * 40,
-                    ram_usage: 45 + Math.random() * 20,
-                    network_rx: 100 + Math.random() * 800,
-                }]
-                return newData
-            })
-        }, 1000)
-        return () => clearInterval(interval)
-    }, [selectedUnitId])
 
     const handleUnitToggle = (unit: Unit) => {
         if (selectedUnitId === unit.id) {
@@ -142,20 +102,11 @@ export default function DashboardView({ orgId: propOrgId }: DashboardViewProps) 
 
     const handleCustomDownload = () => {
         if (!selectedUnitId) return
-        if (DEMO_MODE) {
-            alert("Export is disabled in Demo Mode.")
-            return;
-        }
         window.open(`/api/units/${selectedUnitId}/export?range=1d`, '_blank')
     }
 
     const handleUpdateUnit = async () => {
         if (!selectedUnit) return
-        if (DEMO_MODE) {
-            setIsEditing(false)
-            alert("Editing is disabled in Demo Mode.")
-            return;
-        }
         try {
             const response = await fetch(`/api/units/${selectedUnit.id}`, {
                 method: 'PUT',
@@ -175,12 +126,6 @@ export default function DashboardView({ orgId: propOrgId }: DashboardViewProps) 
     const handleDeleteUnit = async () => {
         if (!selectedUnit) return
         if (!confirm(`Are you sure you want to permanently delete ${selectedUnit.name}? All history will be lost.`)) return
-
-        if (DEMO_MODE) {
-            clearSelection()
-            alert("Deletion simulated in Demo Mode.")
-            return;
-        }
 
         setIsDeleting(true)
         try {
@@ -211,10 +156,10 @@ export default function DashboardView({ orgId: propOrgId }: DashboardViewProps) 
 
     // Data for the Mini-Cards
     const currentMetrics = useMemo(() => [
-        { id: 'cpu', title: 'Processing', label: 'CPU Load', value: (lastData?.cpu ?? lastData?.cpu_usage ?? 0).toFixed(1), unit: '%', icon: <Cpu className="w-5 h-5"/>, color: 'orange' },
-        { id: 'gpu', title: 'Graphics', label: 'GPU Compute', value: (lastData?.gpu ?? lastData?.gpu_load ?? 0).toFixed(1), unit: '%', icon: <Zap className="w-5 h-5"/>, color: 'emerald' },
-        { id: 'ram', title: 'Memory', label: 'RAM Util', value: (lastData?.ram ?? lastData?.ram_usage ?? 0).toFixed(1), unit: '%', icon: <HardDrive className="w-5 h-5"/>, color: 'orange' },
-        { id: 'network_rx', title: 'Network', label: 'RX Rate', value: (lastData?.network_rx ?? 0).toFixed(1), unit: 'KB/s', icon: <Wifi className="w-5 h-5"/>, color: 'orange' }
+        { id: 'cpu', title: 'Processing', label: 'CPU Load', value: (lastData?.cpu ?? lastData?.cpu_usage ?? 0).toFixed(1), unit: '%', icon: <Cpu className="w-5 h-5" />, color: 'orange' },
+        { id: 'gpu', title: 'Graphics', label: 'GPU Compute', value: (lastData?.gpu ?? lastData?.gpu_load ?? 0).toFixed(1), unit: '%', icon: <Zap className="w-5 h-5" />, color: 'emerald' },
+        { id: 'ram', title: 'Memory', label: 'RAM Util', value: (lastData?.ram ?? lastData?.ram_usage ?? 0).toFixed(1), unit: '%', icon: <HardDrive className="w-5 h-5" />, color: 'orange' },
+        { id: 'network_rx', title: 'Network', label: 'RX Rate', value: (lastData?.network_rx ?? 0).toFixed(1), unit: 'KB/s', icon: <Wifi className="w-5 h-5" />, color: 'orange' }
     ], [lastData])
 
     const activeMetricData = currentMetrics.find(m => m.id === selectedMetric)
@@ -229,16 +174,16 @@ export default function DashboardView({ orgId: propOrgId }: DashboardViewProps) 
             {/* HEADER SECTION */}
             <header className="bg-white ring-1 ring-zinc-200/50 shadow-[0_2px_8px_rgba(0,0,0,0.02)] rounded-2xl px-4 lg:px-6 py-3 lg:py-4 flex justify-between items-center z-20 shrink-0">
                 <div className="flex items-center gap-3 lg:gap-6">
-                    <button 
+                    <button
                         onClick={() => setIsMobileMenuOpen(true)}
                         className="lg:hidden p-2 text-zinc-500 hover:bg-zinc-100 hover:text-orange-600 rounded-lg transition-colors"
                     >
                         <Menu size={20} />
                     </button>
                     <div className="flex items-center gap-3 lg:pr-6">
-                        
-                        <Link 
-                            href="/" 
+
+                        <Link
+                            href="/"
                             className="hidden sm:flex items-center justify-center w-10 h-10 bg-zinc-100 text-zinc-600 hover:bg-orange-50 hover:text-orange-600 rounded-xl transition-colors shadow-sm"
                             title="Return to Home"
                         >
@@ -267,10 +212,10 @@ export default function DashboardView({ orgId: propOrgId }: DashboardViewProps) 
             </header>
 
             <div className="flex flex-1 overflow-hidden gap-6 relative z-10 h-full">
-                
+
                 <AnimatePresence>
                     {isMobileMenuOpen && (
-                        <motion.div 
+                        <motion.div
                             initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
                             className="fixed inset-0 bg-zinc-900/20 backdrop-blur-sm z-[100] lg:hidden"
                             onClick={() => setIsMobileMenuOpen(false)}
@@ -286,7 +231,7 @@ export default function DashboardView({ orgId: propOrgId }: DashboardViewProps) 
                         <span className="font-black text-zinc-800 text-xs tracking-widest uppercase flex items-center gap-2">
                             <Activity size={16} className="text-orange-500" /> Fleet Menu
                         </span>
-                        <button 
+                        <button
                             onClick={() => setIsMobileMenuOpen(false)}
                             className="p-1.5 text-zinc-400 hover:text-zinc-800 bg-zinc-50 hover:bg-zinc-100 rounded-md transition-colors"
                         >
@@ -302,14 +247,14 @@ export default function DashboardView({ orgId: propOrgId }: DashboardViewProps) 
                             </span>
                         </div>
                         <div className="w-full bg-zinc-100 rounded-full h-1.5 overflow-hidden shadow-inner">
-                            <div 
-                                className="bg-orange-500 h-1.5 rounded-full transition-all duration-1000 ease-out" 
+                            <div
+                                className="bg-orange-500 h-1.5 rounded-full transition-all duration-1000 ease-out"
                                 style={{ width: `${totalUnits > 0 ? (activeUnits / totalUnits) * 100 : 0}%` }}
                             ></div>
                         </div>
                     </div>
 
-                    <div className="flex-1 overflow-y-auto p-3 lg:p-4 space-y-2 lg:space-y-3 custom-scrollbar bg-white/50">
+                    <div className="flex-1 overflow-y-auto p-3 lg:p-4 space-y-4 lg:space-y-6 custom-scrollbar bg-white/50">
                         {loading ? (
                             <div className="flex flex-col items-center justify-center p-8 text-zinc-400 gap-3">
                                 <div className="w-6 h-6 border-2 border-zinc-200 border-t-orange-500 rounded-full animate-spin" />
@@ -321,82 +266,96 @@ export default function DashboardView({ orgId: propOrgId }: DashboardViewProps) 
                                 <p className="text-xs font-bold text-zinc-500">No nodes found.</p>
                             </div>
                         ) : (
-                            units.map((unit) => {
-                                const isSelected = selectedUnitId === unit.id;
-                                const isOnline = unit.status === 'online';
-                                
-                                return (
-                                    <button
-                                        key={unit.id}
-                                        onClick={() => handleUnitToggle(unit)}
-                                        className={cn(
-                                            "w-full text-left p-3 lg:p-4 rounded-xl transition-all duration-200 relative overflow-hidden group/card shadow-sm",
-                                            isSelected 
-                                                ? 'bg-white ring-1 ring-orange-500 shadow-[0_4px_12px_rgba(249,115,22,0.08)]' 
-                                                : 'bg-white ring-1 ring-zinc-200/60 hover:ring-zinc-300 hover:shadow-md hover:-translate-y-0.5'
-                                        )}
-                                    >
-                                        <div className="flex justify-between items-start mb-2.5">
-                                            <div className="flex items-center gap-2.5 lg:gap-3">
-                                                <div className={cn("p-1.5 lg:p-2 rounded-lg transition-colors", isSelected ? 'bg-orange-50 text-orange-600' : 'bg-zinc-50 text-zinc-400 group-hover/card:text-zinc-700')}>
-                                                    <Monitor className="w-4 h-4" />
-                                                </div>
-                                                <span className={cn("font-bold truncate text-xs lg:text-sm transition-colors", isSelected ? 'text-zinc-900' : 'text-zinc-600 group-hover/card:text-zinc-900')}>
-                                                    {unit.name.split('/').pop()}
-                                                </span>
-                                            </div>
-                                            <div className={cn("w-2 h-2 rounded-full mt-2 shrink-0 shadow-sm", isOnline ? 'bg-emerald-500' : 'bg-zinc-300')} />
+                            Object.entries(
+                                units.reduce((acc, unit) => {
+                                    const org = unit.org_id || 'Global';
+                                    if (!acc[org]) acc[org] = [];
+                                    acc[org].push(unit);
+                                    return acc;
+                                }, {} as Record<string, Unit[]>)
+                            ).map(([org, orgUnits]) => (
+                                <div key={org} className="space-y-2 lg:space-y-3">
+                                    <div className="flex items-center gap-2 px-1 mb-2">
+                                        <div className="p-1 px-1.5 bg-zinc-100 rounded text-[9px] font-black text-zinc-400 border border-zinc-200 uppercase tracking-widest">
+                                            {org}
                                         </div>
-                                        
-                                        <div className="flex justify-between items-center text-xs pl-[36px] lg:pl-[44px]">
-                                            <span className={cn("font-mono text-[10px] lg:text-[11px] font-medium truncate pr-2", isSelected ? 'text-orange-600' : 'text-zinc-400')}>{unit.ip}</span>
-                                            <span className={cn("px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider shrink-0", 
-                                                isSelected ? 'bg-orange-50 text-orange-700' : 'bg-zinc-100 text-zinc-500'
-                                            )}>
-                                                {unit.org_id || 'Global'}
-                                            </span>
-                                        </div>
-                                    </button>
-                                )
-                            })
+                                        <div className="h-[1px] flex-1 bg-zinc-200/60" />
+                                    </div>
+                                    <div className="space-y-2 lg:space-y-3">
+                                        {orgUnits.map((unit) => {
+                                            const isSelected = selectedUnitId === unit.id;
+                                            const isOnline = unit.status === 'online';
+
+                                            return (
+                                                <button
+                                                    key={unit.id}
+                                                    onClick={() => handleUnitToggle(unit)}
+                                                    className={cn(
+                                                        "w-full text-left p-3 lg:p-4 rounded-xl transition-all duration-200 relative overflow-hidden group/card shadow-sm",
+                                                        isSelected
+                                                            ? 'bg-white ring-1 ring-orange-500 shadow-[0_4px_12px_rgba(249,115,22,0.08)]'
+                                                            : 'bg-white ring-1 ring-zinc-200/60 hover:ring-zinc-300 hover:shadow-md hover:-translate-y-0.5'
+                                                    )}
+                                                >
+                                                    <div className="flex justify-between items-start mb-2.5">
+                                                        <div className="flex items-center gap-2.5 lg:gap-3">
+                                                            <div className={cn("p-1.5 lg:p-2 rounded-lg transition-colors", isSelected ? 'bg-orange-50 text-orange-600' : 'bg-zinc-50 text-zinc-400 group-hover/card:text-zinc-700')}>
+                                                                <Monitor className="w-4 h-4" />
+                                                            </div>
+                                                            <span className={cn("font-bold truncate text-xs lg:text-sm transition-colors", isSelected ? 'text-zinc-900' : 'text-zinc-600 group-hover/card:text-zinc-900')}>
+                                                                {unit.name.split('/').pop()}
+                                                            </span>
+                                                        </div>
+                                                        <div className={cn("w-2 h-2 rounded-full mt-2 shrink-0 shadow-sm", isOnline ? 'bg-emerald-500' : 'bg-zinc-300')} />
+                                                    </div>
+
+                                                    <div className="flex justify-between items-center text-xs pl-[36px] lg:pl-[44px]">
+                                                        <span className={cn("font-mono text-[10px] lg:text-[11px] font-medium truncate pr-2", isSelected ? 'text-orange-600' : 'text-zinc-400')}>{unit.ip}</span>
+                                                    </div>
+                                                </button>
+                                            )
+                                        })}
+                                    </div>
+                                </div>
+                            ))
                         )}
                     </div>
 
-                {/* Constant Professional Logo Section */}
-<div className="relative border-t border-zinc-200/60 flex flex-col items-center justify-center shrink-0 shadow-[0_-4px_20px_rgba(0,0,0,0.02)] z-10 py-6 px-4 overflow-hidden">
-    <div className="absolute inset-0 bg-gradient-to-r from-orange-500/10 via-white to-white z-0 pointer-events-none" />
-    <div className="flex items-center justify-between w-full gap-3 mb-5 relative z-10">
-        <div className="flex-1 h-16 flex items-center justify-center p-1 transition-transform hover:scale-105">
-            <img 
-                src="/krishishayogi.png" 
-                alt="Krishi Sahayogi" 
-                className="max-h-full max-w-full object-contain drop-shadow-md" 
-            />
-        </div>
-        <div className="flex-1 h-16 rounded-xl bg-white/70 backdrop-blur-md border border-zinc-200/50 flex items-center justify-center p-1.5 shadow-sm transition-all hover:scale-105">
-            <img 
-                src="/Nielit_logo.jpeg" 
-                alt="NIELIT" 
-                className="h-full w-full object-contain mix-blend-multiply opacity-90" 
-            />
-        </div>
-        <div className="flex-1 h-16 rounded-xl bg-white/70 backdrop-blur-md border border-zinc-200/50 flex items-center justify-center p-1.5 shadow-sm transition-all hover:scale-105">
-            <img 
-                src="/India-AI_logo.jpeg" 
-                alt="India AI" 
-                className="h-full w-full object-contain mix-blend-multiply opacity-90" 
-            />
-        </div>
-    </div>
-    <div className="text-center space-y-1.5 relative z-10">
-        <p className="text-[10px] font-black uppercase tracking-[0.25em] text-zinc-400">
-            Built by <span className="text-orange-500 font-black">Krishi Sahayogi</span>
-        </p>
-        <p className="text-[9px] text-zinc-300 font-bold tracking-[0.35em] uppercase">
-            NIELIT Bhubaneswar
-        </p>
-    </div>
-</div>
+                    {/* Constant Professional Logo Section */}
+                    <div className="relative border-t border-zinc-200/60 flex flex-col items-center justify-center shrink-0 shadow-[0_-4px_20px_rgba(0,0,0,0.02)] z-10 py-6 px-4 overflow-hidden">
+                        <div className="absolute inset-0 bg-gradient-to-r from-orange-500/10 via-white to-white z-0 pointer-events-none" />
+                        <div className="flex items-center justify-between w-full gap-3 mb-5 relative z-10">
+                            <div className="flex-1 h-16 flex items-center justify-center p-1 transition-transform hover:scale-105">
+                                <img
+                                    src="/krishishayogi.png"
+                                    alt="Krishi Sahayogi"
+                                    className="max-h-full max-w-full object-contain drop-shadow-md"
+                                />
+                            </div>
+                            <div className="flex-1 h-16 rounded-xl bg-white/70 backdrop-blur-md border border-zinc-200/50 flex items-center justify-center p-1.5 shadow-sm transition-all hover:scale-105">
+                                <img
+                                    src="/Nielit_logo.jpeg"
+                                    alt="NIELIT"
+                                    className="h-full w-full object-contain mix-blend-multiply opacity-90"
+                                />
+                            </div>
+                            <div className="flex-1 h-16 rounded-xl bg-white/70 backdrop-blur-md border border-zinc-200/50 flex items-center justify-center p-1.5 shadow-sm transition-all hover:scale-105">
+                                <img
+                                    src="/India-AI_logo.jpeg"
+                                    alt="India AI"
+                                    className="h-full w-full object-contain mix-blend-multiply opacity-90"
+                                />
+                            </div>
+                        </div>
+                        <div className="text-center space-y-1.5 relative z-10">
+                            <p className="text-[10px] font-black uppercase tracking-[0.25em] text-zinc-400">
+                                Built by <span className="text-orange-500 font-black">Krishi Sahayogi</span>
+                            </p>
+                            <p className="text-[9px] text-zinc-300 font-bold tracking-[0.35em] uppercase">
+                                NIELIT Bhubaneswar
+                            </p>
+                        </div>
+                    </div>
 
                 </aside>
 
@@ -404,11 +363,11 @@ export default function DashboardView({ orgId: propOrgId }: DashboardViewProps) 
                 <main className="flex-1 flex flex-col relative overflow-hidden w-full h-full">
                     <AnimatePresence mode="wait">
                         {selectedUnit ? (
-                            <motion.div 
-                                key={selectedUnit.id} 
-                                initial={{ opacity: 0, scale: 0.99, y: 5 }} 
-                                animate={{ opacity: 1, scale: 1, y: 0 }} 
-                                exit={{ opacity: 0, scale: 0.99, y: -5 }} 
+                            <motion.div
+                                key={selectedUnit.id}
+                                initial={{ opacity: 0, scale: 0.99, y: 5 }}
+                                animate={{ opacity: 1, scale: 1, y: 0 }}
+                                exit={{ opacity: 0, scale: 0.99, y: -5 }}
                                 transition={{ duration: 0.2, ease: "easeOut" }}
                                 className="flex-1 flex flex-col overflow-y-auto custom-scrollbar h-full"
                             >
@@ -490,7 +449,7 @@ export default function DashboardView({ orgId: propOrgId }: DashboardViewProps) 
                                 {activeTab === 'metrics' ? (
                                     // UPDATED: Changed to lg:flex-row so buttons are on left and graph is on right
                                     <div className="flex flex-col lg:flex-row gap-4 lg:gap-6 pb-4 lg:pb-6 flex-1 min-h-0">
-                                        
+
                                         {/* COMPONENT SELECTOR BUTTONS (Vertical Stack on Desktop) */}
                                         <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-1 gap-3 lg:gap-4 shrink-0 lg:w-48 xl:w-56 overflow-y-auto custom-scrollbar p-1">
                                             {currentMetrics.map((metric) => (
@@ -499,8 +458,8 @@ export default function DashboardView({ orgId: propOrgId }: DashboardViewProps) 
                                                     onClick={() => setSelectedMetric(metric.id as any)}
                                                     className={cn(
                                                         "p-4 lg:p-5 text-left rounded-2xl transition-all duration-300 flex flex-col justify-between items-start group relative z-0",
-                                                        selectedMetric === metric.id 
-                                                            ? 'bg-white ring-2 ring-orange-500 shadow-[0_4px_15px_rgba(249,115,22,0.15)] scale-[1.02] z-10' 
+                                                        selectedMetric === metric.id
+                                                            ? 'bg-white ring-2 ring-orange-500 shadow-[0_4px_15px_rgba(249,115,22,0.15)] scale-[1.02] z-10'
                                                             : 'bg-white ring-1 ring-zinc-200/80 hover:ring-zinc-300 hover:shadow-md hover:-translate-y-0.5'
                                                     )}
                                                 >
@@ -570,7 +529,7 @@ export default function DashboardView({ orgId: propOrgId }: DashboardViewProps) 
                                 <p className="text-zinc-500 max-w-sm text-xs lg:text-sm font-medium leading-relaxed">
                                     Choose a machine from the <span className="text-zinc-700 font-bold">Active Fleet</span> roster to monitor real-time telemetry and manage configurations.
                                 </p>
-                                <button 
+                                <button
                                     onClick={() => setIsMobileMenuOpen(true)}
                                     className="mt-6 lg:hidden px-6 py-2.5 bg-orange-50 text-orange-600 font-bold rounded-xl ring-1 ring-orange-200 shadow-sm text-xs uppercase tracking-wider"
                                 >

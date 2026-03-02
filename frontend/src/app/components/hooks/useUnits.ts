@@ -48,8 +48,11 @@ export const useUnits = (orgId?: string) => {
   }, [fetchUnits, fetchAlerts])
 
   useEffect(() => {
-    fetchUnits()
-    fetchAlerts()
+    const initFetch = async () => {
+      await Promise.all([fetchUnits(), fetchAlerts()])
+      setLoading(false)
+    }
+    initFetch()
     connectWebSocket()
 
     return () => {
