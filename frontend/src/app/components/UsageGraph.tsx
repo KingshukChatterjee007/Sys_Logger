@@ -70,9 +70,6 @@ export const UsageGraph: React.FC<UsageGraphProps> = ({
   const parseTimestamp = (timestamp: string) => {
     if (!timestamp) return 0
     try {
-      // If it's a naive ISO string from Python (2026-02-18T...), 
-      // new Date() treats it as local time correctly.
-      // If we want to be safe against different browser behaviors:
       const d = new Date(timestamp)
       return isNaN(d.getTime()) ? 0 : d.getTime()
     } catch {
@@ -111,7 +108,6 @@ export const UsageGraph: React.FC<UsageGraphProps> = ({
       return parseTimestamp(log.timestamp) >= cutoff
     })
 
-    // If no data in range, show last few points to avoid blank screen
     if (filtered.length === 0 && sortedData.length > 0) {
       return sortedData.slice(-20)
     }
@@ -128,13 +124,13 @@ export const UsageGraph: React.FC<UsageGraphProps> = ({
 
     const getMetricColor = () => {
       switch (metric) {
-        case 'cpu': return { border: '#3b82f6', bg: 'rgba(59, 130, 246, 0.1)' }
-        case 'ram': return { border: '#6366f1', bg: 'rgba(99, 102, 241, 0.1)' }
-        case 'gpu': return { border: '#10b981', bg: 'rgba(16, 185, 129, 0.1)' }
-        case 'network_rx': return { border: '#3b82f6', bg: 'rgba(59, 130, 246, 0.1)' }
-        case 'network_tx': return { border: '#64748b', bg: 'rgba(100, 116, 139, 0.1)' }
-        case 'temperature': return { border: '#f59e0b', bg: 'rgba(245, 158, 11, 0.1)' }
-        default: return { border: '#3b82f6', bg: 'rgba(59, 130, 246, 0.1)' }
+        case 'cpu': return { border: '#f97316', bg: 'rgba(249, 115, 22, 0.15)' } // Orange
+        case 'ram': return { border: '#f97316', bg: 'rgba(249, 115, 22, 0.15)' } // Orange
+        case 'gpu': return { border: '#10b981', bg: 'rgba(16, 185, 129, 0.15)' } // Emerald
+        case 'network_rx': return { border: '#3b82f6', bg: 'rgba(59, 130, 246, 0.15)' } // Blue
+        case 'network_tx': return { border: '#8b5cf6', bg: 'rgba(139, 92, 246, 0.15)' } // Violet
+        case 'temperature': return { border: '#ef4444', bg: 'rgba(239, 68, 68, 0.15)' } // Red
+        default: return { border: '#f97316', bg: 'rgba(249, 115, 22, 0.15)' }
       }
     }
 
@@ -161,11 +157,11 @@ export const UsageGraph: React.FC<UsageGraphProps> = ({
       fill: true,
       tension: 0.4,
       pointRadius: 0,
-      pointHoverRadius: 4,
-      pointHoverBackgroundColor: colors.border,
-      pointHoverBorderColor: '#fff',
-      pointHoverBorderWidth: 2,
-      borderWidth: 2,
+      pointHoverRadius: 5,
+      pointHoverBackgroundColor: '#fff',
+      pointHoverBorderColor: colors.border,
+      pointHoverBorderWidth: 3,
+      borderWidth: 2.5,
     }
 
     return { labels, datasets: [dataset] }
@@ -179,11 +175,11 @@ export const UsageGraph: React.FC<UsageGraphProps> = ({
       legend: { display: false },
       tooltip: {
         enabled: true,
-        backgroundColor: 'rgba(15, 23, 42, 0.95)',
-        titleColor: '#94a3b8',
-        bodyColor: '#f8fafc',
+        backgroundColor: '#18181b', // zinc-900
+        titleColor: '#a1a1aa', // zinc-400
+        bodyColor: '#ffffff',
         titleFont: { size: 10, weight: 600 as any },
-        bodyFont: { size: 12, family: 'monospace', weight: 600 as any },
+        bodyFont: { size: 13, family: 'monospace', weight: 700 as any },
         borderColor: 'rgba(255, 255, 255, 0.1)',
         borderWidth: 1,
         cornerRadius: 8,
@@ -208,21 +204,40 @@ export const UsageGraph: React.FC<UsageGraphProps> = ({
     },
     scales: {
       x: {
-        display: false,
-        grid: { display: false },
+        display: true,
+        grid: { 
+          display: true,
+          color: 'rgba(0, 0, 0, 0.04)', // Light grey grid lines
+          drawTicks: false,
+        },
+        ticks: {
+          color: '#a1a1aa', // zinc-400
+          font: { size: 9, family: 'monospace', weight: 600 as any },
+          maxRotation: 0,
+          maxTicksLimit: 6, // Prevents X axis from getting cluttered
+          padding: 8
+        },
+        border: { display: false }
       },
       y: {
         position: 'right' as const,
+        beginAtZero: true,
+        grid: { 
+          display: true,
+          color: 'rgba(0, 0, 0, 0.04)', // Light grey grid lines
+          drawTicks: false,
+        },
         ticks: {
-          color: 'rgba(148, 163, 184, 0.4)',
-          font: { size: 8, family: 'monospace' },
-          maxTicksLimit: 5,
+          color: '#a1a1aa', // zinc-400
+          font: { size: 10, family: 'monospace', weight: 600 as any },
+          maxTicksLimit: 6,
+          padding: 12,
           callback: (value: any) => {
             if (metric === 'cpu' || metric === 'ram' || metric === 'gpu') return `${value}%`
             return value
           }
         },
-        grid: { color: 'rgba(255, 255, 255, 0.03)' },
+        border: { display: false },
         min: 0,
         max: (metric === 'cpu' || metric === 'ram' || metric === 'gpu') ? 100 : undefined,
       },
@@ -231,25 +246,25 @@ export const UsageGraph: React.FC<UsageGraphProps> = ({
   }), [filteredData, metric])
 
   if (loading) return (
-    <div className="flex flex-col items-center justify-center h-full gap-2">
-      <div className="w-4 h-4 border-2 border-blue-500/20 border-t-blue-400 rounded-full animate-spin" />
-      <span className="text-[10px] font-bold text-slate-600 uppercase tracking-widest">Hydrating...</span>
+    <div className="flex flex-col items-center justify-center h-full gap-3">
+      <div className="w-5 h-5 border-2 border-zinc-200 border-t-orange-500 rounded-full animate-spin" />
+      <span className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">Loading Data...</span>
     </div>
   )
-  if (error) return <div className="p-8 text-center text-red-400 font-bold text-[10px] uppercase">{error}</div>
+  if (error) return <div className="p-8 text-center text-red-500 font-bold text-[10px] uppercase">{error}</div>
 
   return (
     <div className={cn("flex flex-col h-full", className)}>
-      <div className="flex flex-wrap gap-1 mb-2">
+      <div className="flex flex-wrap gap-1.5 mb-3">
         {['30s', '1m', '5m', '15m', '30m', '1h', '6h', '1d'].map((range) => (
           <button
             key={range}
             onClick={() => setSelectedTimeRange(range as TimeRange)}
             className={cn(
-              "px-2 py-0.5 text-[8px] font-black rounded-md transition-all uppercase tracking-widest border",
+              "px-2.5 py-1 text-[9px] font-black rounded-lg transition-all uppercase tracking-widest border",
               selectedTimeRange === range
-                ? 'bg-white/10 text-white border-white/20'
-                : 'text-slate-600 border-transparent hover:text-slate-400 hover:bg-white/5'
+                ? 'bg-orange-50 text-orange-600 border-orange-200 shadow-sm'
+                : 'bg-white text-zinc-400 border-zinc-200/80 hover:text-zinc-700 hover:bg-zinc-50 hover:border-zinc-300'
             )}
           >
             {range}
