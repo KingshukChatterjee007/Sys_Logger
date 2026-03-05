@@ -25,7 +25,7 @@ echo [%date% %time%] Phase 2: Starting PM2 services... >> %LOGFILE%
 pm2 start ecosystem.config.js >> %LOGFILE% 2>&1
 
 if errorlevel 1 (
-    echo [%date% %time%] PM2 start failed. Attempting resurrect... >> %LOGFILE%
+    echo [%date% %time%] pm2 start failed. Attempting resurrect... >> %LOGFILE%
     pm2 resurrect >> %LOGFILE% 2>&1
 )
 
