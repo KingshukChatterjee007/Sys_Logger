@@ -104,7 +104,7 @@ export default function HomeDashboard() {
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ duration: 1, delay: 0.5, ease: [0.16, 1, 0.3, 1] }}
                     >
-                        <Link href="/fleet">
+                        <Link href="/login">
                             <button className="group relative px-8 py-4 bg-zinc-900 text-white rounded-full font-black uppercase tracking-widest text-xs flex items-center gap-3 transition-all hover:scale-105 hover:bg-zinc-800 hover:shadow-[0_8px_30px_rgba(0,0,0,0.12)] overflow-hidden">
                                 <span className="relative z-10 flex items-center gap-2">
                                     Initialize Fleet Hub 

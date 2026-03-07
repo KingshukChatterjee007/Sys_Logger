@@ -462,6 +462,99 @@ def health_check():
         'local_ip': get_local_ip()
     }), 200
 
+@app.route('/api/register_unit', methods=['POST'])
+def register_unit():
+    data = request.json
+    unit_id = data.get('system_id')
+    if not unit_id:
+        return jsonify({'error': 'system_id is required'}), 400
+        
+    org_id = data.get('org_id')
+    comp_id = data.get('comp_id')
+    hostname = data.get('hostname')
+    
+    # Check if this name exists, or create a unique name based on org_id and comp_id
+    assigned_name = data.get('name', f"{org_id}/{comp_id}" if org_id and comp_id else hostname)
+    
+    # Update UnitStore
+    unit = UnitStore.get_unit(unit_id) or {}
+    unit.update({
+        'system_id': unit_id,
+        'org_id': org_id,
+        'comp_id': comp_id,
+        'hostname': hostname,
+        'os_info': data.get('os_info'),
+        'cpu_info': data.get('cpu_info'),
+        'ram_total': data.get('ram_total'),
+        'gpu_info': data.get('gpu_info'),
+        'network_interfaces': data.get('network_interfaces'),
+        'status': 'online',
+        'last_seen': datetime.now().isoformat(),
+        'name': assigned_name
+    })
+    UnitStore.save_unit(unit_id, unit)
+    
+    # Upsert into PostgreSQL 'systems' table
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        cur.execute("""
+            INSERT INTO systems (system_name, system_uuid, hostname)
+            VALUES (%s, %s, %s)
+            ON CONFLICT (system_name) DO UPDATE SET 
+                system_uuid = EXCLUDED.system_uuid,
+                hostname = EXCLUDED.hostname
+        """, (assigned_name, unit_id, hostname))
+        conn.commit()
+        cur.close()
+        conn.close()
+    except Exception as e:
+        print(f"Error upserting system upon registration: {e}")
+
+    socketio.emit('units_update', UnitStore.get_all_units())
+    if org_id:
+        socketio.emit('org_units_update', UnitStore.get_units_by_org(org_id), to=org_id)
+        
+    return jsonify({'status': 'registered', 'unit_id': unit_id}), 201
+
+@app.route('/api/report_usage', methods=['POST'])
+def report_usage():
+    data = request.json
+    if isinstance(data, dict):
+        batch = [data]
+    elif isinstance(data, list):
+        batch = data
+    else:
+        return jsonify({'error': 'Invalid payload format'}), 400
+
+    last_unit_id = None
+    last_org_id = None
+    
+    for item in batch:
+        unit_id = item.get('system_id')
+        if not unit_id:
+            continue
+            
+        unit = UnitStore.get_unit(unit_id)
+        if not unit:
+            return jsonify({'error': 'Unit not registered'}), 404
+            
+        UnitStore.add_usage(unit_id, item)
+        
+        unit['last_seen'] = datetime.now().isoformat()
+        unit['status'] = 'online'
+        UnitStore.save_unit(unit_id, unit)
+        
+        last_unit_id = unit_id
+        last_org_id = unit.get('org_id')
+
+    if last_unit_id:
+        socketio.emit('units_update', UnitStore.get_all_units())
+        if last_org_id:
+            socketio.emit('org_units_update', UnitStore.get_units_by_org(last_org_id), to=last_org_id)
+
+    return jsonify({'status': 'success', 'records_processed': len(batch)}), 200
+
 @app.route('/api/units', methods=['GET'])
 def get_units():
     return jsonify(UnitStore.get_all_units())
@@ -1261,790 +1354,6 @@ def acknowledge_alert(alert_id):
             alert['acknowledged'] = True
             return jsonify({'status': 'acknowledged'}), 200
     return jsonify({'error': 'Alert not found'}), 404
-
-# ============================================================
-# AUTH ROUTES
-# ============================================================
-
-@app.route('/api/auth/login', methods=['POST'])
-def auth_login():
-    data = request.get_json()
-    username = data.get('username', '').strip()
-    password = data.get('password', '')
-    if not username or not password:
-        return jsonify({'error': 'Username and password required'}), 400
-
-    try:
-        conn = get_db_connection()
-        cur = conn.cursor(cursor_factory=RealDictCursor)
-        cur.execute("SELECT * FROM users WHERE username = %s AND is_active = TRUE", (username,))
-        user = cur.fetchone()
-        cur.close()
-        conn.close()
-
-        if not user or not check_password_hash(user['password_hash'], password):
-            return jsonify({'error': 'Invalid credentials'}), 401
-
-        # Get org slug if org user
-        org_slug = None
-        org_name = None
-        if user['role'] == 'org' and user['org_id']:
-            conn2 = get_db_connection()
-            cur2 = conn2.cursor(cursor_factory=RealDictCursor)
-            cur2.execute("SELECT slug, name FROM organizations WHERE org_id = %s", (user['org_id'],))
-            org = cur2.fetchone()
-            cur2.close()
-            conn2.close()
-            if org:
-                org_slug = org['slug']
-                org_name = org['name']
-
-        token = create_token(dict(user))
-        return jsonify({
-            'token': token,
-            'user': {
-                'user_id': user['user_id'],
-                'username': user['username'],
-                'role': user['role'],
-                'org_id': user['org_id'],
-                'org_slug': org_slug,
-                'org_name': org_name,
-            }
-        }), 200
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-@app.route('/api/auth/me', methods=['GET'])
-@token_required
-def auth_me():
-    user = request.current_user
-    org_slug = None
-    org_name = None
-    tier = None
-    if user.get('role') == 'org' and user.get('org_id'):
-        try:
-            conn = get_db_connection()
-            cur = conn.cursor(cursor_factory=RealDictCursor)
-            cur.execute("SELECT slug, name, tier FROM organizations WHERE org_id = %s", (user['org_id'],))
-            org = cur.fetchone()
-            cur.close()
-            conn.close()
-            if org:
-                org_slug = org['slug']
-                org_name = org['name']
-                tier = org['tier']
-        except: pass
-    return jsonify({
-        'user_id': user['user_id'],
-        'username': user['username'],
-        'role': user['role'],
-        'org_id': user.get('org_id'),
-        'org_slug': org_slug,
-        'org_name': org_name,
-        'tier': tier,
-    }), 200
-
-@app.route('/api/auth/forgot-password', methods=['POST'])
-def auth_forgot_password():
-    data = request.get_json()
-    email = data.get('email', '').strip()
-    if not email:
-        return jsonify({'error': 'Email required'}), 400
-
-    try:
-        conn = get_db_connection()
-        cur = conn.cursor(cursor_factory=RealDictCursor)
-        cur.execute("SELECT * FROM users WHERE email = %s AND is_active = TRUE", (email,))
-        user = cur.fetchone()
-        cur.close()
-        conn.close()
-
-        if not user:
-            # Don't reveal whether user exists
-            return jsonify({'message': 'If an account with that email exists, a reset link has been sent.'}), 200
-
-        # Generate reset token (short-lived: 1 hour)
-        reset_payload = {
-            'user_id': user['user_id'],
-            'purpose': 'password_reset',
-            'exp': datetime.utcnow() + timedelta(hours=1)
-        }
-        reset_token = jwt.encode(reset_payload, JWT_SECRET, algorithm='HS256')
-
-        # Build reset link (frontend handles the reset page)
-        frontend_url = os.getenv('FRONTEND_URL', 'http://localhost:3000')
-        reset_link = f"{frontend_url}/reset-password?token={reset_token}"
-
-        # Send email
-        if SMTP_USER and SMTP_PASS:
-            msg = MIMEMultipart()
-            msg['From'] = SMTP_FROM
-            msg['To'] = email
-            msg['Subject'] = 'Sys_Logger Password Reset'
-            body = f"Hello {user['username']},\n\nClick the link below to reset your password:\n{reset_link}\n\nThis link expires in 1 hour.\n\n— Sys_Logger Team"
-            msg.attach(MIMEText(body, 'plain'))
-
-            with smtplib.SMTP(SMTP_SERVER, SMTP_PORT) as server:
-                server.starttls()
-                server.login(SMTP_USER, SMTP_PASS)
-                server.send_message(msg)
-            print(f"[AUTH] Password reset email sent to {email}")
-        else:
-            print(f"[AUTH] SMTP not configured. Reset link: {reset_link}")
-
-        return jsonify({'message': 'If an account with that email exists, a reset link has been sent.'}), 200
-    except Exception as e:
-        print(f"[AUTH] Forgot password error: {e}")
-        return jsonify({'error': 'Failed to process request'}), 500
-
-@app.route('/api/auth/reset-password', methods=['POST'])
-def auth_reset_password():
-    data = request.get_json()
-    token = data.get('token', '')
-    new_password = data.get('password', '')
-    if not token or not new_password:
-        return jsonify({'error': 'Token and new password required'}), 400
-    try:
-        payload = jwt.decode(token, JWT_SECRET, algorithms=['HS256'])
-        if payload.get('purpose') != 'password_reset':
-            return jsonify({'error': 'Invalid token'}), 400
-
-        conn = get_db_connection()
-        cur = conn.cursor()
-        cur.execute("UPDATE users SET password_hash = %s WHERE user_id = %s",
-                    (generate_password_hash(new_password), payload['user_id']))
-        conn.commit()
-        cur.close()
-        conn.close()
-        return jsonify({'message': 'Password updated successfully'}), 200
-    except jwt.ExpiredSignatureError:
-        return jsonify({'error': 'Reset link expired'}), 400
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-# ============================================================
-# ADMIN DASHBOARD
-# ============================================================
-
-@app.route('/api/admin/dashboard', methods=['GET'])
-@admin_required
-def admin_dashboard():
-    try:
-        conn = get_db_connection()
-        cur = conn.cursor(cursor_factory=RealDictCursor)
-
-        cur.execute("SELECT COUNT(*) as total FROM organizations WHERE is_active = TRUE")
-        total_orgs = cur.fetchone()['total']
-
-        cur.execute("SELECT COUNT(*) as total FROM users WHERE is_active = TRUE AND role = 'org'")
-        total_org_users = cur.fetchone()['total']
-
-        # Count total registered nodes from in-memory store
-        all_units = UnitStore.get_all_units()
-        total_nodes = len(all_units)
-        online_nodes = len([u for u in all_units if u.get('status') == 'online'])
-
-        # Orgs list with details
-        cur.execute("""
-            SELECT o.*, 
-                   (SELECT COUNT(*) FROM users u WHERE u.org_id = o.org_id AND u.is_active = TRUE) as user_count
-            FROM organizations o WHERE o.is_active = TRUE
-            ORDER BY o.created_at DESC
-        """)
-        orgs = cur.fetchall()
-        for org in orgs:
-            org['created_at'] = org['created_at'].isoformat() if org.get('created_at') else None
-            org['next_payment_date'] = org['next_payment_date'].isoformat() if org.get('next_payment_date') else None
-            # Count nodes for this org
-            org_units = [u for u in all_units if u.get('org_id') == org['slug']]
-            org['node_count'] = len(org_units)
-            org['online_nodes'] = len([u for u in org_units if u.get('status') == 'online'])
-
-        # Billing summary
-        upcoming_payments = [o for o in orgs if o.get('next_payment_date') and
-                            datetime.fromisoformat(o['next_payment_date']).date() <= (datetime.now() + timedelta(days=7)).date()]
-
-        cur.close()
-        conn.close()
-
-        return jsonify({
-            'total_orgs': total_orgs,
-            'total_org_users': total_org_users,
-            'total_nodes': total_nodes,
-            'online_nodes': online_nodes,
-            'organizations': orgs,
-            'upcoming_payments': len(upcoming_payments),
-            'server_stats': latest_server_stats,
-        }), 200
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-@app.route('/api/admin/orgs', methods=['GET'])
-@admin_required
-def admin_list_orgs():
-    try:
-        conn = get_db_connection()
-        cur = conn.cursor(cursor_factory=RealDictCursor)
-        cur.execute("SELECT * FROM organizations ORDER BY created_at DESC")
-        orgs = cur.fetchall()
-        for org in orgs:
-            org['created_at'] = org['created_at'].isoformat() if org.get('created_at') else None
-            org['next_payment_date'] = org['next_payment_date'].isoformat() if org.get('next_payment_date') else None
-        cur.close()
-        conn.close()
-        return jsonify(orgs), 200
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-# ============================================================
-# ORG DASHBOARD & NODE MANAGEMENT
-# ============================================================
-
-@app.route('/api/org/dashboard', methods=['GET'])
-@token_required
-def org_dashboard():
-    user = request.current_user
-    org_id_param = user.get('org_id')
-    if not org_id_param:
-        return jsonify({'error': 'No organization linked'}), 400
-    try:
-        conn = get_db_connection()
-        cur = conn.cursor(cursor_factory=RealDictCursor)
-        cur.execute("SELECT * FROM organizations WHERE org_id = %s", (org_id_param,))
-        org = cur.fetchone()
-        cur.close()
-        conn.close()
-        if not org:
-            return jsonify({'error': 'Organization not found'}), 404
-
-        org['created_at'] = org['created_at'].isoformat() if org.get('created_at') else None
-        org['next_payment_date'] = org['next_payment_date'].isoformat() if org.get('next_payment_date') else None
-
-        # Nodes for this org
-        all_units = UnitStore.get_all_units()
-        org_units = [u for u in all_units if u.get('org_id') == org['slug']]
-
-        return jsonify({
-            'organization': org,
-            'tier_info': TIERS.get(org['tier'], TIERS['individual']),
-            'nodes': org_units,
-            'total_nodes': len(org_units),
-            'online_nodes': len([u for u in org_units if u.get('status') == 'online']),
-            'node_limit': org['node_limit'],
-        }), 200
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-@app.route('/api/org/nodes', methods=['GET'])
-@token_required
-def org_nodes():
-    user = request.current_user
-    org_id_param = user.get('org_id')
-    if user.get('role') == 'admin':
-        org_slug = request.args.get('org_slug')
-        if org_slug:
-            all_units = UnitStore.get_all_units()
-            return jsonify([u for u in all_units if u.get('org_id') == org_slug]), 200
-        return jsonify(UnitStore.get_all_units()), 200
-
-    if not org_id_param:
-        return jsonify({'error': 'No organization linked'}), 400
-    try:
-        conn = get_db_connection()
-        cur = conn.cursor(cursor_factory=RealDictCursor)
-        cur.execute("SELECT slug, node_limit FROM organizations WHERE org_id = %s", (org_id_param,))
-        org = cur.fetchone()
-        cur.close()
-        conn.close()
-        if not org:
-            return jsonify([]), 200
-        all_units = UnitStore.get_all_units()
-        org_units = [u for u in all_units if u.get('org_id') == org['slug']]
-        return jsonify(org_units), 200
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-@app.route('/api/org/nodes/add', methods=['POST'])
-@token_required
-def org_add_node():
-    """Add a new node for the org. Checks tier limit. Returns node info for client installer."""
-    user = request.current_user
-    org_id_param = user.get('org_id')
-    if user.get('role') == 'admin':
-        # Admin can add for any org by passing org_db_id
-        org_id_param = request.get_json().get('org_db_id', org_id_param)
-    if not org_id_param:
-        return jsonify({'error': 'No organization linked'}), 400
-
-    data = request.get_json()
-    comp_id = data.get('comp_id', '').strip()
-    if not comp_id:
-        return jsonify({'error': 'Node name (comp_id) is required'}), 400
-
-    try:
-        conn = get_db_connection()
-        cur = conn.cursor(cursor_factory=RealDictCursor)
-        cur.execute("SELECT slug, node_limit, tier FROM organizations WHERE org_id = %s", (org_id_param,))
-        org = cur.fetchone()
-        cur.close()
-        conn.close()
-        if not org:
-            return jsonify({'error': 'Organization not found'}), 404
-
-        org_slug = org['slug']
-        all_units = UnitStore.get_all_units()
-        org_units = [u for u in all_units if u.get('org_id') == org_slug]
-
-        if len(org_units) >= org['node_limit']:
-            return jsonify({
-                'error': f"Node limit reached ({org['node_limit']}). Upgrade your tier or request additional nodes.",
-                'current': len(org_units),
-                'limit': org['node_limit']
-            }), 403
-
-        # Check duplicate comp_id for this org
-        for u in org_units:
-            if u.get('comp_id') == comp_id:
-                return jsonify({'error': f"A node named '{comp_id}' already exists in this organization."}), 409
-
-        # Pre-register the node (it will update on first client heartbeat)
-        unit_id = str(uuid.uuid4())[:8]
-        system_id = str(uuid.uuid4())
-        unit = {
-            'id': unit_id,
-            'system_id': system_id,
-            'org_id': org_slug,
-            'comp_id': comp_id,
-            'ip': 'pending',
-            'name': f"{org_slug}/{comp_id}",
-            'status': 'offline',
-            'last_seen': datetime.now().isoformat(),
-            'hostname': comp_id,
-            'os_info': 'Pending first connect',
-            'cpu_info': '',
-            'ram_total': 0,
-            'gpu_info': '{}',
-            'network_interfaces': '{}',
-            'alerts': []
-        }
-        UnitStore.save_unit(unit_id, unit)
-
-        socketio.emit('units_update', UnitStore.get_all_units())
-
-        return jsonify({
-            'message': f"Node '{comp_id}' created.",
-            'unit_id': unit_id,
-            'system_id': system_id,
-            'org_id': org_slug,
-            'comp_id': comp_id,
-        }), 201
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-# ============================================================
-# CLIENT DEPLOY ZIP GENERATOR
-# ============================================================
-
-@app.route('/api/org/download-client', methods=['POST'])
-@token_required
-def download_client_zip():
-    """Generate a pre-filled client deploy ZIP for a specific node."""
-    user = request.current_user
-    data = request.get_json()
-    org_slug = data.get('org_id', '')
-    comp_id = data.get('comp_id', '')
-    system_id = data.get('system_id', str(uuid.uuid4()))
-
-    if not org_slug or not comp_id:
-        return jsonify({'error': 'org_id and comp_id are required'}), 400
-
-    # Path to client_deploy source
-    project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    source_dir = os.path.join(project_root, 'client_deploy')
-    if not os.path.isdir(source_dir):
-        return jsonify({'error': 'client_deploy directory not found on server'}), 404
-
-    try:
-        tmpdir = tempfile.mkdtemp()
-        # Nest inside SysLogger_Client/client_deploy/
-        inner_dir = os.path.join(tmpdir, 'SysLogger_Client', 'client_deploy')
-        shutil.copytree(source_dir, inner_dir)
-
-        # Determine server URL
-        server_url = request.host_url.rstrip('/')
-        frontend_origin = request.headers.get('Origin', '')
-        # Use the backend URL that the client will connect to
-        if os.getenv('BACKEND_URL'):
-            server_url = os.getenv('BACKEND_URL').rstrip('/')
-
-        # Overwrite config
-        config_path = os.path.join(inner_dir, 'unit_client_config.json')
-        config = {
-            'system_id': system_id,
-            'server_url': server_url,
-            'org_id': org_slug,
-            'comp_id': comp_id,
-            'auth_token': '',
-            '_provisioned': True,
-            '_provisioned_at': datetime.now().isoformat()
-        }
-        with open(config_path, 'w') as f:
-            json.dump(config, f, indent=4)
-
-        # Create zip
-        zip_filename = f"SysLogger_Client_{org_slug}_{comp_id}.zip"
-        zip_path = os.path.join(tmpdir, zip_filename)
-        with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zf:
-            for root, dirs, files in os.walk(os.path.join(tmpdir, 'SysLogger_Client')):
-                for file in files:
-                    file_path = os.path.join(root, file)
-                    arcname = os.path.relpath(file_path, tmpdir)
-                    zf.write(file_path, arcname)
-
-        return send_file(zip_path, as_attachment=True, download_name=zip_filename,
-                        mimetype='application/zip')
-    except Exception as e:
-        print(f"[DEPLOY] Error generating client zip: {e}")
-        return jsonify({'error': str(e)}), 500
-
-# ============================================================
-# BILLING INFO
-# ============================================================
-
-@app.route('/api/billing/info', methods=['GET'])
-@token_required
-def billing_info():
-    user = request.current_user
-    try:
-        conn = get_db_connection()
-        cur = conn.cursor(cursor_factory=RealDictCursor)
-
-        if user.get('role') == 'admin':
-            # Admin sees all orgs billing
-            cur.execute("""
-                SELECT o.org_id, o.name, o.slug, o.tier, o.node_limit, o.next_payment_date, o.is_active, o.created_at
-                FROM organizations o ORDER BY o.next_payment_date ASC NULLS LAST
-            """)
-            orgs = cur.fetchall()
-            for o in orgs:
-                o['created_at'] = o['created_at'].isoformat() if o.get('created_at') else None
-                o['next_payment_date'] = o['next_payment_date'].isoformat() if o.get('next_payment_date') else None
-
-            active_subs = len([o for o in orgs if o['is_active']])
-            upcoming = [o for o in orgs if o.get('next_payment_date') and
-                       datetime.fromisoformat(o['next_payment_date']).date() <= (datetime.now() + timedelta(days=7)).date()]
-
-            cur.close()
-            conn.close()
-            return jsonify({
-                'role': 'admin',
-                'active_subscriptions': active_subs,
-                'total_orgs': len(orgs),
-                'upcoming_payments': len(upcoming),
-                'upcoming_payment_orgs': upcoming,
-                'all_orgs': orgs,
-                'tiers': TIERS,
-            }), 200
-        else:
-            # Org user sees their own billing
-            org_id_param = user.get('org_id')
-            if not org_id_param:
-                return jsonify({'error': 'No organization linked'}), 400
-            cur.execute("SELECT * FROM organizations WHERE org_id = %s", (org_id_param,))
-            org = cur.fetchone()
-            cur.close()
-            conn.close()
-            if not org:
-                return jsonify({'error': 'Organization not found'}), 404
-
-            org['created_at'] = org['created_at'].isoformat() if org.get('created_at') else None
-            org['next_payment_date'] = org['next_payment_date'].isoformat() if org.get('next_payment_date') else None
-
-            return jsonify({
-                'role': 'org',
-                'organization': org,
-                'tier_info': TIERS.get(org['tier'], TIERS['individual']),
-                'tiers': TIERS,
-            }), 200
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-@app.route('/api/billing/switch-tier', methods=['POST'])
-@token_required
-def switch_tier():
-    user = request.current_user
-    data = request.get_json()
-    new_tier = data.get('tier', '')
-    if new_tier not in TIERS:
-        return jsonify({'error': f"Invalid tier. Choose from: {list(TIERS.keys())}"}), 400
-
-    org_id_param = user.get('org_id')
-    if user.get('role') == 'admin':
-        org_id_param = data.get('org_db_id', org_id_param)
-    if not org_id_param:
-        return jsonify({'error': 'No organization linked'}), 400
-
-    try:
-        conn = get_db_connection()
-        cur = conn.cursor()
-        new_limit = TIERS[new_tier]['max_nodes']
-        cur.execute("UPDATE organizations SET tier = %s, node_limit = %s WHERE org_id = %s",
-                    (new_tier, new_limit, org_id_param))
-        conn.commit()
-        cur.close()
-        conn.close()
-        return jsonify({'message': f"Tier switched to {TIERS[new_tier]['name']}", 'tier': new_tier, 'node_limit': new_limit}), 200
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-@app.route('/api/register_unit', methods=['POST'])
-def register_unit():
-    try:
-        data = request.get_json()
-        if not data or 'system_id' not in data:
-            return jsonify({'error': 'system_id required'}), 400
-
-        system_id = data['system_id']
-        org_id = data.get('org_id', 'default_org')
-        comp_id = data.get('comp_id', 'default_comp')
-        hostname = data.get('hostname', 'Unknown')
-        os_info = data.get('os_info', 'Unknown')
-        cpu_info = data.get('cpu_info', 'Unknown')
-        ram_total = data.get('ram_total', 0)
-        gpu_info = data.get('gpu_info', '{}')
-        network_interfaces = data.get('network_interfaces', '{}')
-
-        # Check existing
-        existing_unit = None
-        all_units = UnitStore.get_all_units()
-        for unit in all_units:
-            if unit['system_id'] == system_id or (unit.get('org_id') == org_id and unit.get('comp_id') == comp_id):
-                existing_unit = unit
-                break
-
-        if existing_unit:
-            unit_id = existing_unit['id']
-            # Logic to handle machine renames or org moves
-            if existing_unit.get('org_id') != org_id or existing_unit.get('comp_id') != comp_id:
-                print(f"Unit {unit_id} identity updated: {existing_unit.get('org_id')}/{existing_unit.get('comp_id')} -> {org_id}/{comp_id}")
-                existing_unit['org_id'] = org_id
-                existing_unit['comp_id'] = comp_id
-                existing_unit['name'] = f"{org_id}/{comp_id}"
-
-            existing_unit['last_seen'] = datetime.now().isoformat()
-            existing_unit['status'] = 'online'
-            existing_unit['ip'] = request.remote_addr
-            
-            if hostname != 'Unknown': existing_unit['hostname'] = hostname
-            if os_info != 'Unknown': existing_unit['os_info'] = os_info
-            if cpu_info != 'Unknown': existing_unit['cpu_info'] = cpu_info
-            if ram_total > 0: existing_unit['ram_total'] = ram_total
-            if gpu_info != '{}': existing_unit['gpu_info'] = gpu_info
-            if network_interfaces != '{}': existing_unit['network_interfaces'] = network_interfaces
-            
-            UnitStore.save_unit(unit_id, existing_unit)
-            
-            # Broadcast update because identities might have changed
-            socketio.emit('units_update', UnitStore.get_all_units())
-            return jsonify({'unit_id': unit_id, 'org_id': org_id, 'comp_id': comp_id}), 200
-
-        # New Unit
-        unit_id = str(uuid.uuid4())[:8]
-        unit = {
-            'id': unit_id,
-            'system_id': system_id,
-            'org_id': org_id,
-            'comp_id': comp_id,
-            'ip': request.remote_addr,
-            'name': f"{org_id}/{comp_id}",
-            'status': 'online',
-            'last_seen': datetime.now().isoformat(),
-            'hostname': hostname,
-            'os_info': os_info,
-            'cpu_info': cpu_info,
-            'ram_total': ram_total,
-            'gpu_info': gpu_info,
-            'network_interfaces': network_interfaces,
-            'alerts': []
-        }
-
-        UnitStore.save_unit(unit_id, unit)
-        print(f"Unit registered: {org_id}/{comp_id} (ID: {unit_id})")
-
-        socketio.emit('units_update', UnitStore.get_all_units())
-        socketio.emit('org_units_update', UnitStore.get_units_by_org(org_id), room=org_id)
-
-        return jsonify({'unit_id': unit_id, 'org_id': org_id, 'comp_id': comp_id}), 201
-
-    except Exception as e:
-        print(f"Error registering unit: {e}")
-        return jsonify({'error': str(e)}), 500
-
-def process_usage_record(data):
-    """Process a single usage record"""
-    # DEBUG: Print incoming data to console
-    print(f"Received Data: {data}")
-    
-    if not data or 'unit_id' not in data:
-        return False, 'unit_id required'
-
-    unit_id = data['unit_id']
-    org_id = data.get('org_id')
-    unit = UnitStore.get_unit(unit_id)
-    
-    if not unit:
-        return False, 'Unit not registered'
-
-    unit['last_seen'] = datetime.now().isoformat()
-    unit['status'] = 'online'
-    
-    # Update metadata if it has changed (e.g. rename or org move)
-    changed = False
-    if 'org_id' in data and data['org_id'] != unit.get('org_id'):
-        unit['org_id'] = data['org_id']
-        changed = True
-    if 'comp_id' in data and data['comp_id'] != unit.get('comp_id'):
-        unit['comp_id'] = data['comp_id']
-        unit['name'] = f"{unit.get('org_id', 'unknown')}/{data['comp_id']}"
-        changed = True
-    
-    if 'hostname' in data: unit['hostname'] = data['hostname']
-    unit['ip'] = request.remote_addr
-
-    UnitStore.save_unit(unit_id, unit)
-    if changed:
-        socketio.emit('units_update', UnitStore.get_all_units())
-    UnitStore.add_usage(unit_id, data)
-
-    socketio.emit('usage_update', {'unit_id': unit_id, 'data': data})
-    if org_id:
-            socketio.emit('org_usage_update', {'unit_id': unit_id, 'data': data}, room=org_id)
-            
-    return True, 'processed'
-
-@app.route('/api/report_usage', methods=['POST'])
-def report_usage():
-    try:
-        data = request.get_json()
-        
-        # Batch Processing
-        if isinstance(data, list):
-            success_count = 0
-            for item in data:
-                success, _ = process_usage_record(item)
-                if success: success_count += 1
-            
-            return jsonify({'status': 'received batch', 'processed': success_count}), 200
-
-        # Single Record Processing
-        else:
-            success, msg = process_usage_record(data)
-            if not success:
-                # Keep 404 for "Unit not registered" to trigger client re-registration
-                if msg == 'Unit not registered':
-                    return jsonify({'error': msg}), 404
-                return jsonify({'error': msg}), 400
-                
-            return jsonify({'status': 'received'}), 200
-
-    except Exception as e:
-        print(f"Error reporting usage: {e}")
-        return jsonify({'error': str(e)}), 500
-
-@app.route('/api/units/<unit_id>/export', methods=['GET'])
-def export_unit_data(unit_id):
-    try:
-        # DB Connection
-        conn = get_db_connection()
-        cur = conn.cursor(cursor_factory=RealDictCursor)
-        
-        # 1. Resolve System ID
-        cur.execute("SELECT system_id FROM systems WHERE system_name = %s", (unit_id,))
-        res = cur.fetchone()
-        if not res:
-             return jsonify({'error': 'No data found for this unit'}), 404
-        sys_int_id = res['system_id']
-
-        # 2. Check for custom date range
-        start_date_str = request.args.get('start_date')
-        end_date_str = request.args.get('end_date')
-        
-        filter_start = None
-        filter_end = None
-        filename_dates = ""
-        
-        query = "SELECT * FROM system_metrics WHERE system_id = %s "
-        params = [sys_int_id]
-
-        if start_date_str and end_date_str:
-            try:
-                # Parse YYYY-MM-DD
-                filter_start = datetime.strptime(start_date_str, '%Y-%m-%d')
-                # Set end date to end of that day (23:59:59)
-                filter_end = datetime.strptime(end_date_str, '%Y-%m-%d') + timedelta(days=1, seconds=-1)
-                
-                query += "AND timestamp >= %s AND timestamp <= %s "
-                params.extend([filter_start, filter_end])
-                filename_dates = f"{start_date_str}_to_{end_date_str}"
-            except ValueError:
-                return jsonify({'error': 'Invalid date format. Use YYYY-MM-DD'}), 400
-        else:
-            # 2. Fallback to relative range
-            time_range = request.args.get('range', '1d')
-            days = 1
-            if time_range == '5d': days = 5
-            elif time_range == '10d': days = 10
-            elif time_range == 'all': days = 3650
-            
-            filter_start = datetime.now() - timedelta(days=days)
-            query += "AND timestamp >= %s "
-            params.append(filter_start)
-            filename_dates = time_range
-            
-        query += "ORDER BY timestamp ASC"
-
-        cur.execute(query, tuple(params))
-        rows = cur.fetchall()
-
-        si = io.StringIO()
-        cw = csv.writer(si)
-        cw.writerow(['Timestamp', 'CPU (%)', 'RAM (%)', 'GPU Load (%)', 'Network RX (MB)', 'Network TX (MB)'])
-        
-        for r in rows:
-            # Convert timestamp to local string if needed, DB returns datetime obj
-            ts_str = r['timestamp'].strftime('%Y-%m-%d %H:%M:%S')
-            cw.writerow([
-                ts_str,
-                r['cpu_usage'],
-                r['ram_usage'],
-                r['gpu_usage'],
-                r['network_rx_mb'],
-                r['network_tx_mb']
-            ])
-
-        cur.close()
-        conn.close()
-
-        output = make_response(si.getvalue())
-        output.headers["Content-Disposition"] = f"attachment; filename={unit_id}_usage_{filename_dates}.csv"
-        output.headers["Content-type"] = "text/csv"
-        return output
-
-    except Exception as e:
-        print(f"Export error: {e}")
-        return jsonify({'error': str(e)}), 500
-
-@socketio.on('connect')
-def handle_connect():
-    emit('units_update', UnitStore.get_all_units())
-
-@socketio.on('join_org')
-def handle_join_org(data):
-    org_id = data.get('org_id')
-    if org_id:
-        from flask_socketio import join_room
-        join_room(org_id)
-        emit('org_units_update', UnitStore.get_units_by_org(org_id))
 
 if __name__ == '__main__':
     load_units_db() # Load saved units
