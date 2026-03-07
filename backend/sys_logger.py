@@ -6,6 +6,13 @@ import time
 import atexit
 import signal
 import json
+import shutil
+import zipfile
+import tempfile
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+from functools import wraps
 from datetime import datetime, timedelta
 import requests
 import socket
@@ -14,8 +21,10 @@ import uuid
 import pickle
 import csv
 import io
+import jwt
 import psycopg2
 from psycopg2.extras import RealDictCursor
+from werkzeug.security import generate_password_hash, check_password_hash
 try:
     import redis
 except ImportError:
@@ -47,9 +56,142 @@ DB_USER = os.getenv('DB_USER', 'postgres')
 DB_PASS = os.getenv('DB_PASS', 'postgres')
 DB_NAME = 'sys_logger'
 
+# Auth Config
+JWT_SECRET = os.getenv('JWT_SECRET', 'syslogger-default-secret-change-me')
+JWT_EXPIRATION_HOURS = int(os.getenv('JWT_EXPIRATION_HOURS', '24'))
+
+# SMTP Config
+SMTP_SERVER = os.getenv('SMTP_SERVER', 'smtp.gmail.com')
+SMTP_PORT = int(os.getenv('SMTP_PORT', '587'))
+SMTP_USER = os.getenv('SMTP_USER', '')
+SMTP_PASS = os.getenv('SMTP_PASS', '')
+SMTP_FROM = os.getenv('SMTP_FROM', SMTP_USER)
+
+# Tier definitions
+TIERS = {
+    'individual': {'name': 'Individual', 'max_nodes': 1, 'price_label': 'Free / Basic'},
+    'business':   {'name': 'Business',   'max_nodes': 2, 'price_label': 'Contact Sales'},
+}
+
 def get_db_connection():
     conn = psycopg2.connect(host=DB_HOST, user=DB_USER, password=DB_PASS, dbname=DB_NAME)
     return conn
+
+# ============================================================
+# AUTH SEED DATA (tables created by database_schema.sql)
+# ============================================================
+def seed_auth_data():
+    """Seed default admin user and NIELIT-BBSR org. Tables must already exist via database_schema.sql."""
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+
+        # Check that auth tables exist (schema must have been applied)
+        cur.execute("""
+            SELECT EXISTS (
+                SELECT FROM information_schema.tables WHERE table_name = 'users'
+            ) AND EXISTS (
+                SELECT FROM information_schema.tables WHERE table_name = 'organizations'
+            )
+        """)
+        if not cur.fetchone()[0]:
+            print("[AUTH] Tables 'users' and 'organizations' not found. Run database_schema.sql first!")
+            cur.close()
+            conn.close()
+            return
+
+        # Seed: Admin user (admin / admin123 — CHANGE IN PRODUCTION)
+        cur.execute("SELECT 1 FROM users WHERE username = 'admin'")
+        if not cur.fetchone():
+            cur.execute("""
+                INSERT INTO users (username, email, password_hash, role)
+                VALUES (%s, %s, %s, 'admin')
+            """, ('admin', 'admin@syslogger.local', generate_password_hash('admin123')))
+            print("[AUTH] Default admin user created (admin / admin123)")
+
+        # Seed: NIELIT-BBSR organization + org user
+        cur.execute("SELECT org_id FROM organizations WHERE slug = 'NIELIT-BBSR'")
+        row = cur.fetchone()
+        if not row:
+            cur.execute("""
+                INSERT INTO organizations (name, slug, tier, node_limit, contact_email, next_payment_date)
+                VALUES (%s, %s, %s, %s, %s, %s)
+                RETURNING org_id
+            """, ('NIELIT Bhubaneswar', 'NIELIT-BBSR', 'business', 2, 'nielit@example.com',
+                  (datetime.now() + timedelta(days=30)).date()))
+            org_id = cur.fetchone()[0]
+
+            cur.execute("""
+                INSERT INTO users (username, email, password_hash, role, org_id)
+                VALUES (%s, %s, %s, 'org', %s)
+            """, ('nielit', 'nielit@example.com', generate_password_hash('nielit123'), org_id))
+            print("[AUTH] NIELIT-BBSR org + user created (nielit / nielit123)")
+
+        conn.commit()
+        cur.close()
+        conn.close()
+        print("[AUTH] Auth seed data initialized.")
+    except Exception as e:
+        print(f"[AUTH] Error seeding auth data: {e}")
+
+# Run at import time
+seed_auth_data()
+
+# ============================================================
+# JWT HELPERS & AUTH DECORATOR
+# ============================================================
+def create_token(user_dict):
+    payload = {
+        'user_id': user_dict['user_id'],
+        'username': user_dict['username'],
+        'role': user_dict['role'],
+        'org_id': user_dict.get('org_id'),
+        'exp': datetime.utcnow() + timedelta(hours=JWT_EXPIRATION_HOURS)
+    }
+    return jwt.encode(payload, JWT_SECRET, algorithm='HS256')
+
+def decode_token(token):
+    return jwt.decode(token, JWT_SECRET, algorithms=['HS256'])
+
+def token_required(f):
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        token = None
+        auth_header = request.headers.get('Authorization', '')
+        if auth_header.startswith('Bearer '):
+            token = auth_header[7:]
+        if not token:
+            return jsonify({'error': 'Token required'}), 401
+        try:
+            data = decode_token(token)
+            request.current_user = data
+        except jwt.ExpiredSignatureError:
+            return jsonify({'error': 'Token expired'}), 401
+        except jwt.InvalidTokenError:
+            return jsonify({'error': 'Invalid token'}), 401
+        return f(*args, **kwargs)
+    return decorated
+
+def admin_required(f):
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        token = None
+        auth_header = request.headers.get('Authorization', '')
+        if auth_header.startswith('Bearer '):
+            token = auth_header[7:]
+        if not token:
+            return jsonify({'error': 'Token required'}), 401
+        try:
+            data = decode_token(token)
+            if data.get('role') != 'admin':
+                return jsonify({'error': 'Admin access required'}), 403
+            request.current_user = data
+        except jwt.ExpiredSignatureError:
+            return jsonify({'error': 'Token expired'}), 401
+        except jwt.InvalidTokenError:
+            return jsonify({'error': 'Invalid token'}), 401
+        return f(*args, **kwargs)
+    return decorated
 
 app = Flask(__name__)
 DATA_DIR = 'unit_data'
@@ -435,6 +577,563 @@ def get_system_usage_route():
 
 # --- FLEET MANAGEMENT APIS ---
 
+# ============================================================
+# AUTH ROUTES
+# ============================================================
+
+@app.route('/api/auth/login', methods=['POST'])
+def auth_login():
+    data = request.get_json()
+    username = data.get('username', '').strip()
+    password = data.get('password', '')
+    if not username or not password:
+        return jsonify({'error': 'Username and password required'}), 400
+
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor(cursor_factory=RealDictCursor)
+        cur.execute("SELECT * FROM users WHERE username = %s AND is_active = TRUE", (username,))
+        user = cur.fetchone()
+        cur.close()
+        conn.close()
+
+        if not user or not check_password_hash(user['password_hash'], password):
+            return jsonify({'error': 'Invalid credentials'}), 401
+
+        # Get org slug if org user
+        org_slug = None
+        org_name = None
+        if user['role'] == 'org' and user['org_id']:
+            conn2 = get_db_connection()
+            cur2 = conn2.cursor(cursor_factory=RealDictCursor)
+            cur2.execute("SELECT slug, name FROM organizations WHERE org_id = %s", (user['org_id'],))
+            org = cur2.fetchone()
+            cur2.close()
+            conn2.close()
+            if org:
+                org_slug = org['slug']
+                org_name = org['name']
+
+        token = create_token(dict(user))
+        return jsonify({
+            'token': token,
+            'user': {
+                'user_id': user['user_id'],
+                'username': user['username'],
+                'role': user['role'],
+                'org_id': user['org_id'],
+                'org_slug': org_slug,
+                'org_name': org_name,
+            }
+        }), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/auth/me', methods=['GET'])
+@token_required
+def auth_me():
+    user = request.current_user
+    org_slug = None
+    org_name = None
+    tier = None
+    if user.get('role') == 'org' and user.get('org_id'):
+        try:
+            conn = get_db_connection()
+            cur = conn.cursor(cursor_factory=RealDictCursor)
+            cur.execute("SELECT slug, name, tier FROM organizations WHERE org_id = %s", (user['org_id'],))
+            org = cur.fetchone()
+            cur.close()
+            conn.close()
+            if org:
+                org_slug = org['slug']
+                org_name = org['name']
+                tier = org['tier']
+        except: pass
+    return jsonify({
+        'user_id': user['user_id'],
+        'username': user['username'],
+        'role': user['role'],
+        'org_id': user.get('org_id'),
+        'org_slug': org_slug,
+        'org_name': org_name,
+        'tier': tier,
+    }), 200
+
+@app.route('/api/auth/forgot-password', methods=['POST'])
+def auth_forgot_password():
+    data = request.get_json()
+    email = data.get('email', '').strip()
+    if not email:
+        return jsonify({'error': 'Email required'}), 400
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor(cursor_factory=RealDictCursor)
+        cur.execute("SELECT * FROM users WHERE email = %s AND is_active = TRUE", (email,))
+        user = cur.fetchone()
+        cur.close()
+        conn.close()
+        if not user:
+            return jsonify({'message': 'If an account with that email exists, a reset link has been sent.'}), 200
+
+        reset_payload = {
+            'user_id': user['user_id'],
+            'purpose': 'password_reset',
+            'exp': datetime.utcnow() + timedelta(hours=1)
+        }
+        reset_token = jwt.encode(reset_payload, JWT_SECRET, algorithm='HS256')
+        frontend_url = os.getenv('FRONTEND_URL', 'http://localhost:3000')
+        reset_link = f"{frontend_url}/reset-password?token={reset_token}"
+
+        if SMTP_USER and SMTP_PASS:
+            msg = MIMEMultipart()
+            msg['From'] = SMTP_FROM
+            msg['To'] = email
+            msg['Subject'] = 'Sys_Logger Password Reset'
+            body = f"Hello {user['username']},\n\nClick the link below to reset your password:\n{reset_link}\n\nThis link expires in 1 hour.\n\n— Sys_Logger Team"
+            msg.attach(MIMEText(body, 'plain'))
+            with smtplib.SMTP(SMTP_SERVER, SMTP_PORT) as server:
+                server.starttls()
+                server.login(SMTP_USER, SMTP_PASS)
+                server.send_message(msg)
+            print(f"[AUTH] Password reset email sent to {email}")
+        else:
+            print(f"[AUTH] SMTP not configured. Reset link: {reset_link}")
+
+        return jsonify({'message': 'If an account with that email exists, a reset link has been sent.'}), 200
+    except Exception as e:
+        print(f"[AUTH] Forgot password error: {e}")
+        return jsonify({'error': 'Failed to process request'}), 500
+
+@app.route('/api/auth/reset-password', methods=['POST'])
+def auth_reset_password():
+    data = request.get_json()
+    token_val = data.get('token', '')
+    new_password = data.get('password', '')
+    if not token_val or not new_password:
+        return jsonify({'error': 'Token and new password required'}), 400
+    try:
+        payload = jwt.decode(token_val, JWT_SECRET, algorithms=['HS256'])
+        if payload.get('purpose') != 'password_reset':
+            return jsonify({'error': 'Invalid token'}), 400
+        conn = get_db_connection()
+        cur = conn.cursor()
+        cur.execute("UPDATE users SET password_hash = %s WHERE user_id = %s",
+                    (generate_password_hash(new_password), payload['user_id']))
+        conn.commit()
+        cur.close()
+        conn.close()
+        return jsonify({'message': 'Password updated successfully'}), 200
+    except jwt.ExpiredSignatureError:
+        return jsonify({'error': 'Reset link expired'}), 400
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+# ============================================================
+# ADMIN DASHBOARD
+# ============================================================
+
+@app.route('/api/admin/dashboard', methods=['GET'])
+@admin_required
+def admin_dashboard():
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor(cursor_factory=RealDictCursor)
+        cur.execute("SELECT COUNT(*) as total FROM organizations WHERE is_active = TRUE")
+        total_orgs = cur.fetchone()['total']
+        cur.execute("SELECT COUNT(*) as total FROM users WHERE is_active = TRUE AND role = 'org'")
+        total_org_users = cur.fetchone()['total']
+
+        all_units = UnitStore.get_all_units()
+        total_nodes = len(all_units)
+        online_nodes = len([u for u in all_units if u.get('status') == 'online'])
+
+        cur.execute("""
+            SELECT o.*,
+                   (SELECT COUNT(*) FROM users u WHERE u.org_id = o.org_id AND u.is_active = TRUE) as user_count
+            FROM organizations o WHERE o.is_active = TRUE
+            ORDER BY o.created_at DESC
+        """)
+        orgs = cur.fetchall()
+        for org in orgs:
+            org['created_at'] = org['created_at'].isoformat() if org.get('created_at') else None
+            org['next_payment_date'] = org['next_payment_date'].isoformat() if org.get('next_payment_date') else None
+            org_units = [u for u in all_units if u.get('org_id') == org['slug']]
+            org['node_count'] = len(org_units)
+            org['online_nodes'] = len([u for u in org_units if u.get('status') == 'online'])
+
+        upcoming_payments = [o for o in orgs if o.get('next_payment_date') and
+                            datetime.fromisoformat(o['next_payment_date']).date() <= (datetime.now() + timedelta(days=7)).date()]
+        cur.close()
+        conn.close()
+
+        return jsonify({
+            'total_orgs': total_orgs,
+            'total_org_users': total_org_users,
+            'total_nodes': total_nodes,
+            'online_nodes': online_nodes,
+            'organizations': orgs,
+            'upcoming_payments': len(upcoming_payments),
+            'server_stats': latest_server_stats,
+        }), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/admin/orgs', methods=['GET'])
+@admin_required
+def admin_list_orgs():
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor(cursor_factory=RealDictCursor)
+        cur.execute("SELECT * FROM organizations ORDER BY created_at DESC")
+        orgs = cur.fetchall()
+        for org in orgs:
+            org['created_at'] = org['created_at'].isoformat() if org.get('created_at') else None
+            org['next_payment_date'] = org['next_payment_date'].isoformat() if org.get('next_payment_date') else None
+        cur.close()
+        conn.close()
+        return jsonify(orgs), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/admin/register-org', methods=['POST'])
+@admin_required
+def admin_register_org():
+    """Admin endpoint to register a new organization and its user account."""
+    data = request.get_json()
+    org_name = data.get('name', '').strip()
+    org_slug = data.get('slug', '').strip()
+    tier = data.get('tier', 'individual')
+    contact_email = data.get('contact_email', '').strip()
+    username = data.get('username', '').strip()
+    password = data.get('password', '')
+
+    if not org_name or not org_slug or not username or not password:
+        return jsonify({'error': 'name, slug, username, and password are required'}), 400
+    if tier not in TIERS:
+        return jsonify({'error': f"Invalid tier. Choose from: {list(TIERS.keys())}"}), 400
+
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor(cursor_factory=RealDictCursor)
+
+        # Check existing
+        cur.execute("SELECT 1 FROM organizations WHERE slug = %s OR name = %s", (org_slug, org_name))
+        if cur.fetchone():
+            cur.close(); conn.close()
+            return jsonify({'error': 'Organization name or slug already exists'}), 409
+
+        cur.execute("SELECT 1 FROM users WHERE username = %s", (username,))
+        if cur.fetchone():
+            cur.close(); conn.close()
+            return jsonify({'error': 'Username already taken'}), 409
+
+        node_limit = TIERS[tier]['max_nodes']
+        cur.execute("""
+            INSERT INTO organizations (name, slug, tier, node_limit, contact_email, next_payment_date)
+            VALUES (%s, %s, %s, %s, %s, %s)
+            RETURNING org_id
+        """, (org_name, org_slug, tier, node_limit, contact_email,
+              (datetime.now() + timedelta(days=30)).date()))
+        org_id = cur.fetchone()['org_id']
+
+        cur.execute("""
+            INSERT INTO users (username, email, password_hash, role, org_id)
+            VALUES (%s, %s, %s, 'org', %s)
+        """, (username, contact_email, generate_password_hash(password), org_id))
+
+        conn.commit()
+        cur.close()
+        conn.close()
+        print(f"[AUTH] Org '{org_slug}' registered with user '{username}'")
+        return jsonify({
+            'message': f"Organization '{org_name}' created with user '{username}'",
+            'org_id': org_id,
+            'slug': org_slug,
+            'tier': tier,
+            'node_limit': node_limit,
+        }), 201
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+# ============================================================
+# ORG DASHBOARD & NODE MANAGEMENT
+# ============================================================
+
+@app.route('/api/org/dashboard', methods=['GET'])
+@token_required
+def org_dashboard():
+    user = request.current_user
+    org_id_param = user.get('org_id')
+    if not org_id_param:
+        return jsonify({'error': 'No organization linked'}), 400
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor(cursor_factory=RealDictCursor)
+        cur.execute("SELECT * FROM organizations WHERE org_id = %s", (org_id_param,))
+        org = cur.fetchone()
+        cur.close()
+        conn.close()
+        if not org:
+            return jsonify({'error': 'Organization not found'}), 404
+
+        org['created_at'] = org['created_at'].isoformat() if org.get('created_at') else None
+        org['next_payment_date'] = org['next_payment_date'].isoformat() if org.get('next_payment_date') else None
+
+        all_units = UnitStore.get_all_units()
+        org_units = [u for u in all_units if u.get('org_id') == org['slug']]
+
+        return jsonify({
+            'organization': org,
+            'tier_info': TIERS.get(org['tier'], TIERS['individual']),
+            'nodes': org_units,
+            'total_nodes': len(org_units),
+            'online_nodes': len([u for u in org_units if u.get('status') == 'online']),
+            'node_limit': org['node_limit'],
+        }), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/org/nodes', methods=['GET'])
+@token_required
+def org_nodes():
+    user = request.current_user
+    org_id_param = user.get('org_id')
+    if user.get('role') == 'admin':
+        org_slug = request.args.get('org_slug')
+        if org_slug:
+            all_units = UnitStore.get_all_units()
+            return jsonify([u for u in all_units if u.get('org_id') == org_slug]), 200
+        return jsonify(UnitStore.get_all_units()), 200
+    if not org_id_param:
+        return jsonify({'error': 'No organization linked'}), 400
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor(cursor_factory=RealDictCursor)
+        cur.execute("SELECT slug, node_limit FROM organizations WHERE org_id = %s", (org_id_param,))
+        org = cur.fetchone()
+        cur.close()
+        conn.close()
+        if not org:
+            return jsonify([]), 200
+        all_units = UnitStore.get_all_units()
+        return jsonify([u for u in all_units if u.get('org_id') == org['slug']]), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/org/nodes/add', methods=['POST'])
+@token_required
+def org_add_node():
+    """Add a new node for the org. Checks tier limit."""
+    user = request.current_user
+    org_id_param = user.get('org_id')
+    if user.get('role') == 'admin':
+        org_id_param = request.get_json().get('org_db_id', org_id_param)
+    if not org_id_param:
+        return jsonify({'error': 'No organization linked'}), 400
+
+    data = request.get_json()
+    comp_id = data.get('comp_id', '').strip()
+    if not comp_id:
+        return jsonify({'error': 'Node name (comp_id) is required'}), 400
+
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor(cursor_factory=RealDictCursor)
+        cur.execute("SELECT slug, node_limit, tier FROM organizations WHERE org_id = %s", (org_id_param,))
+        org = cur.fetchone()
+        cur.close()
+        conn.close()
+        if not org:
+            return jsonify({'error': 'Organization not found'}), 404
+
+        org_slug = org['slug']
+        all_units = UnitStore.get_all_units()
+        org_units = [u for u in all_units if u.get('org_id') == org_slug]
+
+        if len(org_units) >= org['node_limit']:
+            return jsonify({
+                'error': f"Node limit reached ({org['node_limit']}). Upgrade your tier or request additional nodes.",
+                'current': len(org_units),
+                'limit': org['node_limit']
+            }), 403
+
+        for u in org_units:
+            if u.get('comp_id') == comp_id:
+                return jsonify({'error': f"A node named '{comp_id}' already exists in this organization."}), 409
+
+        unit_id = str(uuid.uuid4())[:8]
+        system_id = str(uuid.uuid4())
+        unit = {
+            'id': unit_id,
+            'system_id': system_id,
+            'org_id': org_slug,
+            'comp_id': comp_id,
+            'ip': 'pending',
+            'name': f"{org_slug}/{comp_id}",
+            'status': 'offline',
+            'last_seen': datetime.now().isoformat(),
+            'hostname': comp_id,
+            'os_info': 'Pending first connect',
+            'cpu_info': '',
+            'ram_total': 0,
+            'gpu_info': '{}',
+            'network_interfaces': '{}',
+            'alerts': []
+        }
+        UnitStore.save_unit(unit_id, unit)
+        socketio.emit('units_update', UnitStore.get_all_units())
+
+        return jsonify({
+            'message': f"Node '{comp_id}' created.",
+            'unit_id': unit_id,
+            'system_id': system_id,
+            'org_id': org_slug,
+            'comp_id': comp_id,
+        }), 201
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+# ============================================================
+# CLIENT DEPLOY ZIP GENERATOR
+# ============================================================
+
+@app.route('/api/org/download-client', methods=['POST'])
+@token_required
+def download_client_zip():
+    """Generate a pre-filled client deploy ZIP for a specific node."""
+    data = request.get_json()
+    org_slug = data.get('org_id', '')
+    comp_id = data.get('comp_id', '')
+    system_id = data.get('system_id', str(uuid.uuid4()))
+
+    if not org_slug or not comp_id:
+        return jsonify({'error': 'org_id and comp_id are required'}), 400
+
+    project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    source_dir = os.path.join(project_root, 'client_deploy')
+    if not os.path.isdir(source_dir):
+        return jsonify({'error': 'client_deploy directory not found on server'}), 404
+
+    try:
+        tmpdir = tempfile.mkdtemp()
+        inner_dir = os.path.join(tmpdir, 'SysLogger_Client', 'client_deploy')
+        shutil.copytree(source_dir, inner_dir)
+
+        server_url = request.host_url.rstrip('/')
+        if os.getenv('BACKEND_URL'):
+            server_url = os.getenv('BACKEND_URL').rstrip('/')
+
+        config_path = os.path.join(inner_dir, 'unit_client_config.json')
+        config = {
+            'system_id': system_id,
+            'server_url': server_url,
+            'org_id': org_slug,
+            'comp_id': comp_id,
+            'auth_token': '',
+            '_provisioned': True,
+            '_provisioned_at': datetime.now().isoformat()
+        }
+        with open(config_path, 'w') as f:
+            json.dump(config, f, indent=4)
+
+        zip_filename = f"SysLogger_Client_{org_slug}_{comp_id}.zip"
+        zip_path = os.path.join(tmpdir, zip_filename)
+        with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zf:
+            for root, dirs, files in os.walk(os.path.join(tmpdir, 'SysLogger_Client')):
+                for file in files:
+                    file_path = os.path.join(root, file)
+                    arcname = os.path.relpath(file_path, tmpdir)
+                    zf.write(file_path, arcname)
+
+        return send_file(zip_path, as_attachment=True, download_name=zip_filename,
+                        mimetype='application/zip')
+    except Exception as e:
+        print(f"[DEPLOY] Error generating client zip: {e}")
+        return jsonify({'error': str(e)}), 500
+
+# ============================================================
+# BILLING INFO
+# ============================================================
+
+@app.route('/api/billing/info', methods=['GET'])
+@token_required
+def billing_info():
+    user = request.current_user
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor(cursor_factory=RealDictCursor)
+
+        if user.get('role') == 'admin':
+            cur.execute("""
+                SELECT o.org_id, o.name, o.slug, o.tier, o.node_limit, o.next_payment_date, o.is_active, o.created_at
+                FROM organizations o ORDER BY o.next_payment_date ASC NULLS LAST
+            """)
+            orgs = cur.fetchall()
+            for o in orgs:
+                o['created_at'] = o['created_at'].isoformat() if o.get('created_at') else None
+                o['next_payment_date'] = o['next_payment_date'].isoformat() if o.get('next_payment_date') else None
+            active_subs = len([o for o in orgs if o['is_active']])
+            upcoming = [o for o in orgs if o.get('next_payment_date') and
+                       datetime.fromisoformat(o['next_payment_date']).date() <= (datetime.now() + timedelta(days=7)).date()]
+            cur.close()
+            conn.close()
+            return jsonify({
+                'role': 'admin',
+                'active_subscriptions': active_subs,
+                'total_orgs': len(orgs),
+                'upcoming_payments': len(upcoming),
+                'upcoming_payment_orgs': upcoming,
+                'all_orgs': orgs,
+                'tiers': TIERS,
+            }), 200
+        else:
+            org_id_param = user.get('org_id')
+            if not org_id_param:
+                return jsonify({'error': 'No organization linked'}), 400
+            cur.execute("SELECT * FROM organizations WHERE org_id = %s", (org_id_param,))
+            org = cur.fetchone()
+            cur.close()
+            conn.close()
+            if not org:
+                return jsonify({'error': 'Organization not found'}), 404
+            org['created_at'] = org['created_at'].isoformat() if org.get('created_at') else None
+            org['next_payment_date'] = org['next_payment_date'].isoformat() if org.get('next_payment_date') else None
+            return jsonify({
+                'role': 'org',
+                'organization': org,
+                'tier_info': TIERS.get(org['tier'], TIERS['individual']),
+                'tiers': TIERS,
+            }), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/billing/switch-tier', methods=['POST'])
+@token_required
+def switch_tier():
+    user = request.current_user
+    data = request.get_json()
+    new_tier = data.get('tier', '')
+    if new_tier not in TIERS:
+        return jsonify({'error': f"Invalid tier. Choose from: {list(TIERS.keys())}"}), 400
+    org_id_param = user.get('org_id')
+    if user.get('role') == 'admin':
+        org_id_param = data.get('org_db_id', org_id_param)
+    if not org_id_param:
+        return jsonify({'error': 'No organization linked'}), 400
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        new_limit = TIERS[new_tier]['max_nodes']
+        cur.execute("UPDATE organizations SET tier = %s, node_limit = %s WHERE org_id = %s",
+                    (new_tier, new_limit, org_id_param))
+        conn.commit()
+        cur.close()
+        conn.close()
+        return jsonify({'message': f"Tier switched to {TIERS[new_tier]['name']}", 'tier': new_tier, 'node_limit': new_limit}), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
 @app.route('/api/units/<unit_id>', methods=['DELETE'])
 def delete_unit(unit_id):
     """Delete a unit from the registry"""
@@ -562,6 +1261,541 @@ def acknowledge_alert(alert_id):
             alert['acknowledged'] = True
             return jsonify({'status': 'acknowledged'}), 200
     return jsonify({'error': 'Alert not found'}), 404
+
+# ============================================================
+# AUTH ROUTES
+# ============================================================
+
+@app.route('/api/auth/login', methods=['POST'])
+def auth_login():
+    data = request.get_json()
+    username = data.get('username', '').strip()
+    password = data.get('password', '')
+    if not username or not password:
+        return jsonify({'error': 'Username and password required'}), 400
+
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor(cursor_factory=RealDictCursor)
+        cur.execute("SELECT * FROM users WHERE username = %s AND is_active = TRUE", (username,))
+        user = cur.fetchone()
+        cur.close()
+        conn.close()
+
+        if not user or not check_password_hash(user['password_hash'], password):
+            return jsonify({'error': 'Invalid credentials'}), 401
+
+        # Get org slug if org user
+        org_slug = None
+        org_name = None
+        if user['role'] == 'org' and user['org_id']:
+            conn2 = get_db_connection()
+            cur2 = conn2.cursor(cursor_factory=RealDictCursor)
+            cur2.execute("SELECT slug, name FROM organizations WHERE org_id = %s", (user['org_id'],))
+            org = cur2.fetchone()
+            cur2.close()
+            conn2.close()
+            if org:
+                org_slug = org['slug']
+                org_name = org['name']
+
+        token = create_token(dict(user))
+        return jsonify({
+            'token': token,
+            'user': {
+                'user_id': user['user_id'],
+                'username': user['username'],
+                'role': user['role'],
+                'org_id': user['org_id'],
+                'org_slug': org_slug,
+                'org_name': org_name,
+            }
+        }), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/auth/me', methods=['GET'])
+@token_required
+def auth_me():
+    user = request.current_user
+    org_slug = None
+    org_name = None
+    tier = None
+    if user.get('role') == 'org' and user.get('org_id'):
+        try:
+            conn = get_db_connection()
+            cur = conn.cursor(cursor_factory=RealDictCursor)
+            cur.execute("SELECT slug, name, tier FROM organizations WHERE org_id = %s", (user['org_id'],))
+            org = cur.fetchone()
+            cur.close()
+            conn.close()
+            if org:
+                org_slug = org['slug']
+                org_name = org['name']
+                tier = org['tier']
+        except: pass
+    return jsonify({
+        'user_id': user['user_id'],
+        'username': user['username'],
+        'role': user['role'],
+        'org_id': user.get('org_id'),
+        'org_slug': org_slug,
+        'org_name': org_name,
+        'tier': tier,
+    }), 200
+
+@app.route('/api/auth/forgot-password', methods=['POST'])
+def auth_forgot_password():
+    data = request.get_json()
+    email = data.get('email', '').strip()
+    if not email:
+        return jsonify({'error': 'Email required'}), 400
+
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor(cursor_factory=RealDictCursor)
+        cur.execute("SELECT * FROM users WHERE email = %s AND is_active = TRUE", (email,))
+        user = cur.fetchone()
+        cur.close()
+        conn.close()
+
+        if not user:
+            # Don't reveal whether user exists
+            return jsonify({'message': 'If an account with that email exists, a reset link has been sent.'}), 200
+
+        # Generate reset token (short-lived: 1 hour)
+        reset_payload = {
+            'user_id': user['user_id'],
+            'purpose': 'password_reset',
+            'exp': datetime.utcnow() + timedelta(hours=1)
+        }
+        reset_token = jwt.encode(reset_payload, JWT_SECRET, algorithm='HS256')
+
+        # Build reset link (frontend handles the reset page)
+        frontend_url = os.getenv('FRONTEND_URL', 'http://localhost:3000')
+        reset_link = f"{frontend_url}/reset-password?token={reset_token}"
+
+        # Send email
+        if SMTP_USER and SMTP_PASS:
+            msg = MIMEMultipart()
+            msg['From'] = SMTP_FROM
+            msg['To'] = email
+            msg['Subject'] = 'Sys_Logger Password Reset'
+            body = f"Hello {user['username']},\n\nClick the link below to reset your password:\n{reset_link}\n\nThis link expires in 1 hour.\n\n— Sys_Logger Team"
+            msg.attach(MIMEText(body, 'plain'))
+
+            with smtplib.SMTP(SMTP_SERVER, SMTP_PORT) as server:
+                server.starttls()
+                server.login(SMTP_USER, SMTP_PASS)
+                server.send_message(msg)
+            print(f"[AUTH] Password reset email sent to {email}")
+        else:
+            print(f"[AUTH] SMTP not configured. Reset link: {reset_link}")
+
+        return jsonify({'message': 'If an account with that email exists, a reset link has been sent.'}), 200
+    except Exception as e:
+        print(f"[AUTH] Forgot password error: {e}")
+        return jsonify({'error': 'Failed to process request'}), 500
+
+@app.route('/api/auth/reset-password', methods=['POST'])
+def auth_reset_password():
+    data = request.get_json()
+    token = data.get('token', '')
+    new_password = data.get('password', '')
+    if not token or not new_password:
+        return jsonify({'error': 'Token and new password required'}), 400
+    try:
+        payload = jwt.decode(token, JWT_SECRET, algorithms=['HS256'])
+        if payload.get('purpose') != 'password_reset':
+            return jsonify({'error': 'Invalid token'}), 400
+
+        conn = get_db_connection()
+        cur = conn.cursor()
+        cur.execute("UPDATE users SET password_hash = %s WHERE user_id = %s",
+                    (generate_password_hash(new_password), payload['user_id']))
+        conn.commit()
+        cur.close()
+        conn.close()
+        return jsonify({'message': 'Password updated successfully'}), 200
+    except jwt.ExpiredSignatureError:
+        return jsonify({'error': 'Reset link expired'}), 400
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+# ============================================================
+# ADMIN DASHBOARD
+# ============================================================
+
+@app.route('/api/admin/dashboard', methods=['GET'])
+@admin_required
+def admin_dashboard():
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor(cursor_factory=RealDictCursor)
+
+        cur.execute("SELECT COUNT(*) as total FROM organizations WHERE is_active = TRUE")
+        total_orgs = cur.fetchone()['total']
+
+        cur.execute("SELECT COUNT(*) as total FROM users WHERE is_active = TRUE AND role = 'org'")
+        total_org_users = cur.fetchone()['total']
+
+        # Count total registered nodes from in-memory store
+        all_units = UnitStore.get_all_units()
+        total_nodes = len(all_units)
+        online_nodes = len([u for u in all_units if u.get('status') == 'online'])
+
+        # Orgs list with details
+        cur.execute("""
+            SELECT o.*, 
+                   (SELECT COUNT(*) FROM users u WHERE u.org_id = o.org_id AND u.is_active = TRUE) as user_count
+            FROM organizations o WHERE o.is_active = TRUE
+            ORDER BY o.created_at DESC
+        """)
+        orgs = cur.fetchall()
+        for org in orgs:
+            org['created_at'] = org['created_at'].isoformat() if org.get('created_at') else None
+            org['next_payment_date'] = org['next_payment_date'].isoformat() if org.get('next_payment_date') else None
+            # Count nodes for this org
+            org_units = [u for u in all_units if u.get('org_id') == org['slug']]
+            org['node_count'] = len(org_units)
+            org['online_nodes'] = len([u for u in org_units if u.get('status') == 'online'])
+
+        # Billing summary
+        upcoming_payments = [o for o in orgs if o.get('next_payment_date') and
+                            datetime.fromisoformat(o['next_payment_date']).date() <= (datetime.now() + timedelta(days=7)).date()]
+
+        cur.close()
+        conn.close()
+
+        return jsonify({
+            'total_orgs': total_orgs,
+            'total_org_users': total_org_users,
+            'total_nodes': total_nodes,
+            'online_nodes': online_nodes,
+            'organizations': orgs,
+            'upcoming_payments': len(upcoming_payments),
+            'server_stats': latest_server_stats,
+        }), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/admin/orgs', methods=['GET'])
+@admin_required
+def admin_list_orgs():
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor(cursor_factory=RealDictCursor)
+        cur.execute("SELECT * FROM organizations ORDER BY created_at DESC")
+        orgs = cur.fetchall()
+        for org in orgs:
+            org['created_at'] = org['created_at'].isoformat() if org.get('created_at') else None
+            org['next_payment_date'] = org['next_payment_date'].isoformat() if org.get('next_payment_date') else None
+        cur.close()
+        conn.close()
+        return jsonify(orgs), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+# ============================================================
+# ORG DASHBOARD & NODE MANAGEMENT
+# ============================================================
+
+@app.route('/api/org/dashboard', methods=['GET'])
+@token_required
+def org_dashboard():
+    user = request.current_user
+    org_id_param = user.get('org_id')
+    if not org_id_param:
+        return jsonify({'error': 'No organization linked'}), 400
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor(cursor_factory=RealDictCursor)
+        cur.execute("SELECT * FROM organizations WHERE org_id = %s", (org_id_param,))
+        org = cur.fetchone()
+        cur.close()
+        conn.close()
+        if not org:
+            return jsonify({'error': 'Organization not found'}), 404
+
+        org['created_at'] = org['created_at'].isoformat() if org.get('created_at') else None
+        org['next_payment_date'] = org['next_payment_date'].isoformat() if org.get('next_payment_date') else None
+
+        # Nodes for this org
+        all_units = UnitStore.get_all_units()
+        org_units = [u for u in all_units if u.get('org_id') == org['slug']]
+
+        return jsonify({
+            'organization': org,
+            'tier_info': TIERS.get(org['tier'], TIERS['individual']),
+            'nodes': org_units,
+            'total_nodes': len(org_units),
+            'online_nodes': len([u for u in org_units if u.get('status') == 'online']),
+            'node_limit': org['node_limit'],
+        }), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/org/nodes', methods=['GET'])
+@token_required
+def org_nodes():
+    user = request.current_user
+    org_id_param = user.get('org_id')
+    if user.get('role') == 'admin':
+        org_slug = request.args.get('org_slug')
+        if org_slug:
+            all_units = UnitStore.get_all_units()
+            return jsonify([u for u in all_units if u.get('org_id') == org_slug]), 200
+        return jsonify(UnitStore.get_all_units()), 200
+
+    if not org_id_param:
+        return jsonify({'error': 'No organization linked'}), 400
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor(cursor_factory=RealDictCursor)
+        cur.execute("SELECT slug, node_limit FROM organizations WHERE org_id = %s", (org_id_param,))
+        org = cur.fetchone()
+        cur.close()
+        conn.close()
+        if not org:
+            return jsonify([]), 200
+        all_units = UnitStore.get_all_units()
+        org_units = [u for u in all_units if u.get('org_id') == org['slug']]
+        return jsonify(org_units), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/org/nodes/add', methods=['POST'])
+@token_required
+def org_add_node():
+    """Add a new node for the org. Checks tier limit. Returns node info for client installer."""
+    user = request.current_user
+    org_id_param = user.get('org_id')
+    if user.get('role') == 'admin':
+        # Admin can add for any org by passing org_db_id
+        org_id_param = request.get_json().get('org_db_id', org_id_param)
+    if not org_id_param:
+        return jsonify({'error': 'No organization linked'}), 400
+
+    data = request.get_json()
+    comp_id = data.get('comp_id', '').strip()
+    if not comp_id:
+        return jsonify({'error': 'Node name (comp_id) is required'}), 400
+
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor(cursor_factory=RealDictCursor)
+        cur.execute("SELECT slug, node_limit, tier FROM organizations WHERE org_id = %s", (org_id_param,))
+        org = cur.fetchone()
+        cur.close()
+        conn.close()
+        if not org:
+            return jsonify({'error': 'Organization not found'}), 404
+
+        org_slug = org['slug']
+        all_units = UnitStore.get_all_units()
+        org_units = [u for u in all_units if u.get('org_id') == org_slug]
+
+        if len(org_units) >= org['node_limit']:
+            return jsonify({
+                'error': f"Node limit reached ({org['node_limit']}). Upgrade your tier or request additional nodes.",
+                'current': len(org_units),
+                'limit': org['node_limit']
+            }), 403
+
+        # Check duplicate comp_id for this org
+        for u in org_units:
+            if u.get('comp_id') == comp_id:
+                return jsonify({'error': f"A node named '{comp_id}' already exists in this organization."}), 409
+
+        # Pre-register the node (it will update on first client heartbeat)
+        unit_id = str(uuid.uuid4())[:8]
+        system_id = str(uuid.uuid4())
+        unit = {
+            'id': unit_id,
+            'system_id': system_id,
+            'org_id': org_slug,
+            'comp_id': comp_id,
+            'ip': 'pending',
+            'name': f"{org_slug}/{comp_id}",
+            'status': 'offline',
+            'last_seen': datetime.now().isoformat(),
+            'hostname': comp_id,
+            'os_info': 'Pending first connect',
+            'cpu_info': '',
+            'ram_total': 0,
+            'gpu_info': '{}',
+            'network_interfaces': '{}',
+            'alerts': []
+        }
+        UnitStore.save_unit(unit_id, unit)
+
+        socketio.emit('units_update', UnitStore.get_all_units())
+
+        return jsonify({
+            'message': f"Node '{comp_id}' created.",
+            'unit_id': unit_id,
+            'system_id': system_id,
+            'org_id': org_slug,
+            'comp_id': comp_id,
+        }), 201
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+# ============================================================
+# CLIENT DEPLOY ZIP GENERATOR
+# ============================================================
+
+@app.route('/api/org/download-client', methods=['POST'])
+@token_required
+def download_client_zip():
+    """Generate a pre-filled client deploy ZIP for a specific node."""
+    user = request.current_user
+    data = request.get_json()
+    org_slug = data.get('org_id', '')
+    comp_id = data.get('comp_id', '')
+    system_id = data.get('system_id', str(uuid.uuid4()))
+
+    if not org_slug or not comp_id:
+        return jsonify({'error': 'org_id and comp_id are required'}), 400
+
+    # Path to client_deploy source
+    project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    source_dir = os.path.join(project_root, 'client_deploy')
+    if not os.path.isdir(source_dir):
+        return jsonify({'error': 'client_deploy directory not found on server'}), 404
+
+    try:
+        tmpdir = tempfile.mkdtemp()
+        # Nest inside SysLogger_Client/client_deploy/
+        inner_dir = os.path.join(tmpdir, 'SysLogger_Client', 'client_deploy')
+        shutil.copytree(source_dir, inner_dir)
+
+        # Determine server URL
+        server_url = request.host_url.rstrip('/')
+        frontend_origin = request.headers.get('Origin', '')
+        # Use the backend URL that the client will connect to
+        if os.getenv('BACKEND_URL'):
+            server_url = os.getenv('BACKEND_URL').rstrip('/')
+
+        # Overwrite config
+        config_path = os.path.join(inner_dir, 'unit_client_config.json')
+        config = {
+            'system_id': system_id,
+            'server_url': server_url,
+            'org_id': org_slug,
+            'comp_id': comp_id,
+            'auth_token': '',
+            '_provisioned': True,
+            '_provisioned_at': datetime.now().isoformat()
+        }
+        with open(config_path, 'w') as f:
+            json.dump(config, f, indent=4)
+
+        # Create zip
+        zip_filename = f"SysLogger_Client_{org_slug}_{comp_id}.zip"
+        zip_path = os.path.join(tmpdir, zip_filename)
+        with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zf:
+            for root, dirs, files in os.walk(os.path.join(tmpdir, 'SysLogger_Client')):
+                for file in files:
+                    file_path = os.path.join(root, file)
+                    arcname = os.path.relpath(file_path, tmpdir)
+                    zf.write(file_path, arcname)
+
+        return send_file(zip_path, as_attachment=True, download_name=zip_filename,
+                        mimetype='application/zip')
+    except Exception as e:
+        print(f"[DEPLOY] Error generating client zip: {e}")
+        return jsonify({'error': str(e)}), 500
+
+# ============================================================
+# BILLING INFO
+# ============================================================
+
+@app.route('/api/billing/info', methods=['GET'])
+@token_required
+def billing_info():
+    user = request.current_user
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor(cursor_factory=RealDictCursor)
+
+        if user.get('role') == 'admin':
+            # Admin sees all orgs billing
+            cur.execute("""
+                SELECT o.org_id, o.name, o.slug, o.tier, o.node_limit, o.next_payment_date, o.is_active, o.created_at
+                FROM organizations o ORDER BY o.next_payment_date ASC NULLS LAST
+            """)
+            orgs = cur.fetchall()
+            for o in orgs:
+                o['created_at'] = o['created_at'].isoformat() if o.get('created_at') else None
+                o['next_payment_date'] = o['next_payment_date'].isoformat() if o.get('next_payment_date') else None
+
+            active_subs = len([o for o in orgs if o['is_active']])
+            upcoming = [o for o in orgs if o.get('next_payment_date') and
+                       datetime.fromisoformat(o['next_payment_date']).date() <= (datetime.now() + timedelta(days=7)).date()]
+
+            cur.close()
+            conn.close()
+            return jsonify({
+                'role': 'admin',
+                'active_subscriptions': active_subs,
+                'total_orgs': len(orgs),
+                'upcoming_payments': len(upcoming),
+                'upcoming_payment_orgs': upcoming,
+                'all_orgs': orgs,
+                'tiers': TIERS,
+            }), 200
+        else:
+            # Org user sees their own billing
+            org_id_param = user.get('org_id')
+            if not org_id_param:
+                return jsonify({'error': 'No organization linked'}), 400
+            cur.execute("SELECT * FROM organizations WHERE org_id = %s", (org_id_param,))
+            org = cur.fetchone()
+            cur.close()
+            conn.close()
+            if not org:
+                return jsonify({'error': 'Organization not found'}), 404
+
+            org['created_at'] = org['created_at'].isoformat() if org.get('created_at') else None
+            org['next_payment_date'] = org['next_payment_date'].isoformat() if org.get('next_payment_date') else None
+
+            return jsonify({
+                'role': 'org',
+                'organization': org,
+                'tier_info': TIERS.get(org['tier'], TIERS['individual']),
+                'tiers': TIERS,
+            }), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/billing/switch-tier', methods=['POST'])
+@token_required
+def switch_tier():
+    user = request.current_user
+    data = request.get_json()
+    new_tier = data.get('tier', '')
+    if new_tier not in TIERS:
+        return jsonify({'error': f"Invalid tier. Choose from: {list(TIERS.keys())}"}), 400
+
+    org_id_param = user.get('org_id')
+    if user.get('role') == 'admin':
+        org_id_param = data.get('org_db_id', org_id_param)
+    if not org_id_param:
+        return jsonify({'error': 'No organization linked'}), 400
+
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        new_limit = TIERS[new_tier]['max_nodes']
+        cur.execute("UPDATE organizations SET tier = %s, node_limit = %s WHERE org_id = %s",
+                    (new_tier, new_limit, org_id_param))
+        conn.commit()
+        cur.close()
+        conn.close()
+        return jsonify({'message': f"Tier switched to {TIERS[new_tier]['name']}", 'tier': new_tier, 'node_limit': new_limit}), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/api/register_unit', methods=['POST'])
 def register_unit():

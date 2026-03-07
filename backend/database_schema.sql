@@ -4,7 +4,47 @@
 -- =====================================================================
 
 -- ============================================================
--- 1. SYSTEMS TABLE
+-- 1. ORGANIZATIONS TABLE (Multi-Tenant)
+-- ============================================================
+CREATE TABLE IF NOT EXISTS organizations (
+    org_id SERIAL PRIMARY KEY,
+    name VARCHAR(255) NOT NULL UNIQUE,
+    slug VARCHAR(255) NOT NULL UNIQUE,
+    tier VARCHAR(50) NOT NULL DEFAULT 'individual',
+    node_limit INTEGER NOT NULL DEFAULT 1,
+    contact_email VARCHAR(255),
+    next_payment_date DATE,
+    is_active BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_organizations_slug
+    ON organizations(slug);
+
+
+-- ============================================================
+-- 2. USERS TABLE (Auth)
+-- ============================================================
+CREATE TABLE IF NOT EXISTS users (
+    user_id SERIAL PRIMARY KEY,
+    username VARCHAR(255) NOT NULL UNIQUE,
+    email VARCHAR(255),
+    password_hash VARCHAR(512) NOT NULL,
+    role VARCHAR(50) NOT NULL DEFAULT 'org',
+    org_id INTEGER REFERENCES organizations(org_id) ON DELETE SET NULL,
+    is_active BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_users_username
+    ON users(username);
+
+CREATE INDEX IF NOT EXISTS idx_users_org_id
+    ON users(org_id);
+
+
+-- ============================================================
+-- 3. SYSTEMS TABLE
 -- ============================================================
 CREATE TABLE IF NOT EXISTS systems (
     system_id SERIAL PRIMARY KEY,
@@ -30,7 +70,7 @@ CREATE INDEX IF NOT EXISTS idx_systems_active_last_seen
 
 
 -- ============================================================
--- 2. SYSTEM METRICS TABLE (PARTITIONED MONTHLY)
+-- 4. SYSTEM METRICS TABLE (PARTITIONED MONTHLY)
 -- ============================================================
 
 CREATE TABLE IF NOT EXISTS system_metrics (
@@ -48,7 +88,7 @@ CREATE TABLE IF NOT EXISTS system_metrics (
 
 
 -- ============================================================
--- 2A. Partition Auto-Creation Function
+-- 4A. Partition Auto-Creation Function
 -- ============================================================
 
 CREATE OR REPLACE FUNCTION create_system_metrics_partition(target_date DATE)
@@ -89,7 +129,7 @@ CREATE INDEX IF NOT EXISTS idx_system_metrics_timestamp
 
 
 -- ============================================================
--- 3. AGGREGATED METRICS TABLE
+-- 5. AGGREGATED METRICS TABLE
 -- ============================================================
 
 CREATE TABLE IF NOT EXISTS aggregated_metrics (
@@ -116,7 +156,7 @@ CREATE INDEX IF NOT EXISTS idx_aggregated_metrics_system_period
 
 
 -- ============================================================
--- 4. DAILY + HOURLY AGGREGATION FUNCTION
+-- 6. DAILY + HOURLY AGGREGATION FUNCTION
 -- ============================================================
 
 CREATE OR REPLACE FUNCTION aggregate_daily_metrics(
@@ -193,7 +233,7 @@ $$ LANGUAGE plpgsql;
 
 
 -- ============================================================
--- 5. PARTITION CLEANUP (RETENTION POLICY)
+-- 7. PARTITION CLEANUP (RETENTION POLICY)
 -- ============================================================
 
 CREATE OR REPLACE FUNCTION cleanup_old_partitions()

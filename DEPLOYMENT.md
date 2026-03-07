@@ -188,3 +188,159 @@ curl http://localhost:3000
 
 
 This distribution package provides flexible deployment options for both localhost development and production domain hosting, with responsive web interfaces and user-friendly desktop applications.
+
+---
+
+## Multi-Tenant Authentication System
+
+### Default Credentials (CHANGE IN PRODUCTION)
+
+| Role  | Username | Password    | Access                     |
+|-------|----------|-------------|----------------------------|
+| Admin | `admin`  | `admin123`  | `/admin` — full control    |
+| Org   | `nielit`  | `nielit123` | `/NIELIT-BBSR` — org only  |
+
+### Environment Variables for Auth
+
+Add to backend `.env`:
+
+```env
+JWT_SECRET=your-strong-random-secret-here
+JWT_EXPIRATION_HOURS=24
+SMTP_SERVER=smtp.gmail.com
+SMTP_PORT=587
+SMTP_USER=your-email@gmail.com
+SMTP_PASS=your-app-password
+SMTP_FROM=your-email@gmail.com
+FRONTEND_URL=https://your-frontend-url.vercel.app
+BACKEND_URL=http://your-server-ip:5010
+```
+
+### SMTP Setup (Gmail)
+
+1. Go to [Google Account Security](https://myaccount.google.com/security)
+2. Enable **2-Step Verification**
+3. Go to [App Passwords](https://myaccount.google.com/apppasswords)
+4. Generate a new app password for "Mail"
+5. Use this 16-character password as `SMTP_PASS`
+
+> If SMTP is not configured, password reset links print to the backend console instead.
+
+### Tier System
+
+| Tier       | Default Nodes | Description                              |
+|------------|---------------|------------------------------------------|
+| Individual | 1             | Single node monitoring                   |
+| Business   | 2 (default)   | Multi-node, expandable at additional cost |
+
+- `node_limit` is per-org in the DB — admin can increase beyond tier default
+- Switch tier via Billing tab or admin panel
+
+---
+
+## Testing Locally
+
+### Step 1: Start Backend
+```bash
+cd backend
+# Activate venv
+.\venv\Scripts\activate     # Windows
+source venv/bin/activate    # Linux/Mac
+
+# Install deps (if needed)
+pip install -r requirements.txt
+
+# Run server (auto-creates auth tables on start)
+python sys_logger.py
+```
+Backend starts on `http://localhost:5000` (or port in `.env`).
+
+### Step 2: Start Frontend
+```bash
+cd frontend
+npm install
+npm run dev
+```
+Frontend starts on `http://localhost:3000`.
+
+### Step 3: Test Login
+
+1. Open `http://localhost:3000/login`
+2. **Admin login:** `admin` / `admin123` → redirects to `/admin`
+3. **Org login:** `nielit` / `nielit123` → redirects to `/NIELIT-BBSR`
+
+### Step 4: Test Admin Dashboard
+
+- View orgs, total nodes, server health at `/admin`
+- View billing at `/admin/billing`
+- Register new org via API:
+```bash
+curl -X POST http://localhost:5000/api/admin/register-org \
+  -H "Authorization: Bearer YOUR_ADMIN_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"name":"Test Org","slug":"TEST-ORG","tier":"individual","contact_email":"test@example.com","username":"testuser","password":"test123"}'
+```
+
+### Step 5: Test Org Dashboard
+
+1. Login as `nielit` / `nielit123`
+2. **Dashboard tab** — same monitoring view, filtered to org's nodes
+3. **Nodes tab** — view nodes, click "Add Node", enter a name, download client ZIP
+4. **Billing tab** — view current tier, switch tier
+
+### Step 6: Test Client Deploy
+
+1. In Nodes tab, click **"+ Add Node"** → enter node name (e.g. `LAB-PC-01`)
+2. Click **"Download Client Installer"** on the node card
+3. Extract ZIP → pre-configured `unit_client_config.json` with org_id, comp_id, server_url
+4. Run installer on target machine
+
+### Step 7: Test Password Reset
+
+1. Go to `/reset-password`
+2. Enter email associated with account
+3. If SMTP configured → check email for reset link
+4. If SMTP not configured → check backend console for link
+
+---
+
+## API Endpoints Reference
+
+### Auth
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/api/auth/login` | Login with username/password |
+| GET | `/api/auth/me` | Get current user info (requires token) |
+| POST | `/api/auth/forgot-password` | Send password reset email |
+| POST | `/api/auth/reset-password` | Reset password with token |
+
+### Admin (requires admin role)
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/admin/dashboard` | Global stats, orgs, server health |
+| GET | `/api/admin/orgs` | List all organizations |
+| POST | `/api/admin/register-org` | Register new org + user |
+
+### Org (requires auth)
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/org/dashboard` | Org stats + nodes |
+| GET | `/api/org/nodes` | List org's nodes |
+| POST | `/api/org/nodes/add` | Add node (checks tier limit) |
+| POST | `/api/org/download-client` | Download pre-filled client ZIP |
+
+### Billing
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/billing/info` | Billing details |
+| POST | `/api/billing/switch-tier` | Switch org tier |
+
+### Frontend Routes
+| Route | Access | Description |
+|-------|--------|-------------|
+| `/login` | Public | Login page |
+| `/reset-password` | Public | Forgot/reset password |
+| `/admin` | Admin | Admin dashboard |
+| `/admin/billing` | Admin | Billing overview |
+| `/{orgSlug}` | Org/Admin | Org dashboard with tabs |
+| `/fleet` | Admin | Fleet monitoring view |

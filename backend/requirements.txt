@@ -15,3 +15,4 @@ gunicorn
 flask-socketio==5.3.6
 psycopg2-binary
 simple-websocket
+PyJWT
