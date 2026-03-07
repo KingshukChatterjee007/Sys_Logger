@@ -69,8 +69,8 @@ SMTP_FROM = os.getenv('SMTP_FROM', SMTP_USER)
 
 # Tier definitions
 TIERS = {
-    'individual': {'name': 'Individual', 'max_nodes': 1, 'price_label': 'Free / Basic'},
-    'business':   {'name': 'Business',   'max_nodes': 2, 'price_label': 'Contact Sales'},
+    'individual': {'name': 'Individual', 'max_nodes': 1, 'price_label': 'Basic'},
+    'business':   {'name': 'Business',   'max_nodes': 9999999, 'price_label': 'Premium'},
 }
 
 def get_db_connection():
@@ -890,10 +890,9 @@ def admin_list_orgs():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-@app.route('/api/admin/register-org', methods=['POST'])
-@admin_required
-def admin_register_org():
-    """Admin endpoint to register a new organization and its user account."""
+@app.route('/api/register-org', methods=['POST'])
+def register_org():
+    """Endpoint to register a new organization and its user account."""
     data = request.get_json()
     org_name = data.get('name', '').strip()
     org_slug = data.get('slug', '').strip()

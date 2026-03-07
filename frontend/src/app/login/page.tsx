@@ -139,8 +139,12 @@ export default function LoginPage() {
                             </button>
                         </form>
 
-                        <div className="mt-6 text-center">
-                            <Link href="/reset-password" className="text-xs font-bold text-zinc-500 hover:text-orange-600 transition-colors uppercase tracking-wider">
+                        <div className="mt-6 flex flex-col sm:flex-row items-center justify-center gap-4 sm:gap-6">
+                            <Link href="/register" className="text-xs font-black text-orange-600 hover:text-orange-500 transition-colors uppercase tracking-widest flex items-center gap-1.5">
+                                Create Organization <ArrowRight className="w-3.5 h-3.5" />
+                            </Link>
+                            <span className="hidden sm:inline w-[1px] h-3 bg-zinc-200" />
+                            <Link href="/reset-password" className="text-xs font-bold text-zinc-500 hover:text-zinc-800 transition-colors uppercase tracking-wider">
                                 Forgot Password?
                             </Link>
                         </div>
