@@ -43,7 +43,8 @@ interface UsageGraphProps {
   error?: string | null
   onRetry?: () => void
   className?: string
-  timeRange?: TimeRange
+  timeRange?: string
+  onTimeRangeChange?: (range: string) => void
 }
 
 export const UsageGraph: React.FC<UsageGraphProps> = ({
@@ -53,19 +54,10 @@ export const UsageGraph: React.FC<UsageGraphProps> = ({
   error = null,
   onRetry,
   className = '',
-  timeRange = '1m'
+  timeRange = '1m',
+  onTimeRangeChange
 }) => {
-  const [selectedTimeRange, setSelectedTimeRange] = useState<TimeRange>(timeRange)
-  const [currentTime, setCurrentTime] = useState(() => Date.now())
   const chartRef = useRef<any>(null)
-
-  // Update current time every second to force re-filtering
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setCurrentTime(Date.now())
-    }, 1000)
-    return () => clearInterval(interval)
-  }, [])
 
   const parseTimestamp = (timestamp: string) => {
     if (!timestamp) return 0
@@ -79,41 +71,11 @@ export const UsageGraph: React.FC<UsageGraphProps> = ({
 
   const filteredData = useMemo(() => {
     if (!data.length) return []
-
-    const sortedData = [...data].sort((a, b) => {
+    // Data arrives pre-filtered from the backend based on selected timeRange
+    return [...data].sort((a, b) => {
       return parseTimestamp(a.timestamp) - parseTimestamp(b.timestamp)
     })
-
-    const timeRanges = {
-      '30s': 30 * 1000,
-      '1m': 60 * 1000,
-      '5m': 5 * 60 * 1000,
-      '15m': 15 * 60 * 1000,
-      '30m': 30 * 60 * 1000,
-      '1h': 60 * 60 * 1000,
-      '3h': 3 * 60 * 60 * 1000,
-      '6h': 6 * 60 * 60 * 1000,
-      '12h': 12 * 60 * 60 * 1000,
-      '1d': 24 * 60 * 60 * 1000
-    }
-
-    const latestTimestamp = sortedData.length > 0
-      ? parseTimestamp(sortedData[sortedData.length - 1].timestamp)
-      : currentTime
-
-    const referenceTime = latestTimestamp > currentTime ? latestTimestamp : currentTime
-    const cutoff = referenceTime - timeRanges[selectedTimeRange]
-
-    const filtered = sortedData.filter(log => {
-      return parseTimestamp(log.timestamp) >= cutoff
-    })
-
-    if (filtered.length === 0 && sortedData.length > 0) {
-      return sortedData.slice(-20)
-    }
-
-    return filtered
-  }, [data, selectedTimeRange, currentTime])
+  }, [data])
 
   const chartData = useMemo(() => {
     const labels = filteredData.map(log => {
@@ -205,7 +167,7 @@ export const UsageGraph: React.FC<UsageGraphProps> = ({
     scales: {
       x: {
         display: true,
-        grid: { 
+        grid: {
           display: true,
           color: 'rgba(0, 0, 0, 0.04)', // Light grey grid lines
           drawTicks: false,
@@ -222,7 +184,7 @@ export const UsageGraph: React.FC<UsageGraphProps> = ({
       y: {
         position: 'right' as const,
         beginAtZero: true,
-        grid: { 
+        grid: {
           display: true,
           color: 'rgba(0, 0, 0, 0.04)', // Light grey grid lines
           drawTicks: false,
@@ -259,10 +221,10 @@ export const UsageGraph: React.FC<UsageGraphProps> = ({
         {['30s', '1m', '5m', '15m', '30m', '1h', '6h', '1d'].map((range) => (
           <button
             key={range}
-            onClick={() => setSelectedTimeRange(range as TimeRange)}
+            onClick={() => onTimeRangeChange?.(range)}
             className={cn(
               "px-2.5 py-1 text-[9px] font-black rounded-lg transition-all uppercase tracking-widest border",
-              selectedTimeRange === range
+              timeRange === range
                 ? 'bg-orange-50 text-orange-600 border-orange-200 shadow-sm'
                 : 'bg-white text-zinc-400 border-zinc-200/80 hover:text-zinc-700 hover:bg-zinc-50 hover:border-zinc-300'
             )}

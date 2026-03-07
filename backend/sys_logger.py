@@ -387,7 +387,7 @@ class UnitStore:
             print(f"Failed to write to DB: {e}")
 
     @staticmethod
-    def get_usage(unit_id, limit=50):
+    def get_usage(unit_id, limit=50, time_range=None):
         # Read from Postgres (Single Source of Truth)
         try:
             conn = get_db_connection()
@@ -399,13 +399,52 @@ class UnitStore:
             if not res: return []
             sys_int_id = res['system_id']
             
-            cur.execute("""
-                SELECT timestamp, cpu_usage as cpu, ram_usage as ram, gpu_usage as gpu, network_rx_mb as network_rx, network_tx_mb as network_tx 
-                FROM system_metrics 
-                WHERE system_id = %s 
-                ORDER BY timestamp DESC 
-                LIMIT %s
-            """, (sys_int_id, limit))
+            interval = None
+            if time_range == '1d': interval = "1 day"
+            elif time_range == '12h': interval = "12 hours"
+            elif time_range == '6h': interval = "6 hours"
+            elif time_range == '3h': interval = "3 hours"
+            elif time_range == '1h': interval = "1 hour"
+            elif time_range == '30m': interval = "30 minutes"
+            elif time_range == '15m': interval = "15 minutes"
+            elif time_range == '5m': interval = "5 minutes"
+            elif time_range == '1m': interval = "1 minute"
+            elif time_range == '30s': interval = "30 seconds"
+
+            if time_range in ['1h', '3h', '6h', '12h', '1d']:
+                # Group by minute to downsample large datasets
+                cur.execute(f"""
+                    SELECT 
+                        date_trunc('minute', timestamp) as timestamp,
+                        AVG(cpu_usage) as cpu,
+                        AVG(ram_usage) as ram,
+                        AVG(gpu_usage) as gpu,
+                        AVG(network_rx_mb) as network_rx,
+                        AVG(network_tx_mb) as network_tx 
+                    FROM system_metrics 
+                    WHERE system_id = %s 
+                      AND timestamp >= NOW() - INTERVAL '{interval}'
+                    GROUP BY 1
+                    ORDER BY 1 DESC
+                    LIMIT 2000
+                """, (sys_int_id,))
+            elif interval:
+                cur.execute(f"""
+                    SELECT timestamp, cpu_usage as cpu, ram_usage as ram, gpu_usage as gpu, network_rx_mb as network_rx, network_tx_mb as network_tx 
+                    FROM system_metrics 
+                    WHERE system_id = %s 
+                      AND timestamp >= NOW() - INTERVAL '{interval}'
+                    ORDER BY timestamp DESC
+                    LIMIT 2000
+                """, (sys_int_id,))
+            else:
+                cur.execute("""
+                    SELECT timestamp, cpu_usage as cpu, ram_usage as ram, gpu_usage as gpu, network_rx_mb as network_rx, network_tx_mb as network_tx 
+                    FROM system_metrics 
+                    WHERE system_id = %s 
+                    ORDER BY timestamp DESC 
+                    LIMIT %s
+                """, (sys_int_id, limit))
             
             rows = cur.fetchall()
             
@@ -572,7 +611,8 @@ def get_org_units(org_id):
 
 @app.route('/api/units/<unit_id>/usage', methods=['GET'])
 def get_unit_usage(unit_id):
-    data = UnitStore.get_usage(unit_id, limit=100)
+    time_range = request.args.get('range', None)
+    data = UnitStore.get_usage(unit_id, limit=100, time_range=time_range)
     return jsonify(data)
 
 # --- SERVER MONITORING ---

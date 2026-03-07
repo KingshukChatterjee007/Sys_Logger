@@ -28,9 +28,10 @@ interface DashboardViewProps {
 
 export default function DashboardView({ orgId: propOrgId }: DashboardViewProps) {
     const [viewOrgId] = useState<string | null>(propOrgId || null)
+    const [timeRange, setTimeRange] = useState<string>('1m')
 
     // Real API Hooks
-    const apiUsage = useUsageData(viewOrgId || undefined)
+    const apiUsage = useUsageData(viewOrgId || undefined, timeRange)
     const apiUnits = useUnits(viewOrgId || undefined)
 
     // Determine which data to use
@@ -494,7 +495,7 @@ export default function DashboardView({ orgId: propOrgId }: DashboardViewProps) 
                                                 </div>
                                             </div>
                                             <div className="flex-1 relative bg-zinc-50/50 rounded-2xl ring-1 ring-zinc-100 p-4">
-                                                <UsageGraph data={usageData} metric={selectedMetric} className="h-full" />
+                                                <UsageGraph data={usageData} metric={selectedMetric} timeRange={timeRange} onTimeRangeChange={setTimeRange} className="h-full" />
                                             </div>
                                         </div>
                                     </div>

@@ -11,22 +11,37 @@ interface UseUsageDataReturn {
   setSelectedUnitId: (id: string | null) => void
   filteredData: UsageData[]
   orgId?: string
+  timeRange?: string
 }
 
-// Polling interval in ms (2 seconds for near-real-time on live site)
-const POLL_INTERVAL = 2000
+// Polling intervals scale depending on selected time range
+const getPollIntervalForRange = (range: string) => {
+  const map: Record<string, number> = {
+    '30s': 2000,
+    '1m': 2000,
+    '5m': 5000,
+    '15m': 10000,
+    '30m': 15000,
+    '1h': 30000,
+    '3h': 60000,
+    '6h': 120000,
+    '12h': 300000,
+    '1d': 300000, // Every 5 minutes for daily data
+  }
+  return map[range] || 2000
+}
 
-export const useUsageData = (orgId?: string): UseUsageDataReturn => {
+export const useUsageData = (orgId?: string, timeRange: string = '1m'): UseUsageDataReturn => {
   const [data, setData] = useState<UsageData[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [selectedUnitId, setSelectedUnitId] = useState<string | null>(null)
 
   useEffect(() => {
-    // Clear data when switching units to avoid mixed graphs
+    // Clear data when switching units or time range to avoid mixed graphs
     setData([])
     setLoading(true)
-  }, [selectedUnitId])
+  }, [selectedUnitId, timeRange])
 
   const processLog = (log: any): UsageData => {
     let gpu_load = 0
@@ -67,11 +82,11 @@ export const useUsageData = (orgId?: string): UseUsageDataReturn => {
     try {
       let endpoint = ''
       if (selectedUnitId) {
-        endpoint = `/api/units/${selectedUnitId}/usage`
+        endpoint = `/api/units/${selectedUnitId}/usage?range=${timeRange}`
       } else if (orgId) {
-        endpoint = '/api/usage'
+        endpoint = `/api/usage?range=${timeRange}`
       } else {
-        endpoint = '/api/usage'
+        endpoint = `/api/usage?range=${timeRange}`
       }
 
       const response = await apiFetch(endpoint)
@@ -94,14 +109,15 @@ export const useUsageData = (orgId?: string): UseUsageDataReturn => {
       console.error('Error fetching data:', err)
       setLoading(false)
     }
-  }, [orgId, selectedUnitId])
+  }, [orgId, selectedUnitId, timeRange])
 
   // HTTP Polling (works reliably through Vercel HTTPS proxy)
   useEffect(() => {
     fetchData()
-    const interval = setInterval(fetchData, POLL_INTERVAL)
+    const pollInterval = getPollIntervalForRange(timeRange)
+    const interval = setInterval(fetchData, pollInterval)
     return () => clearInterval(interval)
-  }, [fetchData])
+  }, [fetchData, timeRange])
 
   const filteredData = useMemo(() => {
     return data
@@ -114,6 +130,8 @@ export const useUsageData = (orgId?: string): UseUsageDataReturn => {
     refetch: fetchData,
     selectedUnitId,
     setSelectedUnitId,
-    filteredData
+    filteredData,
+    orgId,
+    timeRange
   }
 }
