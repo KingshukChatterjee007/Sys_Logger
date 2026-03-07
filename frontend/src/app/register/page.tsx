@@ -271,9 +271,14 @@ export default function RegisterPage() {
                                                 </>
                                             )}
                                         </button>
-                                        <p className="text-[10px] text-zinc-400 font-bold text-center mt-4">
-                                            By registering, you agree to our Terms of Service.
-                                        </p>
+                                        <div className="text-[10px] text-zinc-400 font-bold text-center mt-5 flex flex-wrap items-center justify-center gap-2">
+                                            <span>By registering, you agree to our</span>
+                                            <Link href="/terms-of-service" className="text-orange-500 hover:text-orange-600 underline decoration-orange-500/30 underline-offset-2">Terms of Service</Link>
+                                            <span className="text-zinc-300">•</span>
+                                            <Link href="/privacy-policy" className="text-orange-500 hover:text-orange-600 underline decoration-orange-500/30 underline-offset-2">Privacy Policy</Link>
+                                            <span className="text-zinc-300">•</span>
+                                            <Link href="/cookie-policy" className="text-orange-500 hover:text-orange-600 underline decoration-orange-500/30 underline-offset-2">Cookie Policy</Link>
+                                        </div>
                                     </div>
                                 </form>
                             </>
