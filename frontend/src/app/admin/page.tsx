@@ -106,9 +106,7 @@ export default function AdminDashboard() {
                     <Link href="/admin/billing" className="hidden sm:flex items-center gap-2 px-4 py-2 bg-zinc-50 hover:bg-orange-50 text-zinc-600 hover:text-orange-600 rounded-xl ring-1 ring-zinc-200 hover:ring-orange-200 transition-all text-xs font-black uppercase tracking-wider">
                         <CreditCard className="w-4 h-4" /> Billing
                     </Link>
-                    <Link href="/fleet" className="hidden sm:flex items-center gap-2 px-4 py-2 bg-zinc-900 hover:bg-zinc-800 text-white rounded-xl transition-all text-xs font-black uppercase tracking-wider shadow-md">
-                        <Activity className="w-4 h-4" /> Fleet View
-                    </Link>
+
                     <button onClick={logout} className="p-2.5 bg-zinc-50 hover:bg-red-50 text-zinc-400 hover:text-red-600 rounded-xl ring-1 ring-zinc-200 hover:ring-red-200 transition-all" title="Logout">
                         <LogOut className="w-4 h-4" />
                     </button>

@@ -394,7 +394,7 @@ class UnitStore:
             cur = conn.cursor(cursor_factory=RealDictCursor)
             
             # Get System ID
-            cur.execute("SELECT system_id FROM systems WHERE system_name = %s", (unit_id,))
+            cur.execute("SELECT system_id FROM systems WHERE system_name = %s OR system_uuid = %s", (unit_id, unit_id))
             res = cur.fetchone()
             if not res: return []
             sys_int_id = res['system_id']
@@ -479,6 +479,8 @@ def register_unit():
     # Update UnitStore
     unit = UnitStore.get_unit(unit_id) or {}
     unit.update({
+        'id': unit_id,
+        'ip': request.headers.get('X-Forwarded-For', request.remote_addr),
         'system_id': unit_id,
         'org_id': org_id,
         'comp_id': comp_id,
