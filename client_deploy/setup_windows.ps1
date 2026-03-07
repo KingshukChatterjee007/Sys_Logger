@@ -72,8 +72,11 @@ Write-Host ""
 Write-Host "[Step 2/6] Setting up Python..."
 
 if (!(Get-Command python -ErrorAction SilentlyContinue)) {
-    Write-Host "  ERROR: Python not found!"
-    Write-Host "  Download from: https://python.org/"
+    Write-Host "  ERROR: 'python' is not recognized as a command."
+    Write-Host "  Python is either not installed, or not added to your system PATH."
+    Write-Host "  Please download from: https://python.org/ and check the 'Add to PATH' box during installation."
+    Write-Host "  Press any key to exit..."
+    $host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown") | Out-Null
     exit 1
 }
 
@@ -92,6 +95,21 @@ if (Test-Path $venvPython) {
 } else {
     Write-Host "  Creating virtual environment..."
     python -m venv $venvPath
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "  ERROR: Failed to create Python virtual environment."
+        Write-Host "  Please ensure your Python installation is working correctly."
+        Write-Host "  Press any key to exit..."
+        $host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown") | Out-Null
+        exit 1
+    }
+}
+
+if (!(Test-Path $venvPython)) {
+    Write-Host "  ERROR: Virtual environment created, but python.exe is missing at: $venvPython"
+    Write-Host "  This may be due to antivirus software blocking the creation."
+    Write-Host "  Press any key to exit..."
+    $host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown") | Out-Null
+    exit 1
 }
 
 # ==========================================
@@ -102,6 +120,13 @@ Write-Host "[Step 3/6] Installing dependencies..."
 
 $reqFile = Join-Path $deployDir "requirements.txt"
 & $venvPython -m pip install -r $reqFile --quiet
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "  ERROR: Failed to install Python dependencies via pip."
+    Write-Host "  Please check your internet connection or Python setup."
+    Write-Host "  Press any key to exit..."
+    $host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown") | Out-Null
+    exit 1
+}
 Write-Host "  OK Dependencies installed"
 
 # ==========================================
@@ -173,7 +198,11 @@ $pythonwExe = Join-Path $venvPath "Scripts\pythonw.exe"
 if (Test-Path $pythonwExe) {
     Write-Host "  OK pythonw.exe verified at: $pythonwExe"
 } else {
-    Write-Host "  WARNING: pythonw.exe not found. Background mode may fail."
+    Write-Host "  ERROR: pythonw.exe not found. Background mode cannot be established."
+    Write-Host "  The virtual environment might be missing the 'pythonw.exe' executable."
+    Write-Host "  Press any key to exit..."
+    $host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown") | Out-Null
+    exit 1
 }
 
 $vbsPath = Join-Path $deployDir "ghost_runner.vbs"
