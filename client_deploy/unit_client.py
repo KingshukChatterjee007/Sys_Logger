@@ -34,7 +34,7 @@ except ImportError:
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 CONFIG_FILE = os.path.join(BASE_DIR, 'unit_client_config.json')
 CACHE_FILE = os.path.join(BASE_DIR, 'cached_usage.json')
-DEFAULT_SERVER_URL = 'http://127.0.0.1:5000'  # Hardcoded central server URL
+DEFAULT_SERVER_URL = 'http://203.193.145.59:5010'  # Hardcoded central server URL
 COLLECTION_INTERVAL = 1  # seconds - updated for 1-second updates
 RECONNECT_INTERVAL = 300  # seconds (5 minutes)
 MAX_RETRIES = 3
