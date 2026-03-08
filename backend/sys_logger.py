@@ -461,7 +461,19 @@ def get_org_units(current_user, org_id):
     return jsonify(units)
 
 @app.route('/api/units/<unit_id>/usage', methods=['GET'])
-def get_unit_usage(unit_id):
+@token_required
+def get_unit_usage(current_user, unit_id):
+    """Get usage for a unit, with strict org-based access control"""
+    all_units = UnitStore.get_all_units()
+    target_unit = next((u for u in all_units if u['id'] == unit_id), None)
+    
+    if not target_unit:
+        return jsonify({'error': 'Unit not found'}), 404
+        
+    # Security check: User must be ROOT or belong to the same organization
+    if current_user['role'] != 'ROOT' and current_user['org_id'] != target_unit.get('org_id'):
+        return jsonify({'error': 'Unauthorized: This unit does not belong to your organization'}), 403
+        
     data = UnitStore.get_usage(unit_id, limit=100)
     return jsonify(data)
 

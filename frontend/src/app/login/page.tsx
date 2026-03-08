@@ -57,7 +57,7 @@ export default function LoginPage() {
                             <Activity className="w-8 h-8 text-orange-500" />
                         </div>
                         <h1 className="text-3xl font-black tracking-tight text-zinc-900 mb-2">Welcome Back.</h1>
-                        <p className="text-zinc-500 font-medium">Log in to your fleet dashboard</p>
+                        <p className="text-zinc-500 font-medium">Log in to the management system</p>
                     </div>
 
                     <form onSubmit={handleSubmit} className="space-y-4">
