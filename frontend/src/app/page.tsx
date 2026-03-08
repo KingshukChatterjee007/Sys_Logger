@@ -16,31 +16,31 @@ export default function HomeDashboard() {
 
     return (
         <div className="min-h-screen bg-[#FAFAFA] text-zinc-900 font-sans flex flex-col relative selection:bg-orange-500/30 overflow-hidden">
-            
+
             {/* Cinematic Ambient Lighting (Light Theme) */}
             <div className="fixed inset-0 pointer-events-none z-0 flex items-center justify-center">
                 <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(0,0,0,0.03)_1px,transparent_1px)] bg-[size:24px_24px] opacity-100" />
-                
-                <motion.div 
-                    animate={{ 
+
+                <motion.div
+                    animate={{
                         scale: [1, 1.1, 1],
                         opacity: [0.05, 0.1, 0.05]
                     }}
                     transition={{ duration: 8, repeat: Infinity, ease: "easeInOut" }}
-                    className="absolute top-[-20%] left-[-10%] w-[60%] h-[60%] bg-orange-500 rounded-full blur-[160px]" 
+                    className="absolute top-[-20%] left-[-10%] w-[60%] h-[60%] bg-orange-500 rounded-full blur-[160px]"
                 />
-                <motion.div 
-                    animate={{ 
+                <motion.div
+                    animate={{
                         scale: [1, 1.2, 1],
                         opacity: [0.03, 0.08, 0.03]
                     }}
                     transition={{ duration: 10, repeat: Infinity, ease: "easeInOut", delay: 1 }}
-                    className="absolute bottom-[-20%] right-[-10%] w-[60%] h-[60%] bg-emerald-500 rounded-full blur-[160px]" 
+                    className="absolute bottom-[-20%] right-[-10%] w-[60%] h-[60%] bg-emerald-500 rounded-full blur-[160px]"
                 />
             </div>
 
             {/* Premium Glass Header */}
-            <motion.header 
+            <motion.header
                 initial={{ opacity: 0, y: -20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
@@ -63,33 +63,33 @@ export default function HomeDashboard() {
             {/* Hero Section */}
             <main className="flex-1 flex flex-col items-center justify-center px-4 relative z-10 -mt-16 text-center">
                 <div className="max-w-5xl mx-auto flex flex-col items-center">
-                    
+
                     {/* Live Badge */}
-                    <motion.div 
+                    <motion.div
                         initial={{ opacity: 0, scale: 0.9 }}
                         animate={{ opacity: 1, scale: 1 }}
                         transition={{ duration: 0.8, delay: 0.2, ease: [0.16, 1, 0.3, 1] }}
                         className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-50 ring-1 ring-emerald-200 mb-8 backdrop-blur-md shadow-sm"
                     >
                         <span className="relative flex h-2 w-2">
-                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                          <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                            <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
                         </span>
                         <span className="text-[10px] font-black uppercase tracking-[0.2em] text-emerald-600">System Online</span>
                     </motion.div>
 
                     {/* Apple-Style Massive Typography (Scaled down ~20%) */}
-                    <motion.h1 
+                    <motion.h1
                         initial={{ opacity: 0, y: 20, filter: 'blur(10px)' }}
                         animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
                         transition={{ duration: 1, delay: 0.3, ease: [0.16, 1, 0.3, 1] }}
                         className="text-5xl md:text-7xl lg:text-[7rem] font-black tracking-tighter text-transparent bg-clip-text bg-gradient-to-b from-zinc-900 via-zinc-800 to-zinc-500 leading-[0.9] pb-4"
                     >
-                        Telemetry. <br/>
+                        Telemetry. <br />
                         <span className="text-transparent bg-clip-text bg-gradient-to-r from-orange-500 to-orange-600">Perfected.</span>
                     </motion.h1>
-                    
-                    <motion.p 
+
+                    <motion.p
                         initial={{ opacity: 0, y: 20 }}
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ duration: 1, delay: 0.4, ease: [0.16, 1, 0.3, 1] }}
@@ -104,10 +104,10 @@ export default function HomeDashboard() {
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ duration: 1, delay: 0.5, ease: [0.16, 1, 0.3, 1] }}
                     >
-                        <Link href="/fleet">
+                        <Link href="/login">
                             <button className="group relative px-8 py-4 bg-zinc-900 text-white rounded-full font-black uppercase tracking-widest text-xs flex items-center gap-3 transition-all hover:scale-105 hover:bg-zinc-800 hover:shadow-[0_8px_30px_rgba(0,0,0,0.12)] overflow-hidden">
                                 <span className="relative z-10 flex items-center gap-2">
-                                    Initialize Fleet Hub 
+                                    Initialize Fleet Hub
                                     <ChevronRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
                                 </span>
                                 {/* Subtle button hover glow */}
@@ -120,7 +120,7 @@ export default function HomeDashboard() {
             </main>
 
             {/* Minimalist Footer Dock */}
-            <motion.footer 
+            <motion.footer
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 transition={{ duration: 1.2, delay: 0.8 }}
