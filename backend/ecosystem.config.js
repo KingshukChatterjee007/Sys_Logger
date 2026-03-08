@@ -4,7 +4,7 @@ module.exports = {
       name: "SysLoggerBackend",
       script: "sys_logger.py",
       cwd: "./",
-      interpreter: "./venv/Scripts/python.exe",
+      interpreter: process.platform === 'win32' ? "./venv/Scripts/python.exe" : "./venv/bin/python3",
       instances: 1,
       autorestart: true,
       watch: false,
