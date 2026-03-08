@@ -92,6 +92,7 @@ export const useUsageData = (orgId?: string): UseUsageDataReturn => {
       setError(null)
     } catch (err) {
       console.error('Error fetching data:', err)
+      setData([]) // Clear stale telemetry on error
       setLoading(false)
     }
   }, [orgId, selectedUnitId])

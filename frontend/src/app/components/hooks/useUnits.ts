@@ -19,8 +19,11 @@ export const useUnits = (orgId?: string) => {
       }
       const result: Unit[] = await response.json()
       setUnits(result)
+      setError(null)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred')
+      setUnits([]) // Clear stale data on error
+      setAlerts([])
     }
   }, [])
 

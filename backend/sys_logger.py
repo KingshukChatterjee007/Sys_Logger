@@ -154,7 +154,7 @@ def register():
 def login():
     auth = request.get_json()
     if not auth or not auth.get('email') or not auth.get('password'):
-        return make_response('Could not verify', 401, {'WWW-Authenticate': 'Basic realm="Login required!"'})
+        return make_response('Could not verify', 401)
     
     conn = get_db_connection()
     cur = conn.cursor(cursor_factory=RealDictCursor)
@@ -164,7 +164,7 @@ def login():
     conn.close()
     
     if not user:
-        return make_response('Could not verify', 401, {'WWW-Authenticate': 'Basic realm="Login required!"'})
+        return make_response('Could not verify', 401)
         
     if bcrypt.checkpw(auth.get('password').encode('utf-8'), user['password_hash'].encode('utf-8')):
         token = jwt.encode({
@@ -184,7 +184,7 @@ def login():
             }
         })
         
-    return make_response('Could not verify', 401, {'WWW-Authenticate': 'Basic realm="Login required!"'})
+    return make_response('Could not verify', 401)
 
 @app.route('/api/auth/me', methods=['GET'])
 @token_required
@@ -411,9 +411,32 @@ class UnitStore:
             print(f"Error reading usage from DB: {e}")
             return []
 
-# Strict CORS for production if needed, but for now allow all to fix frontend connection issues
-CORS(app, resources={r"/*": {"origins": "*"}})
-socketio = SocketIO(app, cors_allowed_origins="*")
+
+def sync_units_state(org_id=None):
+    """
+    Broadcast unit updates to the correct Socket.io rooms to ensure multi-tenant isolation.
+    - All updates are sent to the 'ROOT' room.
+    - If org_id is provided, updates are sent to that specific room.
+    """
+    try:
+        all_units = UnitStore.get_all_units()
+        
+        # 1. Always sync the ROOT admins (total visibility)
+        socketio.emit('units_update', all_units, room='ROOT')
+        
+        # 2. Sync the specific organization room if provided
+        if org_id:
+            org_units = [u for u in all_units if u.get('org_id') == org_id]
+            socketio.emit('units_update', org_units, room=org_id)
+            socketio.emit('org_units_update', org_units, room=org_id)
+        else:
+            # If no org_id, broadcast to all individual org rooms to be safe
+            unique_orgs = UnitStore.get_unique_orgs()
+            for org in unique_orgs:
+                org_units = [u for u in all_units if u.get('org_id') == org]
+                socketio.emit('units_update', org_units, room=org)
+    except Exception as e:
+        print(f"Error in sync_units_state: {e}")
 
 # --- Routes ---
 
@@ -441,7 +464,9 @@ def health_check():
 @token_required
 def get_units_route(current_user):
     """Get all registered units (filtered by org)"""
-    return jsonify(UnitStore.get_all_units(current_user))
+    units = UnitStore.get_all_units(current_user)
+    print(f"DEBUG: get_units for {current_user.get('email')} ({current_user.get('org_id')}) -> {len(units)} units")
+    return jsonify(units)
 
 @app.route('/api/orgs', methods=['GET'])
 @token_required
@@ -642,7 +667,7 @@ def delete_unit(unit_id):
     
     UnitStore.delete_unit(unit_id)
     # Broadcast update
-    socketio.emit('units_update', UnitStore.get_all_units())
+    sync_units_state(unit.get('org_id'))
     return jsonify({'status': 'deleted'}), 200
 
 @app.route('/api/units/<unit_id>', methods=['PUT'])
@@ -664,7 +689,7 @@ def update_unit(unit_id):
     UnitStore.save_unit(unit_id, unit)
     
     # Broadcast to all so sidebar updates immediately
-    socketio.emit('units_update', UnitStore.get_all_units())
+    sync_units_state(unit.get('org_id'))
     return jsonify(unit), 200
 
 # --- DEPLOYMENT GENERATOR ---
@@ -809,7 +834,7 @@ def register_unit():
             UnitStore.save_unit(unit_id, existing_unit)
             
             # Broadcast update because identities might have changed
-            socketio.emit('units_update', UnitStore.get_all_units())
+            sync_units_state(org_id)
             return jsonify({'unit_id': unit_id, 'org_id': org_id, 'comp_id': comp_id}), 200
 
         # New Unit
@@ -835,8 +860,7 @@ def register_unit():
         UnitStore.save_unit(unit_id, unit)
         print(f"Unit registered: {org_id}/{comp_id} (ID: {unit_id})")
 
-        socketio.emit('units_update', UnitStore.get_all_units())
-        socketio.emit('org_units_update', UnitStore.get_units_by_org(org_id), room=org_id)
+        sync_units_state(org_id)
 
         return jsonify({'unit_id': unit_id, 'org_id': org_id, 'comp_id': comp_id}), 201
 
@@ -877,7 +901,7 @@ def process_usage_record(data):
 
     UnitStore.save_unit(unit_id, unit)
     if changed:
-        socketio.emit('units_update', UnitStore.get_all_units())
+        sync_units_state(unit.get('org_id'))
     UnitStore.add_usage(unit_id, data)
 
     socketio.emit('usage_update', {'unit_id': unit_id, 'data': data})
@@ -1000,14 +1024,25 @@ def export_unit_data(unit_id):
 
 @socketio.on('connect')
 def handle_connect():
-    emit('units_update', UnitStore.get_all_units())
+    # Security: Do not emit all units on connect.
+    # Wait for the client to join an organization or prove ROOT status.
+    print(f"Client connected: {request.sid}")
 
 @socketio.on('join_org')
 def handle_join_org(data):
     org_id = data.get('org_id')
-    if org_id:
-        from flask_socketio import join_room
+    role = data.get('role') # Passed from frontend based on JWT
+    
+    from flask_socketio import join_room
+    
+    if role == 'ROOT':
+        join_room('ROOT')
+        print(f"Admin joined ROOT room: {request.sid}")
+        emit('units_update', UnitStore.get_all_units())
+    elif org_id:
         join_room(org_id)
+        print(f"User joined Org room: {org_id} ({request.sid})")
+        emit('units_update', UnitStore.get_units_by_org(org_id))
         emit('org_units_update', UnitStore.get_units_by_org(org_id))
 
 if __name__ == '__main__':
