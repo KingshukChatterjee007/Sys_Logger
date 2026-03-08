@@ -3,10 +3,17 @@
 0. POSTGRESQL INSTALLATION GUIDE
 ================================
 A. WINDOWS:
-   1. Download the installer from: https://www.enterprisedb.com/downloads/postgres-postgresql-downloads
-   2. Run the .exe and follow the wizard (Install Server, pgAdmin, and Command Line Tools).
-   3. Set a password for the 'postgres' user (Remember this for your .env).
-   4. Open 'pgAdmin 4' and create a new database named 'sys_logger'.
+   * OPTION 1 (TERMINAL - RECOMMENDED):
+     Open PowerShell as Administrator and run:
+     winget install PostgreSQL.PostgreSQL.16
+   
+   * OPTION 2 (GUI):
+     1. Download: https://www.enterprisedb.com/downloads/postgres-postgresql-downloads
+     2. Run the .exe and follow the wizard.
+   
+   * BOTH OPTIONS:
+     1. Set a password for 'postgres' and remember it for DB_PASS in your .env.
+     2. Open 'pgAdmin 4' (installed automatically) and create a database named 'sys_logger'.
 
 B. LINUX (UBUNTU/DEBIAN):
    sudo apt update && sudo apt install postgresql postgresql-contrib
