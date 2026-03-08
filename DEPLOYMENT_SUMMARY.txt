@@ -1,5 +1,22 @@
 ### SYS_LOGGER DEPLOYMENT SUMMARY - MARCH 8, 2026 ###
 
+0. POSTGRESQL INSTALLATION GUIDE
+================================
+A. WINDOWS:
+   1. Download the installer from: https://www.enterprisedb.com/downloads/postgres-postgresql-downloads
+   2. Run the .exe and follow the wizard (Install Server, pgAdmin, and Command Line Tools).
+   3. Set a password for the 'postgres' user (Remember this for your .env).
+   4. Open 'pgAdmin 4' and create a new database named 'sys_logger'.
+
+B. LINUX (UBUNTU/DEBIAN):
+   sudo apt update && sudo apt install postgresql postgresql-contrib
+   sudo -u postgres psql -c "CREATE DATABASE sys_logger;"
+
+C. MACOS:
+   brew install postgresql@14
+   brew services start postgresql@14
+   createdb sys_logger
+
 1. OVERVIEW OF CHANGES
 ======================
 The project has shifted from a "Local JSON + Global Broadcast" model to a "PostgreSQL-Backed + Multi-Tenant Isolated" architecture. This prevents Organization Admins (like TEST or NIELIT) from seeing each other's data.
