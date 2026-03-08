@@ -30,13 +30,27 @@ Ensure the following tables exist on the baremetal server:
 - Authorization: 'src/app/api/proxyUtils.ts' now passes the Bearer token to the backend.
 - Proxy: 'src/app/api/auth/login/route.ts' explicitly forwards login requests to resolve 404s.
 
-5. DATA MIGRATION STEPS
+5. VERIFIED LOGIN CREDENTIALS
+============================
+Use these to verify the isolation once deployed:
+
+A. ROOT ADMIN (TOTAL VISIBILITY)
+- Email: admin@syslogger.com
+- Password: adminpassword123
+- Can see all clusters and organizations.
+
+B. TEST ADMIN (ISOLATED VISIBILITY)
+- Email: test_admin@nielit.com
+- Password: testpassword123
+- Should see ONLY 'TEST/Piyush' unit.
+
+6. DATA MIGRATION STEPS
 =======================
 If you have existing units in 'units_db.json' on the server:
 - Use 'backend/sync_json_to_sql.py' to import them into PostgreSQL.
 - This script correctly handles the UUID conversion and 'org_id' mapping.
 
-6. SOCKET.IO ROOM ISOLATION (APPLIED)
+7. SOCKET.IO ROOM ISOLATION (APPLIED)
 ======================================
 The "Global Loudspeaker" has been replaced with private rooms.
 - 'on_join' event: Frontend now (internally) joins the room for its 'org_id'.
