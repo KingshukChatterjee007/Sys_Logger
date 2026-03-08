@@ -26,6 +26,9 @@ from flask_cors import CORS
 from flask_socketio import SocketIO, emit
 from werkzeug.serving import make_server
 from dotenv import load_dotenv
+import jwt
+from functools import wraps
+import bcrypt
 try:
     import GPUtil
     NVIDIA_AVAILABLE = True
@@ -52,6 +55,33 @@ def get_db_connection():
     return conn
 
 app = Flask(__name__)
+CORS(app)
+app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'sys-logger-super-secret-key')
+socketio = SocketIO(app, cors_allowed_origins="*")
+
+# Auth Decorator
+def token_required(f):
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        token = None
+        if 'Authorization' in request.headers:
+            auth_header = request.headers['Authorization']
+            if auth_header.startswith('Bearer '):
+                token = auth_header.split(" ")[1]
+        
+        if not token:
+            return jsonify({'message': 'Token is missing!'}), 401
+        
+        try:
+            data = jwt.decode(token, app.config['SECRET_KEY'], algorithms=["HS256"])
+            # In a real app, query DB for user to ensure they still exist
+            current_user = data
+        except Exception as e:
+            return jsonify({'message': 'Token is invalid!', 'error': str(e)}), 401
+            
+        return f(current_user, *args, **kwargs)
+    return decorated
+
 DATA_DIR = 'unit_data'
 if not os.path.exists(DATA_DIR):
     os.makedirs(DATA_DIR)
@@ -81,6 +111,85 @@ if USE_REDIS and redis:
 elif USE_REDIS and not redis:
     print("Redis enabled but 'redis' library not installed. Falling back to in-memory storage.")
     USE_REDIS = False
+
+# --- AUTHENTICATION ROUTES ---
+
+@app.route('/api/auth/register', methods=['POST'])
+def register():
+    data = request.get_json()
+    email = data.get('email')
+    password = data.get('password')
+    org_id = data.get('org_id')
+    role = data.get('role', 'USER')
+    
+    if not email or not password or not org_id:
+        return jsonify({'message': 'Missing required fields!'}), 400
+        
+    conn = get_db_connection()
+    cur = conn.cursor(cursor_factory=RealDictCursor)
+    
+    # Check if user exists
+    cur.execute("SELECT * FROM users WHERE email = %s", (email,))
+    if cur.fetchone():
+        return jsonify({'message': 'User already exists!'}), 400
+        
+    # Check if org exists, if not create it (auto-bootstrap)
+    cur.execute("SELECT * FROM organizations WHERE org_id = %s", (org_id,))
+    if not cur.fetchone():
+        cur.execute("INSERT INTO organizations (org_id, name) VALUES (%s, %s)", (org_id, org_id))
+    
+    password_hash = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+    cur.execute(
+        "INSERT INTO users (email, password_hash, role, org_id) VALUES (%s, %s, %s, %s)",
+        (email, password_hash, role, org_id)
+    )
+    
+    conn.commit()
+    cur.close()
+    conn.close()
+    
+    return jsonify({'message': 'User registered successfully!'}), 201
+
+@app.route('/api/auth/login', methods=['POST'])
+def login():
+    auth = request.get_json()
+    if not auth or not auth.get('email') or not auth.get('password'):
+        return make_response('Could not verify', 401, {'WWW-Authenticate': 'Basic realm="Login required!"'})
+    
+    conn = get_db_connection()
+    cur = conn.cursor(cursor_factory=RealDictCursor)
+    cur.execute("SELECT * FROM users WHERE email = %s", (auth.get('email'),))
+    user = cur.fetchone()
+    cur.close()
+    conn.close()
+    
+    if not user:
+        return make_response('Could not verify', 401, {'WWW-Authenticate': 'Basic realm="Login required!"'})
+        
+    if bcrypt.checkpw(auth.get('password').encode('utf-8'), user['password_hash'].encode('utf-8')):
+        token = jwt.encode({
+            'user_id': user['user_id'],
+            'email': user['email'],
+            'role': user['role'],
+            'org_id': user['org_id'],
+            'exp': datetime.utcnow() + timedelta(hours=24)
+        }, app.config['SECRET_KEY'], algorithm="HS256")
+        
+        return jsonify({
+            'token': token,
+            'user': {
+                'email': user['email'],
+                'role': user['role'],
+                'org_id': user['org_id']
+            }
+        })
+        
+    return make_response('Could not verify', 401, {'WWW-Authenticate': 'Basic realm="Login required!"'})
+
+@app.route('/api/auth/me', methods=['GET'])
+@token_required
+def get_me(current_user):
+    return jsonify(current_user)
 
 def load_units_db():
     """Load units from JSON file on startup"""
@@ -160,11 +269,19 @@ class UnitStore:
             if unit_id in unit_usage: del unit_usage[unit_id]
 
     @staticmethod
-    def get_all_units():
+    def get_all_units(user=None):
+        all_units = []
         if USE_REDIS:
             raw_units = redis_client.hgetall('units')
-            return [json.loads(u) for u in raw_units.values()]
-        return list(units.values())
+            all_units = [json.loads(u) for u in raw_units.values()]
+        else:
+            all_units = list(units.values())
+            
+        # Filter by Org if not ROOT
+        if user and user.get('role') != 'ROOT':
+            org_id = user.get('org_id')
+            return [u for u in all_units if u.get('org_id') == org_id]
+        return all_units
 
     @staticmethod
     def get_unique_orgs():
@@ -321,15 +438,25 @@ def health_check():
     }), 200
 
 @app.route('/api/units', methods=['GET'])
-def get_units():
-    return jsonify(UnitStore.get_all_units())
+@token_required
+def get_units_route(current_user):
+    """Get all registered units (filtered by org)"""
+    return jsonify(UnitStore.get_all_units(current_user))
 
 @app.route('/api/orgs', methods=['GET'])
-def get_orgs():
+@token_required
+def get_orgs(current_user):
+    """Filter orgs list for ROOT admins only"""
+    if current_user['role'] != 'ROOT':
+        return jsonify({'error': 'Unauthorized'}), 403
     return jsonify(UnitStore.get_unique_orgs())
 
 @app.route('/api/orgs/<org_id>/units', methods=['GET'])
-def get_org_units(org_id):
+@token_required
+def get_org_units(current_user, org_id):
+    """Get units for a specific org (ROOT or Org Admin check)"""
+    if current_user['role'] != 'ROOT' and current_user['org_id'] != org_id:
+        return jsonify({'error': 'Unauthorized'}), 403
     units = UnitStore.get_units_by_org(org_id)
     return jsonify(units)
 

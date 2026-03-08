@@ -17,6 +17,8 @@ export const metadata: Metadata = {
   description: "Real-time system performance monitoring for CPU, RAM, and GPU metrics",
 };
 
+import { AuthProvider } from "./components/AuthContext";
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -27,7 +29,9 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
-        {children}
+        <AuthProvider>
+          {children}
+        </AuthProvider>
       </body>
     </html>
   );

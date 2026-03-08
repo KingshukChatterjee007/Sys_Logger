@@ -14,7 +14,7 @@ import {
     Monitor, Server, Database, Globe,
     ChevronRight, Download, Cpu, HardDrive,
     Wifi, Zap, Clock, AlertTriangle,
-    Terminal, Pencil, Trash2, X, Save, Activity, Menu, ArrowLeft, Shield
+    Terminal, Pencil, Trash2, X, Save, Activity, Menu, ArrowLeft, Shield, LogOut
 } from 'lucide-react'
 
 function cn(...inputs: ClassValue[]) {
@@ -26,7 +26,19 @@ interface DashboardViewProps {
 }
 
 
+import { useAuth } from './components/AuthContext';
+import { useRouter } from 'next/navigation';
+
 export default function DashboardView({ orgId: propOrgId }: DashboardViewProps) {
+    const { user, token, logout, isLoading } = useAuth();
+    const router = useRouter();
+
+    useEffect(() => {
+        if (!isLoading && !token) {
+            router.push('/login');
+        }
+    }, [token, isLoading, router]);
+
     const [viewOrgId] = useState<string | null>(propOrgId || null)
 
     // Real API Hooks
@@ -357,6 +369,32 @@ export default function DashboardView({ orgId: propOrgId }: DashboardViewProps) 
                         </div>
                     </div>
 
+                    {/* User Profile & Logout */}
+                    <div className="p-4 border-t border-zinc-200/60 bg-white">
+                        <div className="flex items-center gap-3 p-3 bg-zinc-50 rounded-2xl ring-1 ring-zinc-200/50">
+                            <div className="w-10 h-10 bg-zinc-900 rounded-xl flex items-center justify-center text-orange-500 font-black text-xs shadow-lg shadow-zinc-900/10">
+                                {user?.email.charAt(0).toUpperCase() || 'U'}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                                <p className="text-xs font-black text-zinc-900 truncate">{user?.email}</p>
+                                <div className="flex items-center gap-1.5 mt-0.5">
+                                    <span className="text-[9px] font-black uppercase tracking-widest text-orange-600 bg-orange-50 px-1.5 py-0.5 rounded border border-orange-100">
+                                        {user?.role}
+                                    </span>
+                                    <span className="text-[9px] font-bold text-zinc-400 uppercase tracking-widest">
+                                        {user?.org_id}
+                                    </span>
+                                </div>
+                            </div>
+                            <button
+                                onClick={logout}
+                                className="p-2 text-zinc-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                                title="Log Out"
+                            >
+                                <LogOut size={16} />
+                            </button>
+                        </div>
+                    </div>
                 </aside>
 
 
