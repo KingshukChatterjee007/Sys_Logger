@@ -81,6 +81,22 @@ The "Global Loudspeaker" has been replaced with private rooms.
 - 'sync_units_state': Now emits ONLY to the 'org_id' room or 'ROOT' room.
 - REAL-TIME FIX: Heartbeats no longer leak across organizations.
 
+----------------8. PM2 MANAGEMENT COMMANDS
+==========================
+To run the backend persistently on the server:
+
+- START:
+  pm2 start venv/bin/python3 --name SysLoggerBackend -- sys_logger.py
+
+- RESTART:
+  pm2 restart SysLoggerBackend
+
+- VIEW LOGS:
+  pm2 logs SysLoggerBackend
+
+- CHECK STATUS:
+  pm2 status
+
 ---------------------------------------------------
 Prepared by Antigravity AI
 ---------------------------------------------------
