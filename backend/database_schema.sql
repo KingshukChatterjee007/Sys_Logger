@@ -1,7 +1,32 @@
--- =====================================================================
---  Sys_Logger Database Schema
---  High-performance monitoring DB with partitioning & aggregation
--- =====================================================================
+-- ============================================================
+-- 0. ORGANIZATIONS & USERS (Auth Layer)
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS organizations (
+    org_id SERIAL PRIMARY KEY,
+    name VARCHAR(255) NOT NULL,
+    slug VARCHAR(255) NOT NULL UNIQUE,
+    tier VARCHAR(50) NOT NULL DEFAULT 'FREE',
+    node_limit INTEGER NOT NULL DEFAULT 10,
+    contact_email VARCHAR(255),
+    next_payment_date DATE,
+    is_active BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS users (
+    user_id SERIAL PRIMARY KEY,
+    username VARCHAR(255) NOT NULL UNIQUE,
+    email VARCHAR(255) UNIQUE,
+    password_hash VARCHAR(512) NOT NULL,
+    role VARCHAR(50) NOT NULL DEFAULT 'USER',
+    org_id INTEGER REFERENCES organizations(org_id) ON DELETE SET NULL,
+    is_active BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_users_org_id ON users(org_id);
+CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);
 
 -- ============================================================
 -- 1. SYSTEMS TABLE
