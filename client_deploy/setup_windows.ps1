@@ -46,16 +46,24 @@ Write-Host "  OK npm found: $(npm -v)"
 
 # Check/Install PM2
 if (!(Get-Command pm2 -ErrorAction SilentlyContinue)) {
-    Write-Host "  Installing PM2 globally..."
-    npm install -g pm2
-    if ($LASTEXITCODE -ne 0) {
-        Write-Host "  ERROR: Failed to install PM2 globally."
-        exit 1
+    # Check common roaming path before installing
+    $roamingNpm = Join-Path $env:APPDATA "npm"
+    $pm2Roaming = Join-Path $roamingNpm "pm2.cmd"
+    
+    if (Test-Path $pm2Roaming) {
+        Write-Host "  OK PM2 found in npm roaming path: $pm2Roaming"
+    } else {
+        Write-Host "  Installing PM2 globally..."
+        npm install -g pm2
+        if ($LASTEXITCODE -ne 0) {
+            Write-Host "  ERROR: Failed to install PM2 globally."
+            exit 1
+        }
+        # Refresh PATH in current session
+        $env:PATH = [System.Environment]::GetEnvironmentVariable("Path", "Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path", "User")
     }
-    # Refresh PATH in current session
-    $env:PATH = [System.Environment]::GetEnvironmentVariable("Path", "Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path", "User")
 }
-Write-Host "  OK PM2 found (Global installation confirmed)"
+Write-Host "  OK PM2 is available"
 
 # ==========================================
 # Step 2: Setup Python Virtual Environment
@@ -72,11 +80,19 @@ if (!(Get-Command python -ErrorAction SilentlyContinue)) {
 $venvPath = Join-Path $deployDir "venv"
 $venvPython = Join-Path $venvPath "Scripts\python.exe"
 
-if (!(Test-Path $venvPython)) {
+if (Test-Path $venvPython) {
+    Write-Host "  Verifying virtual environment..."
+    try {
+        & $venvPython -c "import requests, psutil, GPUtil" -ErrorAction Stop
+        Write-Host "  OK Python venv is healthy"
+    } catch {
+        Write-Host "  WARNING: Python venv is corrupted. Re-creating..."
+        python -m venv --clear $venvPath
+    }
+} else {
     Write-Host "  Creating virtual environment..."
     python -m venv $venvPath
 }
-Write-Host "  OK Python venv ready"
 
 # ==========================================
 # Step 3: Install Dependencies
@@ -97,35 +113,41 @@ Write-Host "  You will be asked for your Organization ID and Computer ID."
 Write-Host "  These are saved once and used every time the client runs."
 Write-Host ""
 
-& $venvPython "$deployDir\first_run_wizard.py"
-
-if ($LASTEXITCODE -ne 0) {
-    Write-Host "  ERROR: Configuration wizard failed. Cannot continue."
-    exit 1
+$configFile = Join-Path $deployDir "unit_client_config.json"
+if (Test-Path $configFile) {
+    Write-Host "  OK Pre-configured installer detected - skipping wizard."
+    $configData = Get-Content $configFile | ConvertFrom-Json
+    Write-Host "    Node: $($configData.comp_id)"
+    Write-Host "    Org : $($configData.org_id)"
+} else {
+    & $venvPython "$deployDir\first_run_wizard.py"
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "  ERROR: Configuration wizard failed. Cannot continue."
+        exit 1
+    }
 }
 Write-Host "  OK Unit identity configured"
 
 # ==========================================
-# Step 5: Start Client via PM2
+# Step 5: Start Client Invisibly
 # ==========================================
 Write-Host ""
-Write-Host "[Step 5/6] Starting client via PM2..."
+Write-Host "[Step 5/6] Starting client invisibly..."
 
 # Create logs directory
 $logsDir = Join-Path $deployDir "logs"
 if (!(Test-Path $logsDir)) { New-Item -ItemType Directory -Path $logsDir | Out-Null }
 
-# Stop any existing instance
-pm2 delete sys-logger-client 2>$null
+# Stop any existing PM2 or VBS instances
+& pm2.cmd delete sys-logger-client 2>$null
+Get-Process pythonw -ErrorAction SilentlyContinue | Where-Object { $_.Path -like "*$deployDir*" } | Stop-Process -Force -ErrorAction SilentlyContinue
 
-# Start with ecosystem config (windowsHide:true keeps it background)
-Set-Location $deployDir
-pm2 start ecosystem.config.js
+# Start via VBS (Zero-Visibility)
+$vbsPath = Join-Path $deployDir "ghost_runner.vbs"
+$wscriptPath = "C:\Windows\System32\wscript.exe"
+Start-Process $wscriptPath -ArgumentList "`"$vbsPath`"" -WorkingDirectory $deployDir
 
-# Save the process list (needed for pm2 resurrect on boot)
-pm2 save --force
-
-Write-Host "  OK Client is running (hidden background process)"
+Write-Host "  OK Client started in the background (No window will appear)"
 
 # ==========================================
 # Step 6: Create Auto-Start Task (Silent)
@@ -137,12 +159,22 @@ Write-Host "[Step 6/6] Registering auto-start..."
 $pm2Path = Get-Command pm2.cmd -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Source
 if (!$pm2Path) { $pm2Path = "pm2" }
 
-# Inject absolute PM2 path into boot_start.bat for maximum reliability
-$batPath = Join-Path $deployDir "boot_start.bat"
-$batContent = Get-Content $batPath
-$batContent = $batContent -replace 'pm2 start', "`"$pm2Path`" start"
-$batContent = $batContent -replace 'pm2 resurrect', "`"$pm2Path`" resurrect"
-Set-Content -Path $batPath -Value $batContent
+# Note: We rely on PM2 being in the PATH or the ecosystem config being relative.
+# Absolute path injection is disabled to keep files portable for shipping.
+# $batContent = Get-Content $batPath
+# $batContent = $batContent -replace 'pm2 start', "`"$pm2Path`" start"
+# $batContent = $batContent -replace 'pm2 resurrect', "`"$pm2Path`" resurrect"
+# Set-Content -Path $batPath -Value $batContent
+
+# === Inject pythonw.exe path (deprecated for shippable VBS) ===
+# We now use relative paths in ghost_runner.vbs for better portability.
+# Only verifying it exists here.
+$pythonwExe = Join-Path $venvPath "Scripts\pythonw.exe"
+if (Test-Path $pythonwExe) {
+    Write-Host "  OK pythonw.exe verified at: $pythonwExe"
+} else {
+    Write-Host "  WARNING: pythonw.exe not found. Background mode may fail."
+}
 
 $vbsPath = Join-Path $deployDir "ghost_runner.vbs"
 $taskName = "Sys_Logger_Client_AutoStart"
