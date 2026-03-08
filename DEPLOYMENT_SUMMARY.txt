@@ -1,0 +1,48 @@
+### SYS_LOGGER DEPLOYMENT SUMMARY - MARCH 8, 2026 ###
+
+1. OVERVIEW OF CHANGES
+======================
+The project has shifted from a "Local JSON + Global Broadcast" model to a "PostgreSQL-Backed + Multi-Tenant Isolated" architecture. This prevents Organization Admins (like TEST or NIELIT) from seeing each other's data.
+
+2. BACKEND (sys_logger.py)
+==========================
+- DEPRECATED: 'units_db.json' is no longer the Source of Truth.
+- NEW: PostgreSQL is now required.
+- TABLES:
+    - 'systems': Stores unit metadata. Enforces 'org_id' foreign key.
+    - 'system_metrics': Stores all telemetry (CPU, GPU, RAM, etc).
+- SECURITY:
+    - Added JWT Authentication.
+    - Added BCrypt password hashing.
+    - Enforced SQL-level filtering (WHERE org_id = %current_user_org_id).
+
+3. DATABASE SCHEMA
+==================
+Ensure the following tables exist on the baremetal server:
+- 'users': user_id, email, password_hash, role, org_id
+- 'organizations': org_id, name, created_at
+- 'systems': system_id, system_name, org_id (FK), status, last_seen, etc.
+- 'system_metrics': id, system_id (FK), cpu, ram, gpu, timestamp...
+
+4. FRONTEND CONFIGURATION
+=========================
+- .env.local: MUST have NEXT_PUBLIC_API_URL=http://localhost:5010 (or the server public IP).
+- Authorization: 'src/app/api/proxyUtils.ts' now passes the Bearer token to the backend.
+- Proxy: 'src/app/api/auth/login/route.ts' explicitly forwards login requests to resolve 404s.
+
+5. DATA MIGRATION STEPS
+=======================
+If you have existing units in 'units_db.json' on the server:
+- Use 'backend/sync_json_to_sql.py' to import them into PostgreSQL.
+- This script correctly handles the UUID conversion and 'org_id' mapping.
+
+6. SOCKET.IO ROOM ISOLATION (APPLIED)
+======================================
+The "Global Loudspeaker" has been replaced with private rooms.
+- 'on_join' event: Frontend now (internally) joins the room for its 'org_id'.
+- 'sync_units_state': Now emits ONLY to the 'org_id' room or 'ROOT' room.
+- REAL-TIME FIX: Heartbeats no longer leak across organizations.
+
+---------------------------------------------------
+Prepared by Antigravity AI
+---------------------------------------------------

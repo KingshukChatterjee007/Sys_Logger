@@ -86,10 +86,8 @@ DATA_DIR = 'unit_data'
 if not os.path.exists(DATA_DIR):
     os.makedirs(DATA_DIR)
 
-UNITS_DB_FILE = 'units_db.json'
-
-# Global data structures
-units = {}  # In-memory cache of units
+# Global data structures (Deprecated JSON storage)
+# units = {}  # Removed to enforce SQL as source of truth
 unit_usage = {}
 alerts = []
 ngrok_url = None
@@ -191,160 +189,188 @@ def login():
 def get_me(current_user):
     return jsonify(current_user)
 
-def load_units_db():
-    """Load units from JSON file on startup"""
-    global units
-    if os.path.exists(UNITS_DB_FILE):
-        try:
-            with open(UNITS_DB_FILE, 'r') as f:
-                units = json.load(f)
-            print(f"Loaded {len(units)} units from {UNITS_DB_FILE}")
-        except Exception as e:
-            print(f"Error loading units db: {e}")
-            units = {}
-    else:
-        units = {}
-
-def save_units_db():
-    """Save units to JSON file"""
-    try:
-        with open(UNITS_DB_FILE, 'w') as f:
-            json.dump(units, f, indent=2)
-    except Exception as e:
-        print(f"Error saving units db: {e}")
+# Legacy JSON storage logic removed (PostgreSQL is now SOT)
 
 class UnitStore:
-    """Store for units and usage with Persistence"""
+    """Store for units and usage with PostgreSQL Persistence"""
     
     @staticmethod
+    def _row_to_unit(row):
+        """Convert a DB row to the frontend unit format"""
+        if not row: return None
+        return {
+            'id': str(row['system_id']), # Use system_id as the primary key for frontend
+            'system_id': str(row['system_uuid']) if row['system_uuid'] else row['system_name'],
+            'org_id': row['org_id'],
+            'comp_id': row['system_name'].split('/')[-1] if '/' in row['system_name'] else row['system_name'],
+            'name': row['system_name'],
+            'status': 'online' if (datetime.now(row['last_seen'].tzinfo) - row['last_seen']).total_seconds() < 300 else 'offline',
+            'last_seen': row['last_seen'].isoformat(),
+            'hostname': row['hostname'],
+            'os_info': row['os'],
+            'ram_total': float(row['ram_gb']) if row['ram_gb'] else 0,
+            'ip': row['ip_address'],
+            'alerts': [] # Alerts are currently in-memory but could be moved to DB too
+        }
+
+    @staticmethod
     def get_unit(unit_id):
-        if USE_REDIS:
-            data = redis_client.hget('units', unit_id)
-            return json.loads(data) if data else None
-        return units.get(unit_id)
+        try:
+            conn = get_db_connection()
+            cur = conn.cursor(cursor_factory=RealDictCursor)
+            cur.execute("SELECT * FROM systems WHERE system_id = %s OR system_name = %s", (unit_id, unit_id))
+            row = cur.fetchone()
+            cur.close()
+            conn.close()
+            return UnitStore._row_to_unit(row)
+        except Exception as e:
+            print(f"Error in UnitStore.get_unit: {e}")
+            return None
 
     @staticmethod
     def get_unit_by_org_comp(org_id, comp_id):
-        all_units = UnitStore.get_all_units()
-        for unit in all_units:
-            if unit.get('org_id') == org_id and unit.get('comp_id') == comp_id:
-                return unit
-        return None
+        try:
+            conn = get_db_connection()
+            cur = conn.cursor(cursor_factory=RealDictCursor)
+            # Match by org_id and a name that ends with /comp_id or IS comp_id
+            name = f"{org_id}/{comp_id}"
+            cur.execute("SELECT * FROM systems WHERE org_id = %s AND (system_name = %s OR system_name = %s)", (org_id, name, comp_id))
+            row = cur.fetchone()
+            cur.close()
+            conn.close()
+            return UnitStore._row_to_unit(row)
+        except Exception as e:
+            print(f"Error in UnitStore.get_unit_by_org_comp: {e}")
+            return None
 
     @staticmethod
     def save_unit(unit_id, unit_data):
-        if USE_REDIS:
-            redis_client.hset('units', unit_id, json.dumps(unit_data))
-        else:
-            units[unit_id] = unit_data
-            save_units_db() # Persist to disk
-
-    @staticmethod
-    def delete_unit(unit_id):
-        # 1. Clean up PostgreSQL if enabled
-        unit = UnitStore.get_unit(unit_id)
-        if unit and 'system_id' in unit:
-            system_uuid = unit['system_id']
-            conn = get_db_connection()
-            if conn:
-                try:
-                    cur = conn.cursor()
-                    # Delete metrics first due to FK
-                    cur.execute("DELETE FROM system_metrics WHERE system_id IN (SELECT system_id FROM systems WHERE system_uuid = %s)", (system_uuid,))
-                    cur.execute("DELETE FROM systems WHERE system_uuid = %s", (system_uuid,))
-                    conn.commit()
-                    cur.close()
-                    conn.close()
-                except Exception as e:
-                    print(f"Error cleaning up PostgreSQL for unit {unit_id}: {e}")
-
-        # 2. Clean up in-memory/JSON storage
-        if USE_REDIS:
-            redis_client.hdel('units', unit_id)
-            redis_client.delete(f'usage:{unit_id}')
-        else:
-            if unit_id in units: 
-                del units[unit_id]
-                save_units_db() # Persist to disk
-            if unit_id in unit_usage: del unit_usage[unit_id]
-
-    @staticmethod
-    def get_all_units(user=None):
-        all_units = []
-        if USE_REDIS:
-            raw_units = redis_client.hgetall('units')
-            all_units = [json.loads(u) for u in raw_units.values()]
-        else:
-            all_units = list(units.values())
-            
-        # Filter by Org if not ROOT
-        if user and user.get('role') != 'ROOT':
-            org_id = user.get('org_id')
-            return [u for u in all_units if u.get('org_id') == org_id]
-        return all_units
-
-    @staticmethod
-    def get_unique_orgs():
-        all_units = UnitStore.get_all_units()
-        orgs = set()
-        for unit in all_units:
-            if unit.get('org_id'):
-                orgs.add(unit.get('org_id'))
-        return sorted(list(orgs))
-
-    @staticmethod
-    def get_units_by_org(org_id):
-        all_units = UnitStore.get_all_units()
-        return [unit for unit in all_units if unit.get('org_id') == org_id]
-
-    @staticmethod
-    def add_usage(unit_id, usage_data):
-        # 1. Update In-Memory Cache for Real-time Graphs (last 100)
-        if USE_REDIS:
-            key = f'usage:{unit_id}'
-            redis_client.rpush(key, json.dumps(usage_data))
-            redis_client.ltrim(key, -100, -1)
-        else:
-            if unit_id not in unit_usage:
-                unit_usage[unit_id] = []
-            unit_usage[unit_id].append(usage_data)
-            if len(unit_usage[unit_id]) > 100:
-                unit_usage[unit_id] = unit_usage[unit_id][-100:]
-
-        # 2. Persist to PostgreSQL (Deep Storage)
+        # In SQL mode, save_unit is usually called during register_unit or heartbeat
+        # We'll implement an upsert here for compatibility
         try:
             conn = get_db_connection()
             cur = conn.cursor()
             
-            # Resolve System ID (Upsert logic to ensure system exists)
-            # Use unit_id as system_name (Short ID for URLs)
-            # Use system_id as system_uuid (Full UUID for uniqueness/proper tracking)
-            
-            timestamp = usage_data.get('timestamp')
-            if timestamp.endswith('Z'): timestamp = timestamp[:-1]
-            
-            # Extract metadata from payload
-            sys_uuid = usage_data.get('system_id') 
-            hostname = usage_data.get('hostname', 'unknown_host')
+            org_id = unit_data.get('org_id', 'TEST')
+            name = unit_data.get('name', f"{org_id}/{unit_data.get('comp_id', unit_id)}")
             
             cur.execute("""
-                INSERT INTO systems (system_name, system_uuid, hostname, last_seen)
-                VALUES (%s, %s, %s, %s)
-                ON CONFLICT (system_name) DO UPDATE SET 
-                    last_seen = EXCLUDED.last_seen,
+                INSERT INTO systems 
+                (system_name, system_uuid, hostname, ip_address, os, ram_gb, org_id, last_seen)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                ON CONFLICT (system_name) DO UPDATE SET
                     system_uuid = COALESCE(EXCLUDED.system_uuid, systems.system_uuid),
-                    hostname = EXCLUDED.hostname
-                RETURNING system_id
-            """, (unit_id, sys_uuid, hostname, timestamp))
+                    hostname = EXCLUDED.hostname,
+                    ip_address = EXCLUDED.ip_address,
+                    os = EXCLUDED.os,
+                    ram_gb = EXCLUDED.ram_gb,
+                    org_id = EXCLUDED.org_id,
+                    last_seen = EXCLUDED.last_seen
+            """, (
+                name,
+                unit_data.get('system_id') if '-' in str(unit_data.get('system_id', '')) else None,
+                unit_data.get('hostname', 'Unknown'),
+                unit_data.get('ip'),
+                unit_data.get('os_info'),
+                unit_data.get('ram_total'),
+                org_id,
+                datetime.now()
+            ))
+            conn.commit()
+            cur.close()
+            conn.close()
+        except Exception as e:
+            print(f"Error in UnitStore.save_unit: {e}")
+
+    @staticmethod
+    def delete_unit(unit_id):
+        try:
+            conn = get_db_connection()
+            cur = conn.cursor()
+            # Delete metrics first due to FK
+            cur.execute("DELETE FROM system_metrics WHERE system_id = %s OR system_id IN (SELECT system_id FROM systems WHERE system_name = %s)", (unit_id, unit_id))
+            cur.execute("DELETE FROM systems WHERE system_id = %s OR system_name = %s", (unit_id, unit_id))
+            conn.commit()
+            cur.close()
+            conn.close()
+        except Exception as e:
+            print(f"Error in UnitStore.delete_unit: {e}")
+
+    @staticmethod
+    def get_all_units(user=None):
+        try:
+            conn = get_db_connection()
+            cur = conn.cursor(cursor_factory=RealDictCursor)
             
-            sys_int_id = cur.fetchone()[0]
+            query = "SELECT * FROM systems"
+            params = []
+            
+            # STRICT SQL ISOLATION
+            if user and user.get('role') != 'ROOT':
+                org_id = user.get('org_id')
+                if not org_id:
+                    return []
+                query += " WHERE org_id = %s"
+                params.append(org_id)
+                
+            cur.execute(query, params)
+            rows = cur.fetchall()
+            cur.close()
+            conn.close()
+            return [UnitStore._row_to_unit(r) for r in rows]
+        except Exception as e:
+            print(f"Error in UnitStore.get_all_units: {e}")
+            return []
+
+    @staticmethod
+    def get_unique_orgs():
+        try:
+            conn = get_db_connection()
+            cur = conn.cursor()
+            cur.execute("SELECT DISTINCT org_id FROM systems WHERE org_id IS NOT NULL")
+            rows = cur.fetchall()
+            cur.close()
+            conn.close()
+            return sorted([r[0] for r in rows])
+        except Exception as e:
+            print(f"Error in UnitStore.get_unique_orgs: {e}")
+            return []
+
+    @staticmethod
+    def get_units_by_org(org_id):
+        return UnitStore.get_all_units(user={'role': 'USER', 'org_id': org_id})
+
+    @staticmethod
+    def add_usage(unit_id, usage_data):
+        # 1. Update In-Memory Cache for Real-time Graphs (last 100)
+        # Keeping this for instant dashboard updates, though SQL is the Source of Truth
+        if unit_id not in unit_usage:
+            unit_usage[unit_id] = []
+        unit_usage[unit_id].append(usage_data)
+        if len(unit_usage[unit_id]) > 100:
+            unit_usage[unit_id] = unit_usage[unit_id][-100:]
+
+        # 2. Persist to PostgreSQL (system_metrics table)
+        try:
+            conn = get_db_connection()
+            cur = conn.cursor()
+            
+            # Resolve System ID (unit_id is the string representation of system_id PK)
+            # We try system_id first, then system_name
+            cur.execute("SELECT system_id FROM systems WHERE system_id = %s OR system_name = %s LIMIT 1", (unit_id, unit_id))
+            res = cur.fetchone()
+            if not res:
+                print(f"Error: Unit {unit_id} not found in DB for usage reporting")
+                return
+            sys_int_id = res[0]
+
+            timestamp = usage_data.get('timestamp')
+            if timestamp and timestamp.endswith('Z'): timestamp = timestamp[:-1]
+            if not timestamp: timestamp = datetime.now()
             
             cpu = usage_data.get('cpu', usage_data.get('cpu_usage', 0))
             ram = usage_data.get('ram', usage_data.get('ram_usage', 0))
-            gpu = 0
-            if usage_data.get('gpu_load') is not None: gpu = usage_data.get('gpu_load')
-            elif usage_data.get('gpu_usage') is not None: gpu = usage_data.get('gpu_usage')
-            
+            gpu = usage_data.get('gpu_load', usage_data.get('gpu_usage', 0))
             net_rx = usage_data.get('network_rx', 0)
             net_tx = usage_data.get('network_tx', 0)
 
@@ -355,27 +381,30 @@ class UnitStore:
                 ON CONFLICT DO NOTHING
             """, (sys_int_id, timestamp, cpu, ram, gpu, net_rx, net_tx))
             
+            # Also update last_seen on systems table
+            cur.execute("UPDATE systems SET last_seen = %s WHERE system_id = %s", (timestamp, sys_int_id))
+            
             conn.commit()
             cur.close()
             conn.close()
         except Exception as e:
-            print(f"Failed to write to DB: {e}")
+            print(f"Failed to write usage to DB for unit {unit_id}: {e}")
 
     @staticmethod
     def get_usage(unit_id, limit=50):
-        # Read from Postgres (Single Source of Truth)
         try:
             conn = get_db_connection()
             cur = conn.cursor(cursor_factory=RealDictCursor)
             
-            # Get System ID
-            cur.execute("SELECT system_id FROM systems WHERE system_name = %s", (unit_id,))
+            # Resolve System ID
+            cur.execute("SELECT system_id FROM systems WHERE system_id = %s OR system_name = %s", (unit_id, unit_id))
             res = cur.fetchone()
             if not res: return []
             sys_int_id = res['system_id']
             
             cur.execute("""
-                SELECT timestamp, cpu_usage as cpu, ram_usage as ram, gpu_usage as gpu, network_rx_mb as network_rx, network_tx_mb as network_tx 
+                SELECT timestamp, cpu_usage as cpu, ram_usage as ram, gpu_usage as gpu, 
+                       network_rx_mb as network_rx, network_tx_mb as network_tx 
                 FROM system_metrics 
                 WHERE system_id = %s 
                 ORDER BY timestamp DESC 
@@ -383,8 +412,25 @@ class UnitStore:
             """, (sys_int_id, limit))
             
             rows = cur.fetchall()
+            cur.close()
+            conn.close()
             
-            # Reverse to Chronological Order (Oldest -> Newest) for Graph
+            # Formatting for frontend
+            formatted_rows = []
+            for r in rows:
+                formatted_rows.append({
+                    'timestamp': r['timestamp'].isoformat() if hasattr(r['timestamp'], 'isoformat') else r['timestamp'],
+                    'cpu': float(r['cpu']) if r['cpu'] is not None else 0,
+                    'ram': float(r['ram']) if r['ram'] is not None else 0,
+                    'gpu': float(r['gpu']) if r['gpu'] is not None else 0,
+                    'network_rx': float(r['network_rx']) if r['network_rx'] is not None else 0,
+                    'network_tx': float(r['network_tx']) if r['network_tx'] is not None else 0
+                })
+            
+            return formatted_rows[::-1] # Newest last
+        except Exception as e:
+            print(f"Error in UnitStore.get_usage: {e}")
+            return []
             rows.reverse()
             
             # Format dates to string if needed by frontend, or let JSON encoder handle it
@@ -794,7 +840,7 @@ def register_unit():
             return jsonify({'error': 'system_id required'}), 400
 
         system_id = data['system_id']
-        org_id = data.get('org_id', 'default_org')
+        org_id = data.get('org_id', 'TEST')
         comp_id = data.get('comp_id', 'default_comp')
         hostname = data.get('hostname', 'Unknown')
         os_info = data.get('os_info', 'Unknown')
@@ -803,41 +849,32 @@ def register_unit():
         gpu_info = data.get('gpu_info', '{}')
         network_interfaces = data.get('network_interfaces', '{}')
 
-        # Check existing
-        existing_unit = None
-        all_units = UnitStore.get_all_units()
-        for unit in all_units:
-            if unit['system_id'] == system_id or (unit.get('org_id') == org_id and unit.get('comp_id') == comp_id):
-                existing_unit = unit
-                break
+        # Check existing in PostgreSQL
+        existing_unit = UnitStore.get_unit_by_org_comp(org_id, comp_id)
+        if not existing_unit:
+            # Try by system_id/name matching
+            existing_unit = UnitStore.get_unit(system_id)
 
         if existing_unit:
             unit_id = existing_unit['id']
-            # Logic to handle machine renames or org moves
-            if existing_unit.get('org_id') != org_id or existing_unit.get('comp_id') != comp_id:
-                print(f"Unit {unit_id} identity updated: {existing_unit.get('org_id')}/{existing_unit.get('comp_id')} -> {org_id}/{comp_id}")
-                existing_unit['org_id'] = org_id
-                existing_unit['comp_id'] = comp_id
-                existing_unit['name'] = f"{org_id}/{comp_id}"
-
-            existing_unit['last_seen'] = datetime.now().isoformat()
-            existing_unit['status'] = 'online'
-            existing_unit['ip'] = request.remote_addr
-            
-            if hostname != 'Unknown': existing_unit['hostname'] = hostname
-            if os_info != 'Unknown': existing_unit['os_info'] = os_info
-            if cpu_info != 'Unknown': existing_unit['cpu_info'] = cpu_info
-            if ram_total > 0: existing_unit['ram_total'] = ram_total
-            if gpu_info != '{}': existing_unit['gpu_info'] = gpu_info
-            if network_interfaces != '{}': existing_unit['network_interfaces'] = network_interfaces
-            
+            # Update metadata
+            existing_unit.update({
+                'org_id': org_id,
+                'comp_id': comp_id,
+                'name': f"{org_id}/{comp_id}",
+                'hostname': hostname,
+                'os_info': os_info,
+                'ram_total': ram_total,
+                'ip': request.remote_addr,
+                'system_id': system_id
+            })
             UnitStore.save_unit(unit_id, existing_unit)
             
-            # Broadcast update because identities might have changed
+            # Broadcast update
             sync_units_state(org_id)
             return jsonify({'unit_id': unit_id, 'org_id': org_id, 'comp_id': comp_id}), 200
 
-        # New Unit
+        # New Unit - UUID is generated by SQL SERIAL PK or manually as name
         unit_id = str(uuid.uuid4())[:8]
         unit = {
             'id': unit_id,
@@ -846,20 +883,18 @@ def register_unit():
             'comp_id': comp_id,
             'ip': request.remote_addr,
             'name': f"{org_id}/{comp_id}",
-            'status': 'online',
-            'last_seen': datetime.now().isoformat(),
             'hostname': hostname,
             'os_info': os_info,
-            'cpu_info': cpu_info,
-            'ram_total': ram_total,
-            'gpu_info': gpu_info,
-            'network_interfaces': network_interfaces,
-            'alerts': []
+            'ram_total': ram_total
         }
 
         UnitStore.save_unit(unit_id, unit)
-        print(f"Unit registered: {org_id}/{comp_id} (ID: {unit_id})")
+        
+        # Get the actual assigned ID from DB
+        new_unit = UnitStore.get_unit_by_org_comp(org_id, comp_id)
+        if new_unit: unit_id = new_unit['id']
 
+        print(f"Unit registered: {org_id}/{comp_id} (ID: {unit_id})")
         sync_units_state(org_id)
 
         return jsonify({'unit_id': unit_id, 'org_id': org_id, 'comp_id': comp_id}), 201
@@ -870,9 +905,6 @@ def register_unit():
 
 def process_usage_record(data):
     """Process a single usage record"""
-    # DEBUG: Print incoming data to console
-    print(f"Received Data: {data}")
-    
     if not data or 'unit_id' not in data:
         return False, 'unit_id required'
 
@@ -883,30 +915,27 @@ def process_usage_record(data):
     if not unit:
         return False, 'Unit not registered'
 
-    unit['last_seen'] = datetime.now().isoformat()
-    unit['status'] = 'online'
+    # Update metadata and last_seen via save_unit
+    unit.update({
+        'status': 'online',
+        'ip': request.remote_addr,
+        'hostname': data.get('hostname', unit.get('hostname'))
+    })
     
-    # Update metadata if it has changed (e.g. rename or org move)
-    changed = False
+    # If org/comp changed in heartbeat, update it
     if 'org_id' in data and data['org_id'] != unit.get('org_id'):
         unit['org_id'] = data['org_id']
-        changed = True
     if 'comp_id' in data and data['comp_id'] != unit.get('comp_id'):
         unit['comp_id'] = data['comp_id']
         unit['name'] = f"{unit.get('org_id', 'unknown')}/{data['comp_id']}"
-        changed = True
-    
-    if 'hostname' in data: unit['hostname'] = data['hostname']
-    unit['ip'] = request.remote_addr
 
     UnitStore.save_unit(unit_id, unit)
-    if changed:
-        sync_units_state(unit.get('org_id'))
     UnitStore.add_usage(unit_id, data)
 
+    # Broadcast updates
     socketio.emit('usage_update', {'unit_id': unit_id, 'data': data})
     if org_id:
-            socketio.emit('org_usage_update', {'unit_id': unit_id, 'data': data}, room=org_id)
+        socketio.emit('org_usage_update', {'unit_id': unit_id, 'data': data}, room=org_id)
             
     return True, 'processed'
 
@@ -1028,6 +1057,23 @@ def handle_connect():
     # Wait for the client to join an organization or prove ROOT status.
     print(f"Client connected: {request.sid}")
 
+@socketio.on('join')
+def handle_join(data):
+    """
+    Allow a client to join their specific organization room.
+    The 'org_id' is passed from the client after authentication.
+    """
+    org_id = data.get('org_id')
+    if org_id:
+        join_room(org_id)
+        # If the user is ROOT, they also join a special 'ROOT' room for all updates
+        if data.get('role') == 'ROOT':
+            join_room('ROOT')
+        
+        print(f"Client {request.sid} joined room: {org_id}")
+        # Send initial sync for this org
+        sync_units_state(org_id)
+
 @socketio.on('join_org')
 def handle_join_org(data):
     org_id = data.get('org_id')
@@ -1046,5 +1092,5 @@ def handle_join_org(data):
         emit('org_units_update', UnitStore.get_units_by_org(org_id))
 
 if __name__ == '__main__':
-    load_units_db() # Load saved units
+    # Units are now managed exclusively in PostgreSQL
     socketio.run(app, host='0.0.0.0', port=5010, debug=True, allow_unsafe_werkzeug=True)
