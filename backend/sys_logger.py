@@ -2,6 +2,7 @@ import psutil
 import logging
 import os
 import sys
+import re
 import time
 import atexit
 import signal
@@ -117,36 +118,72 @@ def register():
     data = request.get_json()
     email = data.get('email')
     password = data.get('password')
-    org_id = data.get('org_id')
-    role = data.get('role', 'USER')
+    org_name = data.get('org_name')
+    org_type = data.get('org_type') # 'Individual' or 'Business'
     
-    if not email or not password or not org_id:
+    if not email or not password or not org_name or not org_type:
         return jsonify({'message': 'Missing required fields!'}), 400
+        
+    def slugify(text):
+        text = text.lower().strip()
+        text = re.sub(r'[^\w\s-]', '', text)
+        text = re.sub(r'[\s_-]+', '-', text)
+        text = re.sub(r'^-+|-+$', '', text)
+        return text
+
+    slug = slugify(org_name)
+    username = email.split('@')[0]
+    
+    # Determine tier and limits
+    if org_type == 'Individual':
+        tier = 'INDIVIDUAL'
+        node_limit = 1
+    else:
+        tier = 'BUSINESS'
+        node_limit = 999999 # Unlimited
         
     conn = get_db_connection()
     cur = conn.cursor(cursor_factory=RealDictCursor)
     
-    # Check if user exists
-    cur.execute("SELECT * FROM users WHERE email = %s", (email,))
-    if cur.fetchone():
-        return jsonify({'message': 'User already exists!'}), 400
+    try:
+        # 1. Check if user exists
+        cur.execute("SELECT * FROM users WHERE email = %s OR username = %s", (email, username))
+        if cur.fetchone():
+            return jsonify({'message': 'User or email already exists!'}), 400
+            
+        # 2. Create Organization
+        # Check if slug exists, if so append unique suffix
+        base_slug = slug
+        counter = 1
+        while True:
+            cur.execute("SELECT * FROM organizations WHERE slug = %s", (slug,))
+            if not cur.fetchone():
+                break
+            slug = f"{base_slug}-{counter}"
+            counter += 1
+            
+        cur.execute(
+            "INSERT INTO organizations (name, slug, tier, node_limit) VALUES (%s, %s, %s, %s) RETURNING org_id",
+            (org_name, slug, tier, node_limit)
+        )
+        org_id = cur.fetchone()['org_id']
         
-    # Check if org exists, if not create it (auto-bootstrap)
-    cur.execute("SELECT * FROM organizations WHERE org_id = %s", (org_id,))
-    if not cur.fetchone():
-        cur.execute("INSERT INTO organizations (org_id, name) VALUES (%s, %s)", (org_id, org_id))
+        # 3. Create User
+        password_hash = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+        cur.execute(
+            "INSERT INTO users (username, email, password_hash, role, org_id) VALUES (%s, %s, %s, %s, %s)",
+            (username, email, password_hash, 'ADMIN', org_id)
+        )
+        
+        conn.commit()
+    except Exception as e:
+        conn.rollback()
+        return jsonify({'message': f'Registration failed: {str(e)}'}), 500
+    finally:
+        cur.close()
+        conn.close()
     
-    password_hash = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
-    cur.execute(
-        "INSERT INTO users (email, password_hash, role, org_id) VALUES (%s, %s, %s, %s)",
-        (email, password_hash, role, org_id)
-    )
-    
-    conn.commit()
-    cur.close()
-    conn.close()
-    
-    return jsonify({'message': 'User registered successfully!'}), 201
+    return jsonify({'message': 'Account created successfully! You can now log in.'}), 201
 
 @app.route('/api/auth/login', methods=['POST'])
 def login():

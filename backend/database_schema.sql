@@ -33,8 +33,11 @@ CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);
 -- ============================================================
 CREATE TABLE IF NOT EXISTS systems (
     system_id SERIAL PRIMARY KEY,
+    user_id INTEGER REFERENCES users(user_id) ON DELETE SET NULL,
+    org_id INTEGER REFERENCES organizations(org_id) ON DELETE SET NULL,
     system_name VARCHAR(255) NOT NULL UNIQUE,
     system_uuid UUID,
+    comp_id VARCHAR(255),
     hostname VARCHAR(255) NOT NULL,
     ip_address INET,
     os VARCHAR(100),

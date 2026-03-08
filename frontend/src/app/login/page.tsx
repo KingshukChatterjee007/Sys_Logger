@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { Activity, Lock, Mail, ChevronRight, AlertCircle } from 'lucide-react';
 import { useAuth } from '../components/AuthContext';
+import Link from 'next/link';
 
 export default function LoginPage() {
     const [email, setEmail] = useState('');
@@ -114,6 +115,13 @@ export default function LoginPage() {
                                 </>
                             )}
                         </button>
+
+                        <p className="text-center text-xs text-zinc-400 font-medium mt-6">
+                            Don't have an account?{' '}
+                            <Link href="/register" className="text-zinc-900 hover:text-orange-500 transition-colors font-bold">
+                                Create Account
+                            </Link>
+                        </p>
                     </form>
 
                     <footer className="mt-12 pt-8 border-t border-zinc-100 flex justify-center items-center gap-8 opacity-80">

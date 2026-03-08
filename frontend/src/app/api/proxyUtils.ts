@@ -24,10 +24,19 @@ export async function proxyGet(backendPath: string): Promise<Response> {
 
     if (!response.ok) {
         const text = await response.text().catch(() => 'Unknown error')
-        return new Response(JSON.stringify({ error: text }), {
-            status: response.status,
-            headers: { 'Content-Type': 'application/json' },
-        })
+        try {
+            // Try to parse as JSON to see if it's a backend error message
+            const json = JSON.parse(text)
+            return new Response(JSON.stringify(json), {
+                status: response.status,
+                headers: { 'Content-Type': 'application/json' },
+            })
+        } catch {
+            return new Response(JSON.stringify({ error: text }), {
+                status: response.status,
+                headers: { 'Content-Type': 'application/json' },
+            })
+        }
     }
 
     const data = await response.json()
@@ -52,10 +61,19 @@ export async function proxyPost(backendPath: string, body?: unknown): Promise<Re
 
     if (!response.ok) {
         const text = await response.text().catch(() => 'Unknown error')
-        return new Response(JSON.stringify({ error: text }), {
-            status: response.status,
-            headers: { 'Content-Type': 'application/json' },
-        })
+        try {
+            // Try to parse as JSON to see if it's a backend error message
+            const json = JSON.parse(text)
+            return new Response(JSON.stringify(json), {
+                status: response.status,
+                headers: { 'Content-Type': 'application/json' },
+            })
+        } catch {
+            return new Response(JSON.stringify({ error: text }), {
+                status: response.status,
+                headers: { 'Content-Type': 'application/json' },
+            })
+        }
     }
 
     const data = await response.json()
