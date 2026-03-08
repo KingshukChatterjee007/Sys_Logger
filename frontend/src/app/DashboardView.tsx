@@ -4,6 +4,7 @@ import Link from 'next/link';
 import React, { useState, useEffect, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { UsageGraph } from './components/UsageGraph'
+import { OrgManager } from './components/OrgManager'
 import { useUsageData } from './components/hooks/useUsageData'
 import { useUnits } from './components/hooks/useUnits'
 import { clsx, type ClassValue } from 'clsx'
@@ -53,7 +54,7 @@ export default function DashboardView({ orgId: propOrgId }: DashboardViewProps) 
 
     const [selectedUnit, setSelectedUnit] = useState<Unit | null>(null)
     const [currentTime, setCurrentTime] = useState<string>('')
-    const [activeTab, setActiveTab] = useState<'metrics' | 'logs'>('metrics')
+    const [activeTab, setActiveTab] = useState<'metrics' | 'logs' | 'management'>('metrics')
 
     // Track the selected component metric
     const [selectedMetric, setSelectedMetric] = useState<'cpu' | 'gpu' | 'ram' | 'network_rx'>('cpu')
@@ -386,6 +387,23 @@ export default function DashboardView({ orgId: propOrgId }: DashboardViewProps) 
                                     </span>
                                 </div>
                             </div>
+                            {user?.role === 'ROOT' && (
+                                <button
+                                    onClick={() => {
+                                        setActiveTab(activeTab === 'management' ? 'metrics' : 'management');
+                                        setIsMobileMenuOpen(false);
+                                    }}
+                                    className={cn(
+                                        "p-2 rounded-lg transition-all",
+                                        activeTab === 'management'
+                                            ? "bg-orange-500 text-white shadow-lg shadow-orange-500/20"
+                                            : "text-zinc-400 hover:text-orange-500 hover:bg-orange-50"
+                                    )}
+                                    title="System Management"
+                                >
+                                    <Shield size={16} />
+                                </button>
+                            )}
                             <button
                                 onClick={logout}
                                 className="p-2 text-zinc-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
@@ -400,7 +418,17 @@ export default function DashboardView({ orgId: propOrgId }: DashboardViewProps) 
 
                 <main className="flex-1 flex flex-col relative overflow-hidden w-full h-full">
                     <AnimatePresence mode="wait">
-                        {selectedUnit ? (
+                        {activeTab === 'management' ? (
+                            <motion.div
+                                key="management"
+                                initial={{ opacity: 0, y: 10 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                exit={{ opacity: 0, y: -10 }}
+                                className="flex-1 overflow-y-auto p-4 lg:p-8 custom-scrollbar"
+                            >
+                                <OrgManager />
+                            </motion.div>
+                        ) : selectedUnit ? (
                             <motion.div
                                 key={selectedUnit.id}
                                 initial={{ opacity: 0, scale: 0.99, y: 5 }}
@@ -409,6 +437,7 @@ export default function DashboardView({ orgId: propOrgId }: DashboardViewProps) 
                                 transition={{ duration: 0.2, ease: "easeOut" }}
                                 className="flex-1 flex flex-col overflow-y-auto custom-scrollbar h-full"
                             >
+                                {/* ... existing unit view ... */}
                                 <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center mb-4 lg:mb-6 bg-white p-5 lg:p-6 rounded-2xl lg:rounded-3xl ring-1 ring-zinc-200/80 shadow-[0_2px_12px_rgba(0,0,0,0.03)] gap-4">
                                     <div className="flex-1 w-full">
                                         {isEditing ? (
@@ -485,22 +514,10 @@ export default function DashboardView({ orgId: propOrgId }: DashboardViewProps) 
                                 </div>
 
                                 {activeTab === 'metrics' ? (
-                                    // UPDATED: Changed to lg:flex-row so buttons are on left and graph is on right
                                     <div className="flex flex-col lg:flex-row gap-4 lg:gap-6 pb-4 lg:pb-6 flex-1 min-h-0">
-
-                                        {/* COMPONENT SELECTOR BUTTONS (Vertical Stack on Desktop) */}
                                         <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-1 gap-3 lg:gap-4 shrink-0 lg:w-48 xl:w-56 overflow-y-auto custom-scrollbar p-1">
                                             {currentMetrics.map((metric) => (
-                                                <button
-                                                    key={metric.id}
-                                                    onClick={() => setSelectedMetric(metric.id as any)}
-                                                    className={cn(
-                                                        "p-4 lg:p-5 text-left rounded-2xl transition-all duration-300 flex flex-col justify-between items-start group relative z-0",
-                                                        selectedMetric === metric.id
-                                                            ? 'bg-white ring-2 ring-orange-500 shadow-[0_4px_15px_rgba(249,115,22,0.15)] scale-[1.02] z-10'
-                                                            : 'bg-white ring-1 ring-zinc-200/80 hover:ring-zinc-300 hover:shadow-md hover:-translate-y-0.5'
-                                                    )}
-                                                >
+                                                <button key={metric.id} onClick={() => setSelectedMetric(metric.id as any)} className={cn("p-4 lg:p-5 text-left rounded-2xl transition-all duration-300 flex flex-col justify-between items-start group relative z-0", selectedMetric === metric.id ? 'bg-white ring-2 ring-orange-500 shadow-[0_4px_15px_rgba(249,115,22,0.15)] scale-[1.02] z-10' : 'bg-white ring-1 ring-zinc-200/80 hover:ring-zinc-300 hover:shadow-md hover:-translate-y-0.5')}>
                                                     <div className="flex items-center justify-between w-full mb-3">
                                                         <div className={cn("p-2 rounded-xl transition-colors", selectedMetric === metric.id ? 'bg-orange-50 text-orange-600' : 'bg-zinc-50 text-zinc-400 group-hover:text-zinc-600')}>
                                                             {metric.icon}
@@ -516,8 +533,6 @@ export default function DashboardView({ orgId: propOrgId }: DashboardViewProps) 
                                                 </button>
                                             ))}
                                         </div>
-
-                                        {/* DETAILED GRAPH */}
                                         <div className="flex-1 bg-white p-6 lg:p-8 rounded-2xl lg:rounded-3xl ring-1 ring-zinc-200/80 shadow-sm flex flex-col min-h-[400px] lg:min-h-0">
                                             <div className="flex justify-between items-end mb-6">
                                                 <div>
@@ -559,7 +574,7 @@ export default function DashboardView({ orgId: propOrgId }: DashboardViewProps) 
                                 )}
                             </motion.div>
                         ) : (
-                            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex-1 flex flex-col items-center justify-center bg-white shadow-[0_2px_12px_rgba(0,0,0,0.03)] rounded-2xl lg:rounded-3xl ring-1 ring-zinc-200/80 h-full p-6 text-center">
+                            <motion.div key="empty" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="flex-1 flex flex-col items-center justify-center bg-white shadow-[0_2px_12px_rgba(0,0,0,0.03)] rounded-2xl lg:rounded-3xl ring-1 ring-zinc-200/80 h-full p-6 text-center">
                                 <div className="mb-6 lg:mb-8 p-6 lg:p-8 bg-zinc-50 rounded-full ring-1 ring-zinc-100 shadow-inner">
                                     <Server className="w-12 h-12 lg:w-16 lg:h-16 text-zinc-300" />
                                 </div>

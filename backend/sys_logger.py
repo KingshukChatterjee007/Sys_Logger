@@ -460,6 +460,65 @@ def get_org_units(current_user, org_id):
     units = UnitStore.get_units_by_org(org_id)
     return jsonify(units)
 
+@app.route('/api/orgs', methods=['POST'])
+@token_required
+def create_org(current_user):
+    """Create a new organization (ROOT only)"""
+    if current_user['role'] != 'ROOT':
+        return jsonify({'error': 'Unauthorized'}), 403
+        
+    data = request.get_json()
+    org_id = data.get('org_id')
+    name = data.get('name')
+    
+    if not org_id or not name:
+        return jsonify({'error': 'Missing org_id or name'}), 400
+        
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        cur.execute("INSERT INTO organizations (org_id, name) VALUES (%s, %s)", (org_id, name))
+        conn.commit()
+        cur.close()
+        conn.close()
+        return jsonify({'message': f'Organization {org_id} created successfully'}), 201
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/units/<unit_id>/org', methods=['PUT'])
+@token_required
+def update_unit_org(current_user, unit_id):
+    """Re-assign a unit to a different organization (ROOT only)"""
+    if current_user['role'] != 'ROOT':
+        return jsonify({'error': 'Unauthorized'}), 403
+        
+    data = request.get_json()
+    new_org_id = data.get('org_id')
+    
+    if not new_org_id:
+        return jsonify({'error': 'Missing org_id'}), 400
+        
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        # Verify org exists
+        cur.execute("SELECT 1 FROM organizations WHERE org_id = %s", (new_org_id,))
+        if not cur.fetchone():
+            return jsonify({'error': 'Organization does not exist'}), 404
+            
+        cur.execute("UPDATE systems SET org_id = %s WHERE system_name = %s", (new_org_id, unit_id))
+        conn.commit()
+        cur.close()
+        conn.close()
+        
+        # Clear local cache if needed (though UnitStore fetches from DB usually)
+        if unit_id in units:
+            units[unit_id]['org_id'] = new_org_id
+            
+        return jsonify({'message': f'Unit {unit_id} moved to {new_org_id}'}), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
 @app.route('/api/units/<unit_id>/usage', methods=['GET'])
 @token_required
 def get_unit_usage(current_user, unit_id):
