@@ -15,6 +15,9 @@ import uuid
 import pickle
 import csv
 import io
+import zipfile
+import tempfile
+import shutil
 import psycopg2
 from psycopg2.extras import RealDictCursor
 try:
@@ -185,6 +188,99 @@ def register():
     
     return jsonify({'message': 'Account created successfully! You can now log in.'}), 201
 
+@app.route('/api/units/download-installer', methods=['POST'])
+@token_required
+def download_installer(current_user):
+    data = request.get_json()
+    comp_id = data.get('comp_id')
+    
+    if not comp_id:
+        return jsonify({'message': 'Component ID is required!'}), 400
+        
+    org_id = current_user.get('org_id')
+    
+    conn = get_db_connection()
+    cur = conn.cursor(cursor_factory=RealDictCursor)
+    
+    try:
+        # 1. Check Tier Limits
+        cur.execute("SELECT node_limit FROM organizations WHERE org_id = %s", (org_id,))
+        org = cur.fetchone()
+        if not org:
+            return jsonify({'message': 'Organization not found!'}), 404
+            
+        cur.execute("SELECT COUNT(*) FROM systems WHERE org_id = %s", (org_id,))
+        current_count = cur.fetchone()['count']
+        
+        if current_count >= org['node_limit']:
+            return jsonify({
+                'message': f"Tier limit reached! Your tier allows {org['node_limit']} nodes. "
+                           "Upgrade to Business Tier for unlimited nodes."
+            }), 403
+
+        # 2. Package Installer
+        # Create a temporary ZIP file
+        temp_dir = tempfile.mkdtemp()
+        zip_path = os.path.join(temp_dir, f"sys_logger_installer_{comp_id}.zip")
+        
+        # Correct path: client_deploy is in the project root, one level up from backend/
+        deploy_src = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'client_deploy'))
+        
+        print(f"DEBUG: Generating installer. Source: {deploy_src}, Target: {zip_path}")
+        
+        if not os.path.exists(deploy_src):
+             return jsonify({'message': f'Source directory not found: {deploy_src}'}), 500
+
+        with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
+            # Add all files from client_deploy
+            for root, dirs, files in os.walk(deploy_src):
+                # Skip venv and logs
+                if 'venv' in dirs: dirs.remove('venv')
+                if 'logs' in dirs: dirs.remove('logs')
+                
+                for file in files:
+                    file_path = os.path.join(root, file)
+                    arcname = os.path.relpath(file_path, deploy_src)
+                    # Wrap in a folder
+                    zipf.write(file_path, os.path.join('sys_logger_installer', arcname))
+            
+            # Inject pre-filled config
+            config_data = {
+                'system_id': str(uuid.uuid4()),
+                'org_id': str(org_id), # Backend sends the internal integer ID
+                'comp_id': comp_id
+            }
+            zipf.writestr('sys_logger_installer/unit_client_config.json', json.dumps(config_data, indent=4))
+
+        # 3. Create Node in Database (Pending State)
+        # This allows the dashboard to show the node even before the first heartbeat
+        name = f"{org_id}/{comp_id}"
+        cur.execute("""
+            INSERT INTO systems (system_name, org_id, status, last_seen)
+            VALUES (%s, %s, %s, %s)
+            ON CONFLICT (system_name) DO UPDATE SET
+                org_id = EXCLUDED.org_id,
+                status = EXCLUDED.status
+        """, (name, org_id, 'pending', None))
+        conn.commit()
+
+        print(f"DEBUG: Node created/verified as PENDING for {name}")
+        sync_units_state(str(org_id))
+
+        return send_file(
+            zip_path,
+            mimetype='application/zip',
+            as_attachment=True,
+            download_name=f"sys_logger_installer_{comp_id}.zip"
+        )
+
+    except Exception as e:
+        print(f"ERROR generating installer: {str(e)}")
+        return jsonify({'message': f'Failed to generate installer: {str(e)}'}), 500
+    finally:
+        cur.close()
+        conn.close()
+
 @app.route('/api/auth/login', methods=['POST'])
 def login():
     auth = request.get_json()
@@ -235,19 +331,37 @@ class UnitStore:
     def _row_to_unit(row):
         """Convert a DB row to the frontend unit format"""
         if not row: return None
+        
+        last_seen = row['last_seen']
+        db_status = row.get('status', 'pending')
+        
+        # Recalculate online/offline based on last_seen if it was previously online
+        status = db_status
+        if last_seen:
+            now = datetime.now(last_seen.tzinfo) if last_seen.tzinfo else datetime.now()
+            if (now - last_seen).total_seconds() < 300:
+                status = 'online'
+            else:
+                status = 'offline'
+        elif db_status == 'online':
+             # If it was marked online but no last_seen (unexpected), fallback to offline
+             status = 'offline'
+
         return {
-            'id': str(row['system_id']), # Use system_id as the primary key for frontend
+            'id': str(row['system_id']), 
             'system_id': str(row['system_uuid']) if row['system_uuid'] else row['system_name'],
             'org_id': row['org_id'],
+            'org_name': row.get('org_display_name', 'Unknown'),
+            'org_slug': row.get('org_slug', 'unknown'),
             'comp_id': row['system_name'].split('/')[-1] if '/' in row['system_name'] else row['system_name'],
             'name': row['system_name'],
-            'status': 'online' if (datetime.now(row['last_seen'].tzinfo) - row['last_seen']).total_seconds() < 300 else 'offline',
-            'last_seen': row['last_seen'].isoformat(),
+            'status': status,
+            'last_seen': last_seen.isoformat() if last_seen else None,
             'hostname': row['hostname'],
             'os_info': row['os'],
             'ram_total': float(row['ram_gb']) if row['ram_gb'] else 0,
             'ip': row['ip_address'],
-            'alerts': [] # Alerts are currently in-memory but could be moved to DB too
+            'alerts': [] 
         }
 
     @staticmethod
@@ -255,7 +369,12 @@ class UnitStore:
         try:
             conn = get_db_connection()
             cur = conn.cursor(cursor_factory=RealDictCursor)
-            cur.execute("SELECT * FROM systems WHERE system_id = %s OR system_name = %s", (unit_id, unit_id))
+            cur.execute("""
+                SELECT s.*, o.name as org_display_name, o.slug as org_slug 
+                FROM systems s 
+                LEFT JOIN organizations o ON s.org_id = o.org_id 
+                WHERE s.system_id = %s OR s.system_name = %s
+            """, (unit_id, unit_id))
             row = cur.fetchone()
             cur.close()
             conn.close()
@@ -267,11 +386,19 @@ class UnitStore:
     @staticmethod
     def get_unit_by_org_comp(org_id, comp_id):
         try:
+            # Ensure org_id is an integer if possible
+            try: org_id = int(org_id)
+            except: return None
+
             conn = get_db_connection()
             cur = conn.cursor(cursor_factory=RealDictCursor)
-            # Match by org_id and a name that ends with /comp_id or IS comp_id
             name = f"{org_id}/{comp_id}"
-            cur.execute("SELECT * FROM systems WHERE org_id = %s AND (system_name = %s OR system_name = %s)", (org_id, name, comp_id))
+            cur.execute("""
+                SELECT s.*, o.name as org_display_name, o.slug as org_slug 
+                FROM systems s 
+                LEFT JOIN organizations o ON s.org_id = o.org_id 
+                WHERE s.org_id = %s AND (s.system_name = %s OR s.system_name = %s)
+            """, (org_id, name, comp_id))
             row = cur.fetchone()
             cur.close()
             conn.close()
@@ -282,19 +409,23 @@ class UnitStore:
 
     @staticmethod
     def save_unit(unit_id, unit_data):
-        # In SQL mode, save_unit is usually called during register_unit or heartbeat
-        # We'll implement an upsert here for compatibility
         try:
             conn = get_db_connection()
             cur = conn.cursor()
             
-            org_id = unit_data.get('org_id', 'TEST')
-            name = unit_data.get('name', f"{org_id}/{unit_data.get('comp_id', unit_id)}")
+            # Robust org_id handling
+            raw_org = unit_data.get('org_id')
+            try:
+                org_id = int(raw_org) if raw_org else None
+            except:
+                org_id = None # Default to None if not a valid integer/ID
+                
+            name = unit_data.get('name', f"{org_id or 'unknown'}/{unit_data.get('comp_id', unit_id)}")
             
             cur.execute("""
                 INSERT INTO systems 
-                (system_name, system_uuid, hostname, ip_address, os, ram_gb, org_id, last_seen)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                (system_name, system_uuid, hostname, ip_address, os, ram_gb, org_id, last_seen, status)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
                 ON CONFLICT (system_name) DO UPDATE SET
                     system_uuid = COALESCE(EXCLUDED.system_uuid, systems.system_uuid),
                     hostname = EXCLUDED.hostname,
@@ -302,7 +433,8 @@ class UnitStore:
                     os = EXCLUDED.os,
                     ram_gb = EXCLUDED.ram_gb,
                     org_id = EXCLUDED.org_id,
-                    last_seen = EXCLUDED.last_seen
+                    last_seen = EXCLUDED.last_seen,
+                    status = EXCLUDED.status
             """, (
                 name,
                 unit_data.get('system_id') if '-' in str(unit_data.get('system_id', '')) else None,
@@ -311,7 +443,8 @@ class UnitStore:
                 unit_data.get('os_info'),
                 unit_data.get('ram_total'),
                 org_id,
-                datetime.now()
+                datetime.now() if unit_data.get('status') == 'online' else unit_data.get('last_seen'),
+                unit_data.get('status', 'online')
             ))
             conn.commit()
             cur.close()
@@ -339,7 +472,11 @@ class UnitStore:
             conn = get_db_connection()
             cur = conn.cursor(cursor_factory=RealDictCursor)
             
-            query = "SELECT * FROM systems"
+            query = """
+                SELECT s.*, o.name as org_display_name, o.slug as org_slug 
+                FROM systems s 
+                LEFT JOIN organizations o ON s.org_id = o.org_id
+            """
             params = []
             
             # STRICT SQL ISOLATION
@@ -347,7 +484,7 @@ class UnitStore:
                 org_id = user.get('org_id')
                 if not org_id:
                     return []
-                query += " WHERE org_id = %s"
+                query += " WHERE s.org_id = %s"
                 params.append(org_id)
                 
             cur.execute(query, params)
@@ -509,15 +646,17 @@ def sync_units_state(org_id=None):
         
         # 2. Sync the specific organization room if provided
         if org_id:
-            org_units = [u for u in all_units if u.get('org_id') == org_id]
-            socketio.emit('units_update', org_units, room=org_id)
-            socketio.emit('org_units_update', org_units, room=org_id)
+            target_org = str(org_id)
+            org_units = [u for u in all_units if str(u.get('org_id')) == target_org]
+            socketio.emit('units_update', org_units, room=target_org)
+            socketio.emit('org_units_update', org_units, room=target_org)
         else:
             # If no org_id, broadcast to all individual org rooms to be safe
             unique_orgs = UnitStore.get_unique_orgs()
             for org in unique_orgs:
-                org_units = [u for u in all_units if u.get('org_id') == org]
-                socketio.emit('units_update', org_units, room=org)
+                target_org = str(org)
+                org_units = [u for u in all_units if str(u.get('org_id')) == target_org]
+                socketio.emit('units_update', org_units, room=target_org)
     except Exception as e:
         print(f"Error in sync_units_state: {e}")
 
@@ -563,9 +702,10 @@ def get_orgs(current_user):
 @token_required
 def get_org_units(current_user, org_id):
     """Get units for a specific org (ROOT or Org Admin check)"""
-    if current_user['role'] != 'ROOT' and current_user['org_id'] != org_id:
+    if current_user['role'] != 'ROOT' and str(current_user['org_id']) != str(org_id):
         return jsonify({'error': 'Unauthorized'}), 403
-    units = UnitStore.get_units_by_org(org_id)
+    
+    units = UnitStore.get_all_units({'role': 'ADMIN', 'org_id': org_id})
     return jsonify(units)
 
 @app.route('/api/orgs', methods=['POST'])
@@ -877,7 +1017,7 @@ def register_unit():
             return jsonify({'error': 'system_id required'}), 400
 
         system_id = data['system_id']
-        org_id = data.get('org_id', 'TEST')
+        org_id = data.get('org_id')
         comp_id = data.get('comp_id', 'default_comp')
         hostname = data.get('hostname', 'Unknown')
         os_info = data.get('os_info', 'Unknown')
@@ -885,6 +1025,11 @@ def register_unit():
         ram_total = data.get('ram_total', 0)
         gpu_info = data.get('gpu_info', '{}')
         network_interfaces = data.get('network_interfaces', '{}')
+
+        # Robust casting
+        try:
+            if org_id: org_id = int(org_id)
+        except: pass
 
         # Check existing in PostgreSQL
         existing_unit = UnitStore.get_unit_by_org_comp(org_id, comp_id)
@@ -894,21 +1039,22 @@ def register_unit():
 
         if existing_unit:
             unit_id = existing_unit['id']
-            # Update metadata
+            # Update metadata and mark as ONLINE
             existing_unit.update({
                 'org_id': org_id,
                 'comp_id': comp_id,
-                'name': f"{org_id}/{comp_id}",
+                'name': f"{org_id or 'unknown'}/{comp_id}",
                 'hostname': hostname,
                 'os_info': os_info,
                 'ram_total': ram_total,
                 'ip': request.remote_addr,
-                'system_id': system_id
+                'system_id': system_id,
+                'status': 'online' # Heartbeat received!
             })
             UnitStore.save_unit(unit_id, existing_unit)
             
             # Broadcast update
-            sync_units_state(org_id)
+            if org_id: sync_units_state(str(org_id))
             return jsonify({'unit_id': unit_id, 'org_id': org_id, 'comp_id': comp_id}), 200
 
         # New Unit - UUID is generated by SQL SERIAL PK or manually as name
@@ -919,10 +1065,11 @@ def register_unit():
             'org_id': org_id,
             'comp_id': comp_id,
             'ip': request.remote_addr,
-            'name': f"{org_id}/{comp_id}",
+            'name': f"{org_id or 'unknown'}/{comp_id}",
             'hostname': hostname,
             'os_info': os_info,
-            'ram_total': ram_total
+            'ram_total': ram_total,
+            'status': 'online'
         }
 
         UnitStore.save_unit(unit_id, unit)
@@ -932,7 +1079,7 @@ def register_unit():
         if new_unit: unit_id = new_unit['id']
 
         print(f"Unit registered: {org_id}/{comp_id} (ID: {unit_id})")
-        sync_units_state(org_id)
+        if org_id: sync_units_state(str(org_id))
 
         return jsonify({'unit_id': unit_id, 'org_id': org_id, 'comp_id': comp_id}), 201
 

@@ -19,9 +19,11 @@ export interface Unit {
   id: string
   name: string
   org_id?: string
+  org_name?: string
+  org_slug?: string
   comp_id?: string
-  status: 'online' | 'offline' | 'warning'
-  last_seen: string
+  status: 'online' | 'offline' | 'warning' | 'pending'
+  last_seen: string | null
   ip?: string
   alerts?: Alert[]
 }

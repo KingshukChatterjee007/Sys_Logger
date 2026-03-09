@@ -114,6 +114,11 @@ Write-Host "  These are saved once and used every time the client runs."
 Write-Host ""
 
 $configFile = Join-Path $deployDir "unit_client_config.json"
+if (-not (Test-Path $configFile)) {
+    # Try current directory as fallback (for ZIP extraction oddities)
+    $configFile = Join-Path (Get-Location) "unit_client_config.json"
+}
+
 if (Test-Path $configFile) {
     Write-Host "  OK Pre-configured installer detected - skipping wizard."
     $configData = Get-Content $configFile | ConvertFrom-Json

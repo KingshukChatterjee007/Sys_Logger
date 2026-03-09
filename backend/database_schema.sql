@@ -38,7 +38,7 @@ CREATE TABLE IF NOT EXISTS systems (
     system_name VARCHAR(255) NOT NULL UNIQUE,
     system_uuid UUID,
     comp_id VARCHAR(255),
-    hostname VARCHAR(255) NOT NULL,
+    hostname VARCHAR(255),
     ip_address INET,
     os VARCHAR(100),
     os_version VARCHAR(50),
@@ -47,7 +47,8 @@ CREATE TABLE IF NOT EXISTS systems (
     gpu_model VARCHAR(255),
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     last_seen TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    is_active BOOLEAN DEFAULT TRUE
+    is_active BOOLEAN DEFAULT TRUE,
+    status VARCHAR(50) DEFAULT 'pending'
 );
 
 CREATE UNIQUE INDEX IF NOT EXISTS idx_systems_hostname 

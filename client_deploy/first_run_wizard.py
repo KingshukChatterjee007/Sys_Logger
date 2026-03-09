@@ -54,6 +54,12 @@ def main():
             system_id = str(uuid.uuid4())
             is_clone = True
 
+    # --- Skip if already configured ---
+    if existing.get('org_id') and existing.get('org_id') != 'default_org' and existing.get('comp_id'):
+        print(f"  OK Pre-configured unit detected: {existing.get('org_id')}/{existing.get('comp_id')}")
+        print("  Skipping setup wizard...")
+        return
+
     # --- Org ID ---
     existing_org = existing.get('org_id', '')
     if existing_org and existing_org != 'default_org':

@@ -64,6 +64,12 @@ export default function DashboardView({ orgId: propOrgId }: DashboardViewProps) 
     const [isDeleting, setIsDeleting] = useState(false)
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
 
+    // Add Node State
+    const [isAddNodeOpen, setIsAddNodeOpen] = useState(false)
+    const [newNodeName, setNewNodeName] = useState('')
+    const [isDownloading, setIsDownloading] = useState(false)
+    const [addNodeError, setAddNodeError] = useState('')
+
     // Logo Carousel State
     const [logoIndex, setLogoIndex] = useState(0)
 
@@ -143,15 +149,70 @@ export default function DashboardView({ orgId: propOrgId }: DashboardViewProps) 
         setIsDeleting(true)
         try {
             const response = await fetch(`/api/units/${selectedUnit.id}`, {
-                method: 'DELETE'
+                method: 'DELETE',
+                headers: { 'Authorization': `Bearer ${token}` }
             })
             if (response.ok) {
                 clearSelection()
+                apiUnits.refetchUnits()
             }
         } catch (err) {
             console.error('Failed to delete unit:', err)
         } finally {
             setIsDeleting(false)
+        }
+    }
+
+    const downloadInstaller = async (compName: string) => {
+        setIsDownloading(true)
+        setAddNodeError('')
+
+        try {
+            const response = await fetch('/api/units/download-installer', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({ comp_id: compName })
+            })
+
+            if (!response.ok) {
+                const data = await response.json()
+                setAddNodeError(data.message || 'Failed to download installer')
+                return false
+            }
+
+            const blob = await response.blob()
+            const url = window.URL.createObjectURL(blob)
+            const a = document.createElement('a')
+            a.href = url
+            a.download = `sys_logger_installer_${compName}.zip`
+            document.body.appendChild(a)
+            a.click()
+            window.URL.revokeObjectURL(url)
+            document.body.removeChild(a)
+            return true
+        } catch (err) {
+            console.error('Download error:', err)
+            setAddNodeError('Connection failure while preparing installer')
+            return false
+        } finally {
+            setIsDownloading(false)
+        }
+    }
+
+    const handleAddNode = async () => {
+        if (!newNodeName.trim()) {
+            setAddNodeError('Unit Name is required')
+            return
+        }
+
+        const success = await downloadInstaller(newNodeName)
+        if (success) {
+            setIsAddNodeOpen(false)
+            setNewNodeName('')
+            apiUnits.refetchUnits()
         }
     }
 
@@ -267,6 +328,17 @@ export default function DashboardView({ orgId: propOrgId }: DashboardViewProps) 
                         </div>
                     </div>
 
+                    {/* Add Monitor Button */}
+                    <div className="px-3 lg:px-4 py-2">
+                        <button
+                            onClick={() => setIsAddNodeOpen(true)}
+                            className="w-full py-3 bg-zinc-900 text-white rounded-xl font-black uppercase tracking-widest text-[10px] flex items-center justify-center gap-2 hover:bg-zinc-800 transition-all shadow-lg shadow-zinc-900/10 group"
+                        >
+                            <Zap className="w-3.5 h-3.5 text-orange-500 group-hover:animate-pulse" />
+                            Add Monitor
+                        </button>
+                    </div>
+
                     <div className="flex-1 overflow-y-auto p-3 lg:p-4 space-y-4 lg:space-y-6 custom-scrollbar bg-white/50">
                         {loading ? (
                             <div className="flex flex-col items-center justify-center p-8 text-zinc-400 gap-3">
@@ -289,8 +361,11 @@ export default function DashboardView({ orgId: propOrgId }: DashboardViewProps) 
                             ).map(([org, orgUnits]) => (
                                 <div key={org} className="space-y-2 lg:space-y-3">
                                     <div className="flex items-center gap-2 px-1 mb-2">
-                                        <div className="p-1 px-1.5 bg-zinc-100 rounded text-[9px] font-black text-zinc-400 border border-zinc-200 uppercase tracking-widest">
-                                            {org}
+                                        <div className="p-1 px-2 bg-zinc-900 rounded-lg text-[9px] font-black text-white border border-zinc-800 uppercase tracking-widest shadow-sm">
+                                            {orgUnits[0].org_name} 
+                                            <span className="ml-1.5 opacity-40 font-bold border-l border-white/20 pl-1.5 text-orange-400">
+                                                {orgUnits[0].org_slug}
+                                            </span>
                                         </div>
                                         <div className="h-[1px] flex-1 bg-zinc-200/60" />
                                     </div>
@@ -298,6 +373,7 @@ export default function DashboardView({ orgId: propOrgId }: DashboardViewProps) 
                                         {orgUnits.map((unit) => {
                                             const isSelected = selectedUnitId === unit.id;
                                             const isOnline = unit.status === 'online';
+                                            const isPending = unit.status === 'pending';
 
                                             return (
                                                 <button
@@ -312,18 +388,32 @@ export default function DashboardView({ orgId: propOrgId }: DashboardViewProps) 
                                                 >
                                                     <div className="flex justify-between items-start mb-2.5">
                                                         <div className="flex items-center gap-2.5 lg:gap-3">
-                                                            <div className={cn("p-1.5 lg:p-2 rounded-lg transition-colors", isSelected ? 'bg-orange-50 text-orange-600' : 'bg-zinc-50 text-zinc-400 group-hover/card:text-zinc-700')}>
+                                                            <div className={cn("p-1.5 lg:p-2 rounded-lg transition-colors", 
+                                                                isSelected ? 'bg-orange-50 text-orange-600' : 'bg-zinc-50 text-zinc-400 group-hover/card:text-zinc-700'
+                                                            )}>
                                                                 <Monitor className="w-4 h-4" />
                                                             </div>
-                                                            <span className={cn("font-bold truncate text-xs lg:text-sm transition-colors", isSelected ? 'text-zinc-900' : 'text-zinc-600 group-hover/card:text-zinc-900')}>
-                                                                {unit.name.split('/').pop()}
-                                                            </span>
+                                                            <div className="flex flex-col min-w-0">
+                                                                <span className={cn("font-bold truncate text-xs lg:text-sm transition-colors", isSelected ? 'text-zinc-900' : 'text-zinc-600 group-hover/card:text-zinc-900')}>
+                                                                    {unit.name.split('/').pop()}
+                                                                </span>
+                                                                {isPending && (
+                                                                    <span className="text-[9px] font-black text-orange-500 uppercase tracking-tighter animate-pulse">
+                                                                        Awaiting Install
+                                                                    </span>
+                                                                )}
+                                                            </div>
                                                         </div>
-                                                        <div className={cn("w-2 h-2 rounded-full mt-2 shrink-0 shadow-sm", isOnline ? 'bg-emerald-500' : 'bg-zinc-300')} />
+                                                        <div className={cn("w-2 h-2 rounded-full mt-2 shrink-0 shadow-sm", 
+                                                            isOnline ? 'bg-emerald-500 shadow-emerald-500/20' : 
+                                                            isPending ? 'bg-orange-400 animate-ping shadow-orange-400/20' : 'bg-zinc-300'
+                                                        )} />
                                                     </div>
 
                                                     <div className="flex justify-between items-center text-xs pl-[36px] lg:pl-[44px]">
-                                                        <span className={cn("font-mono text-[10px] lg:text-[11px] font-medium truncate pr-2", isSelected ? 'text-orange-600' : 'text-zinc-400')}>{unit.ip}</span>
+                                                        <span className={cn("font-mono text-[10px] lg:text-[11px] font-medium truncate pr-2", isSelected ? 'text-orange-600' : 'text-zinc-400')}>
+                                                            {isPending ? 'DEPLOYMENT PENDING' : unit.ip}
+                                                        </span>
                                                     </div>
                                                 </button>
                                             )
@@ -416,7 +506,95 @@ export default function DashboardView({ orgId: propOrgId }: DashboardViewProps) 
                 </aside>
 
 
-                <main className="flex-1 flex flex-col relative overflow-hidden w-full h-full">
+            {/* ADD MONITOR MODAL */}
+            <AnimatePresence>
+                {isAddNodeOpen && (
+                    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+                        <motion.div
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            onClick={() => setIsAddNodeOpen(false)}
+                            className="absolute inset-0 bg-zinc-900/40 backdrop-blur-sm"
+                        />
+                        <motion.div
+                            initial={{ opacity: 0, scale: 0.95, y: 20 }}
+                            animate={{ opacity: 1, scale: 1, y: 0 }}
+                            exit={{ opacity: 0, scale: 0.95, y: 20 }}
+                            className="relative w-full max-w-md bg-white rounded-[2.5rem] shadow-[0_32px_64px_-16px_rgba(0,0,0,0.2)] p-10 overflow-hidden"
+                        >
+                            <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-orange-500 to-emerald-500" />
+                            
+                            <div className="flex justify-between items-start mb-8">
+                                <div className="p-3 bg-zinc-900 rounded-2xl shadow-lg shadow-zinc-900/20">
+                                    <Activity className="w-6 h-6 text-orange-500" />
+                                </div>
+                                <button
+                                    onClick={() => setIsAddNodeOpen(false)}
+                                    className="p-2 text-zinc-400 hover:text-zinc-900 hover:bg-zinc-100 rounded-xl transition-all"
+                                >
+                                    <X size={20} />
+                                </button>
+                            </div>
+
+                            <h2 className="text-2xl font-black text-zinc-900 mb-2 tracking-tight">Add New Monitor.</h2>
+                            <p className="text-sm font-medium text-zinc-500 mb-8">Deploy a telemetry agent to your system</p>
+
+                            <div className="space-y-6">
+                                <div className="space-y-2">
+                                    <label className="text-[10px] font-black uppercase tracking-widest text-zinc-400 ml-4">Unit Identifier</label>
+                                    <div className="relative">
+                                        <Terminal className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
+                                        <input
+                                            type="text"
+                                            value={newNodeName}
+                                            onChange={(e) => setNewNodeName(e.target.value)}
+                                            className="w-full bg-zinc-50 border-none ring-1 ring-zinc-200 rounded-2xl py-4 pl-12 pr-4 text-sm text-zinc-900 focus:ring-2 focus:ring-orange-500/20 transition-all font-bold placeholder:text-zinc-300"
+                                            placeholder="e.g. primary-server"
+                                        />
+                                    </div>
+                                </div>
+
+                                {addNodeError && (
+                                    <div className="flex items-center gap-2 bg-red-50 text-red-600 p-4 rounded-2xl text-[11px] font-black ring-1 ring-red-100 animate-shake">
+                                        <AlertTriangle className="w-4 h-4" />
+                                        {addNodeError.toUpperCase()}
+                                    </div>
+                                )}
+
+                                <div className="p-5 bg-orange-50/50 rounded-2xl border border-orange-100 flex flex-col gap-3">
+                                    <div className="flex items-center gap-3">
+                                        <div className="p-1.5 bg-orange-500 rounded-lg shadow-sm">
+                                            <Download className="w-3 h-3 text-white" />
+                                        </div>
+                                        <span className="text-[10px] font-black uppercase tracking-widest text-orange-600">Generated Bundle</span>
+                                    </div>
+                                    <p className="text-[11px] text-zinc-600 font-medium leading-relaxed">
+                                        We will generate a specialized ZIP package pre-configured for your account. Simply extract and run <code className="font-black text-orange-600">install.bat</code>.
+                                    </p>
+                                </div>
+
+                                <button
+                                    onClick={handleAddNode}
+                                    disabled={isDownloading}
+                                    className="w-full bg-zinc-900 text-white rounded-2xl py-5 font-black uppercase tracking-widest text-xs flex items-center justify-center gap-3 hover:bg-zinc-800 transition-all disabled:opacity-50 group shadow-xl shadow-zinc-900/10"
+                                >
+                                    {isDownloading ? (
+                                        <div className="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin" />
+                                    ) : (
+                                        <>
+                                            Download Installer
+                                            <ChevronRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+                                        </>
+                                    )}
+                                </button>
+                            </div>
+                        </motion.div>
+                    </div>
+                )}
+            </AnimatePresence>
+
+            <main className="flex-1 flex flex-col relative overflow-hidden w-full h-full">
                     <AnimatePresence mode="wait">
                         {activeTab === 'management' ? (
                             <motion.div
@@ -513,7 +691,68 @@ export default function DashboardView({ orgId: propOrgId }: DashboardViewProps) 
                                     </div>
                                 </div>
 
-                                {activeTab === 'metrics' ? (
+                                {selectedUnit.status === 'pending' ? (
+                                    <div className="flex-1 flex items-center justify-center p-4 lg:p-8">
+                                        <div className="max-w-xl w-full bg-white rounded-[2.5rem] border border-zinc-200/60 p-10 lg:p-12 text-center shadow-sm relative overflow-hidden">
+                                            <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-orange-500/20 via-orange-500 to-orange-500/20" />
+                                            
+                                            <div className="mb-8 relative inline-block">
+                                                <div className="w-24 h-24 bg-orange-50 rounded-full flex items-center justify-center ring-4 ring-white shadow-xl">
+                                                    <Download className="w-10 h-10 text-orange-500 animate-bounce" />
+                                                </div>
+                                                <div className="absolute -bottom-2 -right-2 bg-zinc-900 text-white p-2 rounded-xl shadow-lg ring-4 ring-white">
+                                                    <Shield className="w-4 h-4 text-emerald-400" />
+                                                </div>
+                                            </div>
+
+                                            <h2 className="text-3xl font-black text-zinc-900 mb-4 tracking-tight">Awaiting Installation.</h2>
+                                            <p className="text-zinc-500 font-medium mb-10 text-sm lg:text-base leading-relaxed">
+                                                We've registered your unit <span className="text-zinc-900 font-black px-2 py-1 bg-zinc-100 rounded-lg">{selectedUnit.name.split('/').pop()}</span>. 
+                                                Now, you need to deploy the telemetry agent to start receiving live metrics.
+                                            </p>
+
+                                            <div className="space-y-4 mb-10">
+                                                <div className="flex items-start gap-4 text-left p-5 bg-zinc-50 rounded-2xl border border-zinc-100 group hover:border-orange-200 transition-colors">
+                                                    <div className="w-8 h-8 rounded-lg bg-zinc-900 text-white flex items-center justify-center text-xs font-black shrink-0 shadow-md">1</div>
+                                                    <div>
+                                                        <p className="text-[11px] font-black uppercase tracking-widest text-zinc-400 mb-1">Transfer Bundle</p>
+                                                        <p className="text-xs font-bold text-zinc-700">Move the downloaded ZIP to your target server and extract it.</p>
+                                                    </div>
+                                                </div>
+                                                <div className="flex items-start gap-4 text-left p-5 bg-zinc-50 rounded-2xl border border-zinc-100 group hover:border-orange-200 transition-colors">
+                                                    <div className="w-8 h-8 rounded-lg bg-zinc-900 text-white flex items-center justify-center text-xs font-black shrink-0 shadow-md">2</div>
+                                                    <div>
+                                                        <p className="text-[11px] font-black uppercase tracking-widest text-zinc-400 mb-1">Single Command Install</p>
+                                                        <p className="text-xs font-bold text-zinc-700">Open a terminal in the folder and run <code className="text-orange-600 font-black">install.bat</code>.</p>
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            <div className="flex flex-col sm:flex-row gap-3">
+                                                <button
+                                                    onClick={() => downloadInstaller(selectedUnit.name.split('/').pop() || '')}
+                                                    disabled={isDownloading}
+                                                    className="flex-1 bg-zinc-900 text-white rounded-2xl py-5 px-8 font-black uppercase tracking-widest text-[11px] flex items-center justify-center gap-3 hover:bg-zinc-800 transition-all shadow-xl shadow-zinc-900/10 disabled:opacity-50"
+                                                >
+                                                    {isDownloading ? (
+                                                        <div className="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin" />
+                                                    ) : (
+                                                        <>
+                                                            <Download className="w-4 h-4" />
+                                                            Download Installer Again
+                                                        </>
+                                                    )}
+                                                </button>
+                                                <button 
+                                                    onClick={handleDeleteUnit}
+                                                    className="px-8 bg-zinc-100 hover:bg-red-50 hover:text-red-600 text-zinc-500 rounded-2xl py-5 font-black uppercase tracking-widest text-[11px] transition-all"
+                                                >
+                                                    Cancel Setup
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                ) : activeTab === 'metrics' ? (
                                     <div className="flex flex-col lg:flex-row gap-4 lg:gap-6 pb-4 lg:pb-6 flex-1 min-h-0">
                                         <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-1 gap-3 lg:gap-4 shrink-0 lg:w-48 xl:w-56 overflow-y-auto custom-scrollbar p-1">
                                             {currentMetrics.map((metric) => (
