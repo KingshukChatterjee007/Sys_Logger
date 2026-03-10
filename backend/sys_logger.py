@@ -143,13 +143,9 @@ def register():
     slug = slugify(org_name)
     username = email.split('@')[0]
     
-    # Determine tier and limits
-    if org_type == 'Individual':
-        tier = 'INDIVIDUAL'
-        node_limit = 1
-    else:
-        tier = 'BUSINESS'
-        node_limit = 999999 # Unlimited
+    # All new registrations start on INDIVIDUAL tier with 1 node limit
+    tier = 'INDIVIDUAL'
+    node_limit = 1
         
     conn = get_db_connection()
     cur = conn.cursor(cursor_factory=RealDictCursor)
@@ -1015,7 +1011,7 @@ def create_org(current_user):
         # 1. Fetch node limit from pricing_plans
         cur.execute("SELECT node_limit FROM pricing_plans WHERE slug = %s", (tier.lower(),))
         plan = cur.fetchone()
-        node_limit = plan['node_limit'] if plan else 10
+        node_limit = plan['node_limit'] if plan else 1
 
         # 2. Check if slug exists
         cur.execute("SELECT 1 FROM organizations WHERE slug = %s", (slug,))

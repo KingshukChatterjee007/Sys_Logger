@@ -46,7 +46,7 @@ export function OrgManager() {
 
     const [newOrgId, setNewOrgId] = useState('');
     const [newOrgName, setNewOrgName] = useState('');
-    const [newOrgTier, setNewOrgTier] = useState('FREE');
+    const [newOrgTier, setNewOrgTier] = useState('PRO');
     const [createLoading, setCreateLoading] = useState(false);
     const [error, setError] = useState('');
     const [success, setSuccess] = useState('');
