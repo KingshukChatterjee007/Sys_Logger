@@ -175,7 +175,7 @@ export default function HomeDashboard() {
                         <Activity className="w-5 h-5 text-orange-500" />
                     </div>
                     <span className="font-bold tracking-widest text-sm text-zinc-500 uppercase">
-                        System Logger <span className="text-zinc-900">PRO</span>
+                        System Logger 
                     </span>
                 </div>
                 <div className="flex items-center gap-2 text-zinc-500 font-mono text-xs font-bold tracking-widest uppercase bg-white/60 backdrop-blur-md px-4 py-2 rounded-full ring-1 ring-zinc-200/80 shadow-sm">
@@ -312,7 +312,7 @@ export default function HomeDashboard() {
                     <div className="w-[1px] h-6 bg-zinc-200" />
                     <img src="/India-AI_logo.jpeg" alt="India AI" className="h-6 object-contain opacity-60 hover:opacity-100 transition-opacity grayscale hover:grayscale-0 duration-300 mix-blend-multiply" />
                 </div>
-                <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-[0.3em]">© 2026 System Logger Pro • Precision Monitoring</p>
+                <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-[0.3em]">© 2026 System Logger • Precision Monitoring</p>
             </motion.footer>
 
         </div>
