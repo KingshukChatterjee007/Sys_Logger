@@ -216,8 +216,10 @@ def download_installer(current_user):
         
         if current_count >= org['node_limit']:
             return jsonify({
-                'message': f"Tier limit reached! Your tier allows {org['node_limit']} nodes. "
-                           "Upgrade to Business Tier for unlimited nodes."
+                'error': 'limit_reached',
+                'current_count': current_count,
+                'limit': org['node_limit'],
+                'message': f"Tier limit reached! Your tier allows {org['node_limit']} nodes. Upgrade to add more monitors."
             }), 403
 
         # 2. Package Installer

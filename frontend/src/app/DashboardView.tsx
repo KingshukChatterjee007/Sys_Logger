@@ -26,6 +26,16 @@ interface DashboardViewProps {
     orgId?: string
 }
 
+interface PricingPlan {
+    plan_id: number;
+    name: string;
+    slug: string;
+    price_monthly: number;
+    node_limit: number;
+    features: string[];
+    is_active: boolean;
+}
+
 
 import { useAuth } from './components/AuthContext';
 import { useRouter } from 'next/navigation';
@@ -69,6 +79,9 @@ export default function DashboardView({ orgId: propOrgId }: DashboardViewProps) 
     const [newNodeName, setNewNodeName] = useState('')
     const [isDownloading, setIsDownloading] = useState(false)
     const [addNodeError, setAddNodeError] = useState('')
+    const [isUpgradeModalOpen, setIsUpgradeModalOpen] = useState(false)
+    const [plans, setPlans] = useState<PricingPlan[]>([])
+    const [paymentLoading, setPaymentLoading] = useState<string | null>(null)
 
     // Logo Carousel State
     const [logoIndex, setLogoIndex] = useState(0)
@@ -88,11 +101,75 @@ export default function DashboardView({ orgId: propOrgId }: DashboardViewProps) 
             setLogoIndex((prev) => (prev + 1) % logos.length)
         }, 3000)
 
+        // Load Razorpay & fetch plans
+        const script = document.createElement('script');
+        script.src = 'https://checkout.razorpay.com/v1/checkout.js';
+        script.async = true;
+        document.body.appendChild(script);
+
+        fetch('/api/pricing')
+            .then(res => res.ok ? res.json() : Promise.reject())
+            .then(data => { if (Array.isArray(data) && data.length > 0) setPlans(data) })
+            .catch(() => setPlans([
+                { plan_id: 2, name: "Pro", slug: "pro", price_monthly: 99, node_limit: 10, features: ["10 Active Nodes", "Advanced Metrics", "Priority Support"], is_active: true },
+                { plan_id: 3, name: "Business", slug: "business", price_monthly: 199, node_limit: 50, features: ["50 Nodes", "Global Fleet Control", "24/7 Support"], is_active: true }
+            ]))
+
         return () => {
             clearInterval(timeInterval)
             clearInterval(logoInterval)
+            if (document.body.contains(script)) document.body.removeChild(script);
         }
     }, [logos.length])
+
+    const handlePayment = async (plan: PricingPlan) => {
+        setPaymentLoading(plan.slug);
+        try {
+            const orderResp = await fetch('/api/payments/create-order', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                body: JSON.stringify({ plan_slug: plan.slug })
+            });
+            const orderData = await orderResp.json();
+            if (!orderResp.ok) throw new Error(orderData.error || 'Failed to create order');
+
+            const options = {
+                key: orderData.key_id,
+                amount: orderData.amount,
+                currency: orderData.currency,
+                name: "SysLogger",
+                description: `Upgrade to ${plan.name} Plan`,
+                order_id: orderData.order_id,
+                handler: async (response: any) => {
+                    const verifyResp = await fetch('/api/payments/verify', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                        body: JSON.stringify({
+                            razorpay_order_id: response.razorpay_order_id,
+                            razorpay_payment_id: response.razorpay_payment_id,
+                            razorpay_signature: response.razorpay_signature
+                        })
+                    });
+                    const verifyData = await verifyResp.json();
+                    if (verifyResp.ok) {
+                        setIsUpgradeModalOpen(false);
+                        alert(`✅ Upgraded to ${verifyData.tier}! You can now add more monitors.`);
+                        apiUnits.refetchUnits();
+                    } else {
+                        alert('Payment verification failed: ' + verifyData.error);
+                    }
+                },
+                prefill: { name: '', email: user?.email || '' },
+                theme: { color: '#f97316' }
+            };
+            const rzp = new (window as any).Razorpay(options);
+            rzp.open();
+        } catch (err: any) {
+            alert(err.message || 'Payment failed to initiate');
+        } finally {
+            setPaymentLoading(null);
+        }
+    };
 
     useEffect(() => {
         if (selectedUnitId && units.length > 0) {
@@ -179,6 +256,12 @@ export default function DashboardView({ orgId: propOrgId }: DashboardViewProps) 
 
             if (!response.ok) {
                 const data = await response.json()
+                // Check for limit_reached error and open upgrade modal
+                if (data.error === 'limit_reached') {
+                    setIsAddNodeOpen(false)
+                    setIsUpgradeModalOpen(true)
+                    return false
+                }
                 setAddNodeError(data.message || 'Failed to download installer')
                 return false
             }
@@ -588,6 +671,67 @@ export default function DashboardView({ orgId: propOrgId }: DashboardViewProps) 
                                         </>
                                     )}
                                 </button>
+                            </div>
+                        </motion.div>
+                    </div>
+                )}
+            </AnimatePresence>
+
+            {/* UPGRADE MODAL */}
+            <AnimatePresence>
+                {isUpgradeModalOpen && (
+                    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+                        <motion.div
+                            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                            onClick={() => setIsUpgradeModalOpen(false)}
+                            className="absolute inset-0 bg-zinc-900/50 backdrop-blur-sm"
+                        />
+                        <motion.div
+                            initial={{ opacity: 0, scale: 0.95, y: 20 }}
+                            animate={{ opacity: 1, scale: 1, y: 0 }}
+                            exit={{ opacity: 0, scale: 0.95, y: 20 }}
+                            className="relative w-full max-w-xl bg-white rounded-[2.5rem] shadow-[0_32px_64px_-16px_rgba(0,0,0,0.25)] p-10 overflow-hidden"
+                        >
+                            <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-orange-500 to-emerald-500" />
+                            <button
+                                onClick={() => setIsUpgradeModalOpen(false)}
+                                className="absolute top-6 right-6 p-2 text-zinc-400 hover:text-zinc-900 hover:bg-zinc-100 rounded-xl transition-all"
+                            >
+                                <X size={20} />
+                            </button>
+
+                            <div className="mb-6">
+                                <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-orange-50 ring-1 ring-orange-200 mb-4">
+                                    <AlertTriangle className="w-3.5 h-3.5 text-orange-500" />
+                                    <span className="text-[10px] font-black uppercase tracking-[0.2em] text-orange-600">Node Limit Reached</span>
+                                </div>
+                                <h2 className="text-2xl font-black text-zinc-900 tracking-tight mb-2">Upgrade Your Plan</h2>
+                                <p className="text-sm font-medium text-zinc-500">You've used all your available node slots. Upgrade below to unlock more monitors instantly.</p>
+                            </div>
+
+                            <div className="space-y-4">
+                                {plans.map((plan) => (
+                                    <div key={plan.plan_id} className={`relative flex items-center justify-between p-5 rounded-2xl ring-1 transition-all ${plan.slug === 'pro' ? 'ring-orange-300 bg-orange-50/50' : 'ring-zinc-200 bg-zinc-50/50'}`}>
+                                        {plan.slug === 'pro' && (
+                                            <div className="absolute -top-2.5 left-4 px-3 py-0.5 bg-orange-500 text-white text-[9px] font-black uppercase tracking-widest rounded-full shadow-sm">
+                                                Recommended
+                                            </div>
+                                        )}
+                                        <div>
+                                            <p className="font-black text-zinc-900 uppercase tracking-wider text-sm">{plan.name}</p>
+                                            <p className="text-xs font-medium text-zinc-500 mt-0.5">{plan.node_limit} Active Nodes • ₹{plan.price_monthly}/mo</p>
+                                        </div>
+                                        <button
+                                            onClick={() => handlePayment(plan)}
+                                            disabled={paymentLoading === plan.slug}
+                                            className={`px-5 py-2.5 rounded-xl font-black uppercase tracking-widest text-[10px] flex items-center gap-2 transition-all disabled:opacity-50 ${plan.slug === 'pro' ? 'bg-zinc-900 text-white hover:bg-zinc-800 shadow-lg shadow-zinc-900/10' : 'bg-white text-zinc-700 ring-1 ring-zinc-200 hover:ring-zinc-300'}`}
+                                        >
+                                            {paymentLoading === plan.slug ? (
+                                                <div className="w-3.5 h-3.5 border-2 border-current/30 border-t-current rounded-full animate-spin" />
+                                            ) : 'Upgrade Now'}
+                                        </button>
+                                    </div>
+                                ))}
                             </div>
                         </motion.div>
                     </div>
