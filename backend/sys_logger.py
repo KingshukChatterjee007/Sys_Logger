@@ -215,7 +215,7 @@ def download_installer(current_user):
         if not org:
             return jsonify({'message': 'Organization not found!'}), 404
             
-        cur.execute("SELECT COUNT(*) FROM systems WHERE org_id = %s::varchar", (org_id,))
+        cur.execute("SELECT COUNT(*) FROM systems WHERE org_id = %s", (org_id,))
         current_count = cur.fetchone()['count']
         
         if current_count >= org['node_limit']:
@@ -263,7 +263,7 @@ def download_installer(current_user):
         name = f"{org_id}/{comp_id}"
         cur.execute("""
             INSERT INTO systems (system_name, org_id, created_at)
-            VALUES (%s, %s::varchar, NOW())
+            VALUES (%s, %s, NOW())
             ON CONFLICT (system_name) DO UPDATE SET
                 org_id = EXCLUDED.org_id
         """, (name, org_id))
@@ -340,7 +340,7 @@ def get_users(current_user):
         cur.execute("""
             SELECT u.user_id, u.username, u.email, u.role, o.name as org_name 
             FROM users u 
-            LEFT JOIN organizations o ON u.org_id::varchar = o.org_id::varchar
+            LEFT JOIN organizations o ON u.org_id = o.org_id
             ORDER BY u.user_id DESC
         """)
         users = cur.fetchall()
@@ -556,7 +556,7 @@ class UnitStore:
             query = """
                 SELECT s.*, o.name as org_display_name, o.slug as org_slug 
                 FROM systems s 
-                LEFT JOIN organizations o ON s.org_id = o.org_id::varchar
+                LEFT JOIN organizations o ON s.org_id = o.org_id
             """
             params = []
             
@@ -961,7 +961,7 @@ def verify_payment(current_user):
         cur.execute("""
             UPDATE organizations 
             SET tier = %s, node_limit = %s 
-            WHERE org_id = %s::varchar
+            WHERE org_id = %s
         """, (plan['name'].upper(), plan['node_limit'], str(current_user['org_id'])))
         
         conn.commit()
