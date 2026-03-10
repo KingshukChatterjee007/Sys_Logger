@@ -61,13 +61,23 @@ export function OrgManager() {
                 method: 'POST',
                 body: JSON.stringify({ org_id: newOrgId, name: newOrgName })
             });
-            const data = await resp.json();
-            if (!resp.ok) throw new Error(data.error || 'Failed to create organization');
+            
+            let data;
+            const contentType = resp.headers.get('content-type');
+            if (contentType && contentType.includes('application/json')) {
+                data = await resp.json();
+            } else {
+                const text = await resp.text();
+                throw new Error(text || `Server error: ${resp.status}`);
+            }
+
+            if (!resp.ok) throw new Error(data.error || data.message || 'Failed to create organization');
 
             setNewOrgId('');
             setNewOrgName('');
             await fetchData();
         } catch (err: any) {
+            console.error('Org creation error:', err);
             setError(err.message || 'Failed to create organization');
         } finally {
             setCreateLoading(false);

@@ -10,14 +10,14 @@ export function getBackendUrl(): string {
 /**
  * Proxy a GET request to the Flask backend and return the JSON response.
  */
-export async function proxyGet(backendPath: string): Promise<Response> {
+export async function proxyGet(backendPath: string, token?: string | null): Promise<Response> {
     const url = `${getBackendUrl()}${backendPath}`
-    const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null
+    const effectiveToken = token || (typeof window !== 'undefined' ? localStorage.getItem('token') : null)
 
     const response = await fetch(url, {
         headers: {
             'Content-Type': 'application/json',
-            ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+            ...(effectiveToken ? { 'Authorization': effectiveToken.startsWith('Bearer ') ? effectiveToken : `Bearer ${effectiveToken}` } : {})
         },
         cache: 'no-store',
     })
@@ -46,15 +46,15 @@ export async function proxyGet(backendPath: string): Promise<Response> {
 /**
  * Proxy a POST request to the Flask backend.
  */
-export async function proxyPost(backendPath: string, body?: unknown): Promise<Response> {
+export async function proxyPost(backendPath: string, body?: unknown, token?: string | null): Promise<Response> {
     const url = `${getBackendUrl()}${backendPath}`
-    const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null
+    const effectiveToken = token || (typeof window !== 'undefined' ? localStorage.getItem('token') : null)
 
     const response = await fetch(url, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
-            ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+            ...(effectiveToken ? { 'Authorization': effectiveToken.startsWith('Bearer ') ? effectiveToken : `Bearer ${effectiveToken}` } : {})
         },
         body: body ? JSON.stringify(body) : undefined,
     })
@@ -83,15 +83,15 @@ export async function proxyPost(backendPath: string, body?: unknown): Promise<Re
 /**
      * Proxy a PUT request to the Flask backend.
      */
-export async function proxyPut(backendPath: string, body?: unknown): Promise<Response> {
+export async function proxyPut(backendPath: string, body?: unknown, token?: string | null): Promise<Response> {
     const url = `${getBackendUrl()}${backendPath}`
-    const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null
+    const effectiveToken = token || (typeof window !== 'undefined' ? localStorage.getItem('token') : null)
 
     const response = await fetch(url, {
         method: 'PUT',
         headers: {
             'Content-Type': 'application/json',
-            ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+            ...(effectiveToken ? { 'Authorization': effectiveToken.startsWith('Bearer ') ? effectiveToken : `Bearer ${effectiveToken}` } : {})
         },
         body: body ? JSON.stringify(body) : undefined,
     })
@@ -111,14 +111,14 @@ export async function proxyPut(backendPath: string, body?: unknown): Promise<Res
 /**
  * Proxy a DELETE request to the Flask backend.
  */
-export async function proxyDelete(backendPath: string): Promise<Response> {
+export async function proxyDelete(backendPath: string, token?: string | null): Promise<Response> {
     const url = `${getBackendUrl()}${backendPath}`
-    const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null
+    const effectiveToken = token || (typeof window !== 'undefined' ? localStorage.getItem('token') : null)
 
     const response = await fetch(url, {
         method: 'DELETE',
         headers: {
-            ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+            ...(effectiveToken ? { 'Authorization': effectiveToken.startsWith('Bearer ') ? effectiveToken : `Bearer ${effectiveToken}` } : {})
         },
     })
 
