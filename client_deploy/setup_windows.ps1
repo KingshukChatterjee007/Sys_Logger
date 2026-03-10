@@ -105,13 +105,10 @@ $reqFile = Join-Path $deployDir "requirements.txt"
 Write-Host "  OK Dependencies installed"
 
 # ==========================================
-# Step 4: Configure Unit Identity
+# Step 4: Validate Pre-Configured Identity
 # ==========================================
 Write-Host ""
-Write-Host "[Step 4/6] Configuring unit identity..."
-Write-Host "  You will be asked for your Organization ID and Computer ID."
-Write-Host "  These are saved once and used every time the client runs."
-Write-Host ""
+Write-Host "[Step 4/6] Validating unit identity..."
 
 $configFile = Join-Path $deployDir "unit_client_config.json"
 if (-not (Test-Path $configFile)) {
@@ -119,19 +116,35 @@ if (-not (Test-Path $configFile)) {
     $configFile = Join-Path (Get-Location) "unit_client_config.json"
 }
 
-if (Test-Path $configFile) {
-    Write-Host "  OK Pre-configured installer detected - skipping wizard."
-    $configData = Get-Content $configFile | ConvertFrom-Json
-    Write-Host "    Node: $($configData.comp_id)"
-    Write-Host "    Org : $($configData.org_id)"
-} else {
-    & $venvPython "$deployDir\first_run_wizard.py"
-    if ($LASTEXITCODE -ne 0) {
-        Write-Host "  ERROR: Configuration wizard failed. Cannot continue."
-        exit 1
-    }
+if (-not (Test-Path $configFile)) {
+    Write-Host ""
+    Write-Host "  ERROR: unit_client_config.json not found!" -ForegroundColor Red
+    Write-Host "  This installer requires a pre-configured package from the admin dashboard."
+    Write-Host "  Manual installation is not supported."
+    Write-Host ""
+    Write-Host "  To get a valid installer:"
+    Write-Host "    1. Log into the Sys_Logger dashboard"
+    Write-Host "    2. Go to 'Add Node' > 'Download Installer'"
+    Write-Host "    3. Extract and run the downloaded package"
+    exit 1
 }
-Write-Host "  OK Unit identity configured"
+
+# Validate config contents
+$configData = Get-Content $configFile -Raw | ConvertFrom-Json
+
+if (-not $configData.org_id -or -not $configData.comp_id -or -not $configData.install_token) {
+    Write-Host ""
+    Write-Host "  ERROR: Invalid configuration file!" -ForegroundColor Red
+    Write-Host "  The config is missing required fields (org_id, comp_id, or install_token)."
+    Write-Host "  This installer may have been tampered with or already used."
+    Write-Host "  Request a new installer from your admin dashboard."
+    exit 1
+}
+
+Write-Host "  OK Pre-configured installer detected."
+Write-Host "    Node: $($configData.comp_id)"
+Write-Host "    Org : $($configData.org_id)"
+Write-Host "  OK Unit identity validated"
 
 # ==========================================
 # Step 5: Start Client Invisibly

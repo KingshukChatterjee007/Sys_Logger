@@ -51,15 +51,17 @@ class UnitClient:
         self.system_id = self.config.get('system_id')
         self.org_id = self.config.get('org_id')
         self.comp_id = self.config.get('comp_id')
+        self.install_token = self.config.get('install_token')  # One-time use token from admin
         
         # Hardcode server URL as requested by user
         self.server_url = DEFAULT_SERVER_URL
         
         if not self.org_id or self.org_id == 'default_org' or not self.comp_id:
-            # Under PM2/Boot — config must be set up by first_run_wizard.py / install.bat first
+            # Under PM2/Boot — config must be set up by admin-generated installer
             print(
                 "ERROR: org_id or comp_id not configured.\n"
-                "  Please run install.bat (Windows) or first_run_wizard.py to set up this unit.",
+                "  This installer requires an admin-generated package.\n"
+                "  Manual installation is not supported.",
                 flush=True
             )
             sys.exit(1)
@@ -161,6 +163,10 @@ class UnitClient:
         if not info:
             return False
 
+        # Include install_token if we have one (first-time registration)
+        if self.install_token:
+            info['install_token'] = self.install_token
+
         url = f"{self.server_url}/api/register_unit"
         try:
             response = requests.post(url, json=info, timeout=30)
@@ -171,13 +177,38 @@ class UnitClient:
                     print(f"DEBUG: Assigned unit_id: {self.unit_id}", flush=True)
                 except: pass
 
+                # Consume install_token after successful registration (one-time use)
+                if self.install_token:
+                    self._consume_install_token()
+
                 print(f"Unit registered successfully (Status: {response.status_code})", flush=True)
                 return True
+            elif response.status_code == 403:
+                # Token invalid or missing — admin needs to re-issue
+                error_msg = 'Unknown'
+                try:
+                    error_msg = response.json().get('error', 'Unknown')
+                except: pass
+                print(f"Registration REJECTED (403): {error_msg}", flush=True)
+                print("This installer is invalid or has already been used. Request a new one from your admin.", flush=True)
+                sys.exit(1)
             else:
                 print(f"Registration failed with status: {response.status_code}", flush=True)
         except requests.RequestException as e:
             print(f"Registration error: {e}", flush=True)
         return False
+
+    def _consume_install_token(self):
+        """Remove install_token from local config after successful registration (one-time use)."""
+        try:
+            self.install_token = None
+            config = self.config.copy()
+            config.pop('install_token', None)
+            with open(CONFIG_FILE, 'w', encoding='utf-8') as f:
+                json.dump(config, f, indent=4)
+            print("Install token consumed (one-time use).", flush=True)
+        except Exception as e:
+            print(f"Warning: Could not remove install_token from config: {e}", flush=True)
 
     def get_gpu_usage(self):
         """Get GPU usage (NVIDIA via GPUtil, or AMD/Generic via PowerShell)"""

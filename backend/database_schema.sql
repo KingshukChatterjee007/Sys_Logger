@@ -48,7 +48,8 @@ CREATE TABLE IF NOT EXISTS systems (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     last_seen TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     is_active BOOLEAN DEFAULT TRUE,
-    status VARCHAR(50) DEFAULT 'pending'
+    status VARCHAR(50) DEFAULT 'pending',
+    install_token VARCHAR(64)
 );
 
 CREATE UNIQUE INDEX IF NOT EXISTS idx_systems_hostname 
