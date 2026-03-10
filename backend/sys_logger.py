@@ -209,7 +209,7 @@ def download_installer(current_user):
         if not org:
             return jsonify({'message': 'Organization not found!'}), 404
             
-        cur.execute("SELECT COUNT(*) FROM systems WHERE org_id = %s", (org_id,))
+        cur.execute("SELECT COUNT(*) FROM systems WHERE org_id = %s::varchar", (org_id,))
         current_count = cur.fetchone()['count']
         
         if current_count >= org['node_limit']:
@@ -256,12 +256,11 @@ def download_installer(current_user):
         # This allows the dashboard to show the node even before the first heartbeat
         name = f"{org_id}/{comp_id}"
         cur.execute("""
-            INSERT INTO systems (system_name, org_id, status, last_seen)
-            VALUES (%s, %s, %s, %s)
+            INSERT INTO systems (system_name, org_id, created_at)
+            VALUES (%s, %s::varchar, NOW())
             ON CONFLICT (system_name) DO UPDATE SET
-                org_id = EXCLUDED.org_id,
-                status = EXCLUDED.status
-        """, (name, org_id, 'pending', None))
+                org_id = EXCLUDED.org_id
+        """, (name, org_id))
         conn.commit()
 
         print(f"DEBUG: Node created/verified as PENDING for {name}")
