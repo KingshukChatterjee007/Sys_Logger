@@ -264,7 +264,7 @@ export default function HomeDashboard() {
                         <div className="w-20 h-1.5 bg-orange-500 mx-auto rounded-full" />
                     </motion.div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+                    <div className="flex flex-col md:flex-row justify-center gap-8 items-stretch max-w-5xl mx-auto">
                         {plans.map((plan, idx) => (
                             <motion.div
                                 key={plan.plan_id}
@@ -272,7 +272,7 @@ export default function HomeDashboard() {
                                     whileInView={{ opacity: 1, y: 0 }}
                                     viewport={{ once: true }}
                                     transition={{ delay: idx * 0.1 }}
-                                    className={`relative group p-8 rounded-[2.5rem] bg-white ring-1 ring-zinc-200 shadow-sm hover:shadow-xl hover:ring-orange-500/30 transition-all duration-500 overflow-hidden ${plan.slug === 'pro' ? 'md:scale-105 z-10 ring-orange-200' : ''}`}
+                                    className={`relative group p-8 rounded-[2.5rem] bg-white ring-1 ring-zinc-200 shadow-sm hover:shadow-xl hover:ring-orange-500/30 transition-all duration-500 overflow-hidden w-full max-w-sm ${plan.slug === 'pro' ? 'md:scale-105 z-10 ring-orange-200' : ''}`}
                                 >
                                     {plan.slug === 'pro' && (
                                         <div className="absolute top-0 right-0 px-6 py-2 bg-gradient-to-r from-orange-500 to-orange-600 text-white text-[10px] font-black uppercase tracking-widest rounded-bl-3xl shadow-sm">
