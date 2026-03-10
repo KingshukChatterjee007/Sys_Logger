@@ -322,6 +322,59 @@ def login():
 def get_me(current_user):
     return jsonify(current_user)
 
+@app.route('/api/users', methods=['POST'])
+@token_required
+def create_user(current_user):
+    """Create a new user (ROOT only)"""
+    if current_user['role'] != 'ROOT':
+        return jsonify({'error': 'Unauthorized'}), 403
+        
+    data = request.get_json()
+    username = data.get('username')
+    email = data.get('email')
+    password = data.get('password')
+    role = data.get('role', 'USER')
+    org_id = data.get('org_id')
+    
+    if not username or not email or not password:
+        return jsonify({'error': 'Missing required fields (username, email, password)'}), 400
+        
+    password_hash = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+    
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor(cursor_factory=RealDictCursor)
+        
+        # Check if email exists
+        cur.execute("SELECT 1 FROM users WHERE email = %s", (email,))
+        if cur.fetchone():
+            return jsonify({'error': f'User with email {email} already exists'}), 409
+
+        # Check if username exists
+        cur.execute("SELECT 1 FROM users WHERE username = %s", (username,))
+        if cur.fetchone():
+            return jsonify({'error': f'Username {username} is already taken'}), 409
+            
+        cur.execute(
+            """INSERT INTO users (username, email, password_hash, role, org_id) 
+               VALUES (%s, %s, %s, %s, %s) RETURNING user_id""", 
+            (username, email, password_hash, role, org_id)
+        )
+        new_user = cur.fetchone()
+        conn.commit()
+        cur.close()
+        conn.close()
+        
+        return jsonify({
+            'message': 'User created successfully',
+            'user_id': new_user['user_id'],
+            'username': username,
+            'email': email,
+            'role': role
+        }), 201
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
 # Legacy JSON storage logic removed (PostgreSQL is now SOT)
 
 class UnitStore:
@@ -696,7 +749,17 @@ def get_orgs(current_user):
     """Filter orgs list for ROOT admins only"""
     if current_user['role'] != 'ROOT':
         return jsonify({'error': 'Unauthorized'}), 403
-    return jsonify(UnitStore.get_unique_orgs())
+    
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor(cursor_factory=RealDictCursor)
+        cur.execute("SELECT org_id, name, slug, tier FROM organizations ORDER BY name")
+        orgs = cur.fetchall()
+        cur.close()
+        conn.close()
+        return jsonify(orgs)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/api/orgs/<org_id>/units', methods=['GET'])
 @token_required
@@ -718,9 +781,17 @@ def create_org(current_user):
     data = request.get_json()
     org_id = data.get('org_id')
     name = data.get('name')
+    tier = data.get('tier', 'FREE').upper()
     
     if not org_id or not name:
         return jsonify({'error': 'Missing org_id or name'}), 400
+
+    tier_limits = {
+        'FREE': 10,
+        'PRO': 100,
+        'BUSINESS': 99999
+    }
+    node_limit = tier_limits.get(tier, 10)
 
     def slugify(text):
         text = text.lower().strip()
@@ -742,8 +813,8 @@ def create_org(current_user):
             return jsonify({'error': f'Organization ID/Slug "{slug}" is already taken.'}), 409
             
         cur.execute(
-            "INSERT INTO organizations (name, slug) VALUES (%s, %s) RETURNING org_id", 
-            (name, slug)
+            "INSERT INTO organizations (name, slug, tier, node_limit) VALUES (%s, %s, %s, %s) RETURNING org_id", 
+            (name, slug, tier, node_limit)
         )
         new_org = cur.fetchone()
         conn.commit()
@@ -752,7 +823,9 @@ def create_org(current_user):
         return jsonify({
             'message': f'Organization created successfully',
             'org_id': new_org['org_id'],
-            'slug': slug
+            'slug': slug,
+            'tier': tier,
+            'node_limit': node_limit
         }), 201
     except Exception as e:
         return jsonify({'error': str(e)}), 500

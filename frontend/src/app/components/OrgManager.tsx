@@ -4,10 +4,13 @@ import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Building2, Plus, ArrowRight, Server, Shield, Globe, Check, AlertCircle } from 'lucide-react';
 import { apiFetch } from './hooks/apiUtils';
+import { UserManager } from './UserManager';
 
 interface Org {
-    org_id: string;
+    org_id: number;
     name: string;
+    slug: string;
+    tier?: string;
 }
 
 interface Unit {
@@ -24,8 +27,10 @@ export function OrgManager() {
 
     const [newOrgId, setNewOrgId] = useState('');
     const [newOrgName, setNewOrgName] = useState('');
+    const [newOrgTier, setNewOrgTier] = useState('FREE');
     const [createLoading, setCreateLoading] = useState(false);
     const [error, setError] = useState('');
+    const [success, setSuccess] = useState('');
 
     const fetchData = async () => {
         setLoading(true);
@@ -56,10 +61,15 @@ export function OrgManager() {
         e.preventDefault();
         setCreateLoading(true);
         setError('');
+        setSuccess('');
         try {
             const resp = await apiFetch('/api/orgs', {
                 method: 'POST',
-                body: JSON.stringify({ org_id: newOrgId, name: newOrgName })
+                body: JSON.stringify({ 
+                    org_id: newOrgId, 
+                    name: newOrgName,
+                    tier: newOrgTier
+                })
             });
             
             let data;
@@ -75,6 +85,7 @@ export function OrgManager() {
 
             setNewOrgId('');
             setNewOrgName('');
+            setSuccess(`Organization "${newOrgName}" registered successfully!`);
             await fetchData();
         } catch (err: any) {
             console.error('Org creation error:', err);
@@ -131,6 +142,16 @@ export function OrgManager() {
                         className="bg-zinc-50 border-none ring-1 ring-zinc-200 rounded-2xl p-4 text-sm font-bold text-zinc-900 focus:ring-2 focus:ring-orange-500/20"
                         required
                     />
+                    <select
+                        value={newOrgTier}
+                        onChange={e => setNewOrgTier(e.target.value)}
+                        className="bg-zinc-50 border-none ring-1 ring-zinc-200 rounded-2xl p-4 text-sm font-bold text-zinc-900 focus:ring-2 focus:ring-orange-500/20"
+                        required
+                    >
+                        <option value="FREE">Free Tier (1 Node)</option>
+                        <option value="PRO">Pro Tier (10 Nodes)</option>
+                        <option value="BUSINESS">Business Tier (50)</option>
+                    </select>
                     <button
                         type="submit"
                         disabled={createLoading}
@@ -143,7 +164,17 @@ export function OrgManager() {
                 {error && <div className="mt-4 text-red-500 text-[10px] font-black uppercase flex items-center gap-2 bg-red-50 p-3 rounded-xl ring-1 ring-red-100">
                     <AlertCircle className="w-4 h-4" /> {error}
                 </div>}
+                
+                {success && <motion.div 
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="mt-4 text-emerald-500 text-[10px] font-black uppercase flex items-center gap-2 bg-emerald-50 p-3 rounded-xl ring-1 ring-emerald-100 shadow-sm"
+                >
+                    <Check className="w-4 h-4" /> {success}
+                </motion.div>}
             </div>
+
+            <UserManager />
 
             {/* Unit Mapping Table */}
             <div className="bg-white rounded-3xl overflow-hidden ring-1 ring-zinc-200/80 shadow-sm">
@@ -198,7 +229,7 @@ export function OrgManager() {
                                         >
                                             <option value="" disabled>Select Org</option>
                                             {orgs.map(org => (
-                                                <option key={org.org_id} value={org.org_id}>{org.org_id} - {org.name}</option>
+                                                <option key={org.org_id} value={org.org_id}>{org.slug} - {org.name}</option>
                                             ))}
                                         </select>
                                     </td>
