@@ -243,3 +243,40 @@ BEGIN
     END LOOP;
 END;
 $$ LANGUAGE plpgsql;
+
+-- ============================================================
+-- 6. PRICING & TRANSACTIONS
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS pricing_plans (
+    plan_id SERIAL PRIMARY KEY,
+    name VARCHAR(255) NOT NULL,
+    slug VARCHAR(255) NOT NULL UNIQUE,
+    price_monthly NUMERIC(10, 2) NOT NULL,
+    node_limit INTEGER NOT NULL,
+    features JSONB NOT NULL DEFAULT '[]',
+    is_active BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS transactions (
+    transaction_id SERIAL PRIMARY KEY,
+    org_id VARCHAR(50) NOT NULL,
+    plan_id INTEGER REFERENCES pricing_plans(plan_id),
+    amount NUMERIC(10, 2) NOT NULL,
+    razorpay_order_id VARCHAR(255) NOT NULL,
+    razorpay_payment_id VARCHAR(255),
+    status VARCHAR(50) DEFAULT 'created',
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_transactions_order_id ON transactions(razorpay_order_id);
+
+-- Seed initial plans
+INSERT INTO pricing_plans (name, slug, price_monthly, node_limit, features) 
+VALUES 
+('Free', 'free', 0.00, 1, '["1 Active Node", "Real-time Telemetry", "Basic Support"]'::jsonb),
+('Pro', 'pro', 99.00, 10, '["100 Active Nodes", "Advanced Metrics", "Priority Support"]'::jsonb),
+('Business', 'business', 199.00, 50, '["Unlimited Nodes", "Global Fleet Control", "24/7 Support"]'::jsonb)
+ON CONFLICT (slug) DO NOTHING;
