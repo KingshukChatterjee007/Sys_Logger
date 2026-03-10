@@ -783,6 +783,73 @@ def get_orgs(current_user):
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+@app.route('/api/pricing', methods=['GET'])
+def get_pricing():
+    """Fetch plans (Public sees active only, ROOT sees all)"""
+    try:
+        # Check if requester is ROOT (optional auth)
+        is_root = False
+        auth_header = request.headers.get('Authorization')
+        if auth_header and auth_header.startswith('Bearer '):
+            token = auth_header.split(" ")[1]
+            try:
+                data = jwt.decode(token, app.config['SECRET_KEY'], algorithms=["HS256"])
+                is_root = data.get('role') == 'ROOT'
+            except:
+                pass
+        
+        conn = get_db_connection()
+        cur = conn.cursor(cursor_factory=RealDictCursor)
+        
+        query = "SELECT plan_id, name, slug, price_monthly, node_limit, features, is_active FROM pricing_plans"
+        if not is_root:
+            query += " WHERE is_active = true"
+        query += " ORDER BY price_monthly ASC"
+        
+        cur.execute(query)
+        plans = cur.fetchall()
+        cur.close()
+        conn.close()
+        return jsonify(plans)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/pricing', methods=['PUT'])
+@token_required
+def update_pricing(current_user):
+    """ROOT-only endpoint to update plan details"""
+    if current_user['role'] != 'ROOT':
+        return jsonify({'error': 'Unauthorized'}), 403
+    
+    data = request.get_json()
+    plan_id = data.get('plan_id')
+    price = data.get('price_monthly')
+    limit = data.get('node_limit')
+    features = data.get('features') # Expecting an array
+    is_active = data.get('is_active')
+    
+    if plan_id is None:
+        return jsonify({'error': 'Plan ID is required'}), 400
+        
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        cur.execute("""
+            UPDATE pricing_plans 
+            SET price_monthly = COALESCE(%s, price_monthly),
+                node_limit = COALESCE(%s, node_limit),
+                features = COALESCE(%s, features),
+                is_active = COALESCE(%s, is_active),
+                updated_at = NOW()
+            WHERE plan_id = %s
+        """, (price, limit, json.dumps(features) if features is not None else None, is_active, plan_id))
+        conn.commit()
+        cur.close()
+        conn.close()
+        return jsonify({'message': 'Pricing updated successfully'})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
 @app.route('/api/orgs/<org_id>/units', methods=['GET'])
 @token_required
 def get_org_units(current_user, org_id):
@@ -808,13 +875,6 @@ def create_org(current_user):
     if not org_id or not name:
         return jsonify({'error': 'Missing org_id or name'}), 400
 
-    tier_limits = {
-        'FREE': 10,
-        'PRO': 100,
-        'BUSINESS': 99999
-    }
-    node_limit = tier_limits.get(tier, 10)
-
     def slugify(text):
         text = text.lower().strip()
         text = re.sub(r'[^\w\s-]', '', text)
@@ -829,9 +889,15 @@ def create_org(current_user):
         conn = get_db_connection()
         cur = conn.cursor(cursor_factory=RealDictCursor)
         
-        # Check if slug exists
+        # 1. Fetch node limit from pricing_plans
+        cur.execute("SELECT node_limit FROM pricing_plans WHERE slug = %s", (tier.lower(),))
+        plan = cur.fetchone()
+        node_limit = plan['node_limit'] if plan else 10
+
+        # 2. Check if slug exists
         cur.execute("SELECT 1 FROM organizations WHERE slug = %s", (slug,))
         if cur.fetchone():
+            conn.close()
             return jsonify({'error': f'Organization ID/Slug "{slug}" is already taken.'}), 409
             
         cur.execute(
