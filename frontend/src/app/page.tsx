@@ -19,6 +19,7 @@ export default function HomeDashboard() {
     const [currentTime, setCurrentTime] = useState<string>('')
     const [plans, setPlans] = useState<PricingPlan[]>([])
     const [paymentLoading, setPaymentLoading] = useState<string | null>(null)
+    const [isLoggedIn, setIsLoggedIn] = useState(false)
 
     useEffect(() => {
         setCurrentTime(new Date().toLocaleTimeString())
@@ -29,6 +30,9 @@ export default function HomeDashboard() {
         script.src = 'https://checkout.razorpay.com/v1/checkout.js';
         script.async = true;
         document.body.appendChild(script);
+
+        // Check Auth State
+        setIsLoggedIn(!!localStorage.getItem('token'));
 
         // Fetch Dynamic Pricing
         fetch(`${process.env.NEXT_PUBLIC_API_URL || ''}/api/pricing`)
@@ -182,9 +186,16 @@ export default function HomeDashboard() {
                         System Logger 
                     </span>
                 </div>
-                <div className="flex items-center gap-2 text-zinc-500 font-mono text-xs font-bold tracking-widest uppercase bg-white/60 backdrop-blur-md px-4 py-2 rounded-full ring-1 ring-zinc-200/80 shadow-sm">
-                    <Globe className="w-3.5 h-3.5 animate-pulse text-emerald-500" />
-                    {currentTime || "SYNCING..."}
+                <div className="flex items-center gap-4">
+                    <div className="hidden md:flex items-center gap-2 text-zinc-500 font-mono text-xs font-bold tracking-widest uppercase bg-white/60 backdrop-blur-md px-4 py-2 rounded-full ring-1 ring-zinc-200/80 shadow-sm">
+                        <Globe className="w-3.5 h-3.5 animate-pulse text-emerald-500" />
+                        {currentTime || "SYNCING..."}
+                    </div>
+                    <Link href={isLoggedIn ? "/fleet" : "/login"}>
+                        <button className="px-6 py-2 bg-zinc-900 text-white rounded-full text-[10px] font-black uppercase tracking-widest hover:bg-zinc-800 transition-all shadow-lg shadow-zinc-500/10 active:scale-95">
+                            {isLoggedIn ? 'Dashboard' : 'Sign In'}
+                        </button>
+                    </Link>
                 </div>
             </motion.header>
 
@@ -230,10 +241,10 @@ export default function HomeDashboard() {
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ duration: 1, delay: 0.5, ease: [0.16, 1, 0.3, 1] }}
                     >
-                        <Link href="/login">
+                        <Link href={isLoggedIn ? "/fleet" : "/login"}>
                             <button className="group relative px-8 py-4 bg-zinc-900 text-white rounded-full font-black uppercase tracking-widest text-xs flex items-center gap-3 transition-all hover:scale-105 hover:bg-zinc-800 hover:shadow-[0_8px_30px_rgba(0,0,0,0.12)] overflow-hidden">
                                 <span className="relative z-10 flex items-center gap-2">
-                                    Initialize Fleet Hub
+                                    {isLoggedIn ? 'Access Fleet Hub' : 'Initialize Fleet Hub'}
                                     <ChevronRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
                                 </span>
                                 <div className="absolute inset-0 bg-gradient-to-r from-orange-500/20 to-emerald-500/20 translate-x-[-100%] group-hover:translate-x-0 transition-transform duration-500 ease-in-out" />
@@ -309,12 +320,12 @@ export default function HomeDashboard() {
                 transition={{ duration: 1.2, delay: 0.8 }}
                 className="py-12 relative z-10 flex flex-col items-center gap-8 mb-6"
             >
-                <div className="flex items-center gap-8 px-8 py-4 bg-white/60 backdrop-blur-xl ring-1 ring-zinc-200/80 rounded-3xl shadow-[0_4px_20px_rgba(0,0,0,0.04)]">
-                    <img src="/krishishayogi.png" alt="Krishi" className="h-6 object-contain opacity-60 hover:opacity-100 transition-opacity grayscale hover:grayscale-0 duration-300 mix-blend-multiply" />
-                    <div className="w-[1px] h-6 bg-zinc-200" />
-                    <img src="/Nielit_logo.jpeg" alt="NIELIT" className="h-6 object-contain opacity-60 hover:opacity-100 transition-opacity grayscale hover:grayscale-0 duration-300 mix-blend-multiply" />
-                    <div className="w-[1px] h-6 bg-zinc-200" />
-                    <img src="/India-AI_logo.jpeg" alt="India AI" className="h-6 object-contain opacity-60 hover:opacity-100 transition-opacity grayscale hover:grayscale-0 duration-300 mix-blend-multiply" />
+                <div className="flex items-center gap-8 px-8 py-0 bg-white/60 backdrop-blur-xl ring-1 ring-zinc-200/80 rounded-[2.5rem] shadow-[0_8px_40px_rgba(0,0,0,0.06)]">
+                    <img src="/krishishayogi.png" alt="Krishi" className="h-28 object-contain opacity-60 hover:opacity-100 transition-opacity grayscale hover:grayscale-0 duration-300 mix-blend-multiply" />
+                    <div className="w-[1px] h-10 bg-zinc-200" />
+                    <img src="/Nielit_logo.jpeg" alt="NIELIT" className="h-10 object-contain opacity-40 hover:opacity-80 transition-opacity grayscale hover:grayscale-0 duration-300 mix-blend-multiply" />
+                    <div className="w-[1px] h-10 bg-zinc-200" />
+                    <img src="/India-AI_logo.jpeg" alt="India AI" className="h-8 object-contain opacity-40 hover:opacity-80 transition-opacity grayscale hover:grayscale-0 duration-300 mix-blend-multiply" />
                 </div>
                 <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-[0.3em]">© 2026 System Logger • Precision Monitoring</p>
             </motion.footer>
