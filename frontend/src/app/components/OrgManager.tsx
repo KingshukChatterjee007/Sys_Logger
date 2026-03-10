@@ -5,6 +5,12 @@ import { motion } from 'framer-motion';
 import { Building2, Plus, ArrowRight, Server, Shield, Globe, Check, AlertCircle } from 'lucide-react';
 import { apiFetch } from './hooks/apiUtils';
 import { UserManager } from './UserManager';
+import { clsx, type ClassValue } from 'clsx';
+import { twMerge } from 'tailwind-merge';
+
+function cn(...inputs: ClassValue[]) {
+  return twMerge(clsx(inputs));
+}
 
 interface Org {
     org_id: number;
@@ -18,6 +24,9 @@ interface Unit {
     name: string;
     hostname: string;
     org_id: string;
+    status: string;
+    last_seen: string | null;
+    ip: string | null;
 }
 
 export function OrgManager() {
@@ -31,6 +40,7 @@ export function OrgManager() {
     const [createLoading, setCreateLoading] = useState(false);
     const [error, setError] = useState('');
     const [success, setSuccess] = useState('');
+    const [showAllOrgs, setShowAllOrgs] = useState(false);
 
     const fetchData = async () => {
         setLoading(true);
@@ -107,6 +117,18 @@ export function OrgManager() {
         }
     };
 
+    const formatLastSeen = (isoString: string | null) => {
+        if (!isoString) return 'Never';
+        const date = new Date(isoString);
+        const now = new Date();
+        const diff = Math.floor((now.getTime() - date.getTime()) / 1000);
+
+        if (diff < 60) return 'Just now';
+        if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+        if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+        return date.toLocaleDateString();
+    };
+
     if (loading) return (
         <div className="flex items-center justify-center p-20 text-zinc-400 font-bold uppercase tracking-widest text-xs">
             Loading System Registry...
@@ -172,6 +194,44 @@ export function OrgManager() {
                 >
                     <Check className="w-4 h-4" /> {success}
                 </motion.div>}
+
+                {/* Org List Sub-section */}
+                <div className="mt-10 pt-8 border-t border-zinc-100">
+                    <div className="flex items-center justify-between mb-6">
+                        <div>
+                            <div className="text-[10px] font-black text-zinc-400 uppercase tracking-widest pl-1">Active Registrations</div>
+                            <p className="text-zinc-500 text-[10px] font-medium pl-1">Verified organizational hubs</p>
+                        </div>
+                        <div className="text-[10px] font-bold text-zinc-300 uppercase tracking-widest">{orgs.length} total</div>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                        {orgs.slice(0, showAllOrgs ? undefined : 3).map(org => (
+                            <div key={org.org_id} className="bg-zinc-50 rounded-2xl p-4 ring-1 ring-zinc-100 hover:ring-orange-500/20 transition-all group">
+                                <div className="flex items-center justify-between mb-2">
+                                    <div className="px-2 py-0.5 bg-zinc-900 text-white rounded-md text-[8px] font-black tracking-widest uppercase">
+                                        ID: {org.org_id}
+                                    </div>
+                                    <div className="px-2 py-0.5 bg-orange-50 text-orange-600 rounded-md text-[8px] font-black tracking-widest uppercase ring-1 ring-orange-100">
+                                        {org.tier}
+                                    </div>
+                                </div>
+                                <div className="text-sm font-black text-zinc-900 group-hover:text-orange-600 transition-colors line-clamp-1">{org.name}</div>
+                                <div className="text-[9px] font-bold text-zinc-400 font-mono tracking-tight mt-0.5">slug: {org.slug}</div>
+                            </div>
+                        ))}
+                    </div>
+
+                    {orgs.length > 3 && (
+                        <div className="mt-6 flex justify-center">
+                            <button 
+                                onClick={() => setShowAllOrgs(!showAllOrgs)}
+                                className="px-6 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest text-zinc-500 hover:text-orange-600 hover:bg-orange-50 ring-1 ring-zinc-200 hover:ring-orange-200 transition-all active:scale-95"
+                            >
+                                {showAllOrgs ? 'Show Less' : `Show All (${orgs.length})`}
+                            </button>
+                        </div>
+                    )}
+                </div>
             </div>
 
             <UserManager />
@@ -198,8 +258,9 @@ export function OrgManager() {
                         <thead>
                             <tr className="bg-zinc-50/50">
                                 <th className="px-8 py-4 text-[10px] font-black text-zinc-400 uppercase tracking-widest">Machine Identity</th>
-                                <th className="px-8 py-4 text-[10px] font-black text-zinc-400 uppercase tracking-widest">Current Assignment</th>
-                                <th className="px-8 py-4 text-[10px] font-black text-zinc-400 uppercase tracking-widest">Reassign Org</th>
+                                <th className="px-8 py-4 text-[10px] font-black text-zinc-400 uppercase tracking-widest text-center">Status</th>
+                                <th className="px-8 py-4 text-[10px] font-black text-zinc-400 uppercase tracking-widest">Last Activity</th>
+                                <th className="px-8 py-4 text-[10px] font-black text-zinc-400 uppercase tracking-widest">Org Assignment</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-zinc-100">
@@ -212,26 +273,52 @@ export function OrgManager() {
                                             </div>
                                             <div>
                                                 <div className="text-sm font-black text-zinc-900">{unit.name}</div>
-                                                <div className="text-[10px] font-bold text-zinc-400 font-mono tracking-tight">{unit.hostname}</div>
+                                                <div className="flex items-center gap-2">
+                                                    <span className="text-[10px] font-bold text-zinc-400 font-mono tracking-tight">{unit.hostname}</span>
+                                                    <span className="text-[10px] font-medium text-zinc-300">•</span>
+                                                    <span className="text-[10px] font-bold text-blue-500/70 font-mono tracking-tight">{unit.ip || '0.0.0.0'}</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <td className="px-8 py-5 text-center">
+                                        <div className="flex justify-center">
+                                            <div className={clsx(
+                                                "px-2 py-0.5 rounded-full text-[9px] font-black tracking-widest uppercase flex items-center gap-1.5",
+                                                unit.status === 'online' 
+                                                    ? "bg-emerald-50 text-emerald-600 ring-1 ring-emerald-200" 
+                                                    : "bg-zinc-50 text-zinc-400 ring-1 ring-zinc-200"
+                                            )}>
+                                                <div className={clsx(
+                                                    "w-1 h-1 rounded-full",
+                                                    unit.status === 'online' ? "bg-emerald-500 animate-pulse" : "bg-zinc-300"
+                                                )} />
+                                                {unit.status}
                                             </div>
                                         </div>
                                     </td>
                                     <td className="px-8 py-5">
-                                        <span className="px-3 py-1 bg-orange-50 text-orange-600 rounded-lg text-xs font-black tracking-widest uppercase ring-1 ring-orange-200">
-                                            {unit.org_id || 'UNASSIGNED'}
-                                        </span>
+                                        <div className="text-[10px] font-bold text-zinc-500 uppercase tracking-tight">
+                                            {formatLastSeen(unit.last_seen)}
+                                        </div>
                                     </td>
-                                    <td className="px-8 py-5">
-                                        <select
-                                            value={unit.org_id || ''}
-                                            onChange={(e) => handleUpdateUnitOrg(unit.id, e.target.value)}
-                                            className="bg-zinc-50 border-none ring-1 ring-zinc-200 rounded-xl px-4 py-2 text-xs font-bold text-zinc-900 focus:ring-2 focus:ring-orange-500/20"
-                                        >
-                                            <option value="" disabled>Select Org</option>
-                                            {orgs.map(org => (
-                                                <option key={org.org_id} value={org.org_id}>{org.slug} - {org.name}</option>
-                                            ))}
-                                        </select>
+                                    <td className="px-8 py-5 text-right">
+                                        <div className="flex items-center gap-3 justify-end">
+                                            <span className="px-2 py-1 bg-zinc-50 text-zinc-500 rounded-lg text-[10px] font-black tracking-widest uppercase ring-1 ring-zinc-100">
+                                                {unit.org_id || 'UNASSIGNED'}
+                                            </span>
+                                            <ArrowRight className="w-3 h-3 text-zinc-300" />
+                                            <select
+                                                value={unit.org_id || ''}
+                                                onChange={(e) => handleUpdateUnitOrg(unit.id, e.target.value)}
+                                                className="bg-zinc-50 border-none ring-1 ring-zinc-200 rounded-xl px-4 py-2 text-xs font-bold text-zinc-900 focus:ring-2 focus:ring-orange-500/20"
+                                            >
+                                                <option value="" disabled>Select Org</option>
+                                                {orgs.map(org => (
+                                                    <option key={org.org_id} value={org.org_id}>{org.slug} - {org.name}</option>
+                                                ))}
+                                            </select>
+                                        </div>
                                     </td>
                                 </tr>
                             ))}

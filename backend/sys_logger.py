@@ -322,6 +322,29 @@ def login():
 def get_me(current_user):
     return jsonify(current_user)
 
+@app.route('/api/users', methods=['GET'])
+@token_required
+def get_users(current_user):
+    """List all users (ROOT only)"""
+    if current_user['role'] != 'ROOT':
+        return jsonify({'error': 'Unauthorized'}), 403
+        
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor(cursor_factory=RealDictCursor)
+        cur.execute("""
+            SELECT u.user_id, u.username, u.email, u.role, o.name as org_name 
+            FROM users u 
+            LEFT JOIN organizations o ON u.org_id::varchar = o.org_id::varchar
+            ORDER BY u.user_id DESC
+        """)
+        users = cur.fetchall()
+        cur.close()
+        conn.close()
+        return jsonify(users)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
 @app.route('/api/users', methods=['POST'])
 @token_required
 def create_user(current_user):
@@ -528,7 +551,7 @@ class UnitStore:
             query = """
                 SELECT s.*, o.name as org_display_name, o.slug as org_slug 
                 FROM systems s 
-                LEFT JOIN organizations o ON s.org_id = o.org_id
+                LEFT JOIN organizations o ON s.org_id = o.org_id::varchar
             """
             params = []
             
