@@ -33,6 +33,7 @@ from dotenv import load_dotenv
 import jwt
 from functools import wraps
 import bcrypt
+import razorpay
 try:
     import GPUtil
     NVIDIA_AVAILABLE = True
@@ -47,6 +48,11 @@ if getattr(sys, 'frozen', False):
     load_dotenv(env_path)
 else:
     load_dotenv()
+
+# Initialize Razorpay Client (Keys to be provided by user later)
+RAZORPAY_KEY_ID = os.getenv('RAZORPAY_KEY_ID', 'rzp_test_placeholder')
+RAZORPAY_KEY_SECRET = os.getenv('RAZORPAY_KEY_SECRET', 'secret_placeholder')
+razorpay_client = razorpay.Client(auth=(RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET))
 
 # DB Config
 DB_HOST = os.getenv('DB_HOST', 'localhost')
@@ -849,6 +855,118 @@ def update_pricing(current_user):
         return jsonify({'message': 'Pricing updated successfully'})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
+@app.route('/api/payments/create-order', methods=['POST'])
+@token_required
+def create_payment_order(current_user):
+    """Create a Razorpay order before checkout"""
+    data = request.get_json()
+    plan_slug = data.get('plan_slug')
+    
+    if not plan_slug:
+        return jsonify({'error': 'Plan slug is required'}), 400
+        
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor(cursor_factory=RealDictCursor)
+        
+        # 1. Fetch plan details
+        cur.execute("SELECT plan_id, price_monthly FROM pricing_plans WHERE slug = %s AND is_active = true", (plan_slug.lower(),))
+        plan = cur.fetchone()
+        
+        if not plan:
+            conn.close()
+            return jsonify({'error': 'Invalid or inactive plan'}), 404
+            
+        # 2. Create Razorpay order
+        amount_in_paise = int(plan['price_monthly'] * 100)
+        order_data = {
+            'amount': amount_in_paise,
+            'currency': 'INR',
+            'payment_capture': 1
+        }
+        
+        order = razorpay_client.order.create(data=order_data)
+        
+        # 3. Log transaction as 'created'
+        cur.execute("""
+            INSERT INTO transactions (org_id, plan_id, amount, razorpay_order_id, status)
+            VALUES (%s, %s, %s, %s, 'created')
+        """, (str(current_user['org_id']), plan['plan_id'], plan['price_monthly'], order['id']))
+        
+        conn.commit()
+        cur.close()
+        conn.close()
+        
+        return jsonify({
+            'order_id': order['id'],
+            'amount': amount_in_paise,
+            'currency': 'INR',
+            'key_id': RAZORPAY_KEY_ID,
+            'plan_name': plan_slug.capitalize()
+        })
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/payments/verify', methods=['POST'])
+@token_required
+def verify_payment(current_user):
+    """Verify Razorpay payment signature and update org tier"""
+    data = request.get_json()
+    razorpay_order_id = data.get('razorpay_order_id')
+    razorpay_payment_id = data.get('razorpay_payment_id')
+    razorpay_signature = data.get('razorpay_signature')
+    
+    if not all([razorpay_order_id, razorpay_payment_id, razorpay_signature]):
+        return jsonify({'error': 'Missing payment verification details'}), 400
+        
+    try:
+        # Verify signature
+        params_dict = {
+            'razorpay_order_id': razorpay_order_id,
+            'razorpay_payment_id': razorpay_payment_id,
+            'razorpay_signature': razorpay_signature
+        }
+        
+        razorpay_client.utility.verify_payment_signature(params_dict)
+        
+        # Signature verified -> Update DB
+        conn = get_db_connection()
+        cur = conn.cursor(cursor_factory=RealDictCursor)
+        
+        # 1. Update transaction status
+        cur.execute("""
+            UPDATE transactions 
+            SET razorpay_payment_id = %s, status = 'success' 
+            WHERE razorpay_order_id = %s 
+            RETURNING plan_id, amount
+        """, (razorpay_payment_id, razorpay_order_id))
+        
+        txn = cur.fetchone()
+        if not txn:
+            conn.close()
+            return jsonify({'error': 'Transaction record not found'}), 404
+            
+        # 2. Fetch new tier limits
+        cur.execute("SELECT name, node_limit FROM pricing_plans WHERE plan_id = %s", (txn['plan_id'],))
+        plan = cur.fetchone()
+        
+        # 3. Update organization tier and node_limit
+        cur.execute("""
+            UPDATE organizations 
+            SET tier = %s, node_limit = %s 
+            WHERE org_id = %s::varchar
+        """, (plan['name'].upper(), plan['node_limit'], str(current_user['org_id'])))
+        
+        conn.commit()
+        cur.close()
+        conn.close()
+        
+        return jsonify({'message': 'Payment verified and subscription updated!', 'tier': plan['name']})
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 400
 
 @app.route('/api/orgs/<org_id>/units', methods=['GET'])
 @token_required

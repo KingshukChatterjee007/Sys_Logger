@@ -18,21 +18,125 @@ interface PricingPlan {
 export default function HomeDashboard() {
     const [currentTime, setCurrentTime] = useState<string>('')
     const [plans, setPlans] = useState<PricingPlan[]>([])
+    const [paymentLoading, setPaymentLoading] = useState<string | null>(null)
 
     useEffect(() => {
         setCurrentTime(new Date().toLocaleTimeString())
         const interval = setInterval(() => setCurrentTime(new Date().toLocaleTimeString()), 1000)
         
-        // Fetch Dynamic Pricing
-        fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5010'}/api/pricing`)
-            .then(res => res.json())
-            .then(data => {
-                if (Array.isArray(data)) setPlans(data)
-            })
-            .catch(err => console.error("Error fetching pricing:", err))
+        // Load Razorpay Script
+        const script = document.createElement('script');
+        script.src = 'https://checkout.razorpay.com/v1/checkout.js';
+        script.async = true;
+        document.body.appendChild(script);
 
-        return () => clearInterval(interval)
+        // Fetch Dynamic Pricing
+        fetch(`${process.env.NEXT_PUBLIC_API_URL || ''}/api/pricing`)
+            .then(res => {
+                if (!res.ok) throw new Error('Failed to fetch');
+                return res.json();
+            })
+            .then(data => {
+                if (Array.isArray(data) && data.length > 0) {
+                    setPlans(data)
+                } else {
+                    throw new Error('No plans returned');
+                }
+            })
+            .catch(err => {
+                console.error("Error fetching pricing, applying fallback plans:", err);
+                setPlans([
+                    { plan_id: 1, name: "Free", slug: "free", price_monthly: 0, node_limit: 1, features: ["1 Active Node", "Real-time Telemetry", "Basic Support"], is_active: true },
+                    { plan_id: 2, name: "Pro", slug: "pro", price_monthly: 49, node_limit: 100, features: ["100 Active Nodes", "Advanced Metrics", "Priority Support"], is_active: true },
+                    { plan_id: 3, name: "Business", slug: "business", price_monthly: 199, node_limit: 99999, features: ["Unlimited Nodes", "Global Fleet Control", "24/7 Support"], is_active: true }
+                ]);
+            })
+
+        return () => {
+            clearInterval(interval);
+            if (document.body.contains(script)) {
+                document.body.removeChild(script);
+            }
+        };
     }, [])
+
+    const handlePayment = async (plan: PricingPlan) => {
+        if (plan.price_monthly === 0) {
+            window.location.href = '/login';
+            return;
+        }
+
+        setPaymentLoading(plan.slug);
+        try {
+            const token = localStorage.getItem('token');
+            if (!token) {
+                window.location.href = '/login';
+                return;
+            }
+
+            // 1. Create Order
+            const orderResp = await fetch(`${process.env.NEXT_PUBLIC_API_URL || ''}/api/payments/create-order`, {
+                method: 'POST',
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({ plan_slug: plan.slug })
+            });
+            
+            const orderData = await orderResp.json();
+            if (!orderResp.ok) throw new Error(orderData.error || 'Failed to create order');
+
+            // 2. Open Razorpay Modal
+            const options = {
+                key: orderData.key_id,
+                amount: orderData.amount,
+                currency: orderData.currency,
+                name: "SysLogger",
+                description: `Upgrade to ${plan.name} Plan`,
+                order_id: orderData.order_id,
+                handler: async (response: any) => {
+                    // 3. Verify Payment
+                    const verifyResp = await fetch(`${process.env.NEXT_PUBLIC_API_URL || ''}/api/payments/verify`, {
+                        method: 'POST',
+                        headers: { 
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${token}`
+                        },
+                        body: JSON.stringify({
+                            razorpay_order_id: response.razorpay_order_id,
+                            razorpay_payment_id: response.razorpay_payment_id,
+                            razorpay_signature: response.razorpay_signature
+                        })
+                    });
+                    
+                    const verifyData = await verifyResp.json();
+                    if (verifyResp.ok) {
+                        alert('Payment successful! Your plan has been upgraded to ' + verifyData.tier);
+                        window.location.href = '/fleet';
+                    } else {
+                        alert('Verification failed: ' + verifyData.error);
+                    }
+                },
+                prefill: {
+                    name: "",
+                    email: ""
+                },
+                theme: {
+                    color: "#f97316"
+                }
+            };
+
+            const rzp = new (window as any).Razorpay(options);
+            rzp.open();
+
+        } catch (err: any) {
+            console.error('Payment error:', err);
+            alert(err.message || 'Payment failed to initiate');
+        } finally {
+            setPaymentLoading(null);
+        }
+    };
 
     return (
         <div className="min-h-screen bg-[#FAFAFA] text-zinc-900 font-sans flex flex-col relative selection:bg-orange-500/30 overflow-hidden">
@@ -180,11 +284,13 @@ export default function HomeDashboard() {
                                             ))}
                                         </div>
 
-                                        <Link href="/login" className="mt-auto block w-full">
-                                            <button className={`w-full py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] transition-all transform hover:scale-[1.02] active:scale-[0.98] ${plan.slug === 'pro' ? 'bg-zinc-900 text-white shadow-lg shadow-orange-500/10' : 'bg-zinc-50 text-zinc-600 ring-1 ring-zinc-200 hover:bg-white'}`}>
-                                                Join Now
-                                            </button>
-                                        </Link>
+                                        <button 
+                                            onClick={() => handlePayment(plan)}
+                                            disabled={paymentLoading === plan.slug}
+                                            className={`mt-auto w-full py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] transition-all transform hover:scale-[1.02] active:scale-[0.98] ${plan.slug === 'pro' ? 'bg-zinc-900 text-white shadow-lg shadow-orange-500/10' : 'bg-zinc-50 text-zinc-600 ring-1 ring-zinc-200 hover:bg-white'}`}
+                                        >
+                                            {paymentLoading === plan.slug ? 'Processing...' : 'Join Now'}
+                                        </button>
                                     </div>
                                 </motion.div>
                             ))}
