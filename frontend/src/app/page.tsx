@@ -73,7 +73,8 @@ export default function HomeDashboard() {
         try {
             const token = localStorage.getItem('token');
             if (!token) {
-                window.location.href = '/login';
+                alert('Please sign in or create an account to purchase a plan.');
+                window.location.href = '/login?next=pricing';
                 return;
             }
 
