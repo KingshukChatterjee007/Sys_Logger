@@ -322,7 +322,7 @@ export default function DashboardView({ orgId: propOrgId }: DashboardViewProps) 
     const activeMetricData = currentMetrics.find(m => m.id === selectedMetric)
 
     return (
-        <div className="min-h-screen bg-[#FAFAFA] text-zinc-900 font-sans flex flex-col p-2 sm:p-4 lg:p-6 gap-4 lg:gap-6 relative selection:bg-orange-500/20">
+        <div className="h-screen overflow-hidden bg-[#FAFAFA] text-zinc-900 font-sans flex flex-col p-2 sm:p-4 lg:p-6 gap-4 lg:gap-6 relative selection:bg-orange-500/20">
             <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden flex justify-center items-center">
                 <div className="absolute top-[-20%] left-[-10%] w-[70%] h-[60%] bg-orange-500/5 blur-[140px] rounded-full" />
                 <div className="absolute bottom-[-20%] right-[-10%] w-[70%] h-[60%] bg-orange-600/5 blur-[140px] rounded-full" />
@@ -381,52 +381,74 @@ export default function DashboardView({ orgId: propOrgId }: DashboardViewProps) 
                 </AnimatePresence>
 
                 <aside className={cn(
-                    "fixed inset-y-0 left-0 z-[110] w-[85%] sm:w-80 bg-[#FAFAFA] shadow-[24px_0_40px_rgba(0,0,0,0.08)] lg:shadow-none lg:ring-1 ring-zinc-200/80 lg:rounded-3xl flex flex-col shrink-0 overflow-hidden lg:relative lg:translate-x-0 transition-transform duration-300 ease-in-out",
+                    "fixed inset-y-0 left-0 z-[110] w-[85%] sm:w-80 bg-white/40 backdrop-blur-3xl shadow-[0_8px_32px_0_rgba(249,115,22,0.15)] lg:border border-white/60 lg:ring-1 lg:ring-white/40 lg:rounded-[2.5rem] flex flex-col shrink-0 overflow-hidden lg:relative lg:translate-x-0 transition-transform duration-300 ease-in-out",
                     isMobileMenuOpen ? "translate-x-0" : "-translate-x-full"
                 )}>
-                    <div className="flex items-center justify-between p-4 border-b border-zinc-200/60 lg:hidden bg-white">
+                    <div className="flex items-center justify-between p-4 border-b border-white/60 lg:hidden bg-white/60 backdrop-blur-md">
                         <span className="font-black text-zinc-800 text-xs tracking-widest uppercase flex items-center gap-2">
                             <Activity size={16} className="text-orange-500" /> Fleet Menu
                         </span>
                         <button
                             onClick={() => setIsMobileMenuOpen(false)}
-                            className="p-1.5 text-zinc-400 hover:text-zinc-800 bg-zinc-50 hover:bg-zinc-100 rounded-md transition-colors"
+                            className="p-1.5 text-zinc-400 hover:text-orange-600 bg-white/50 hover:bg-white/90 rounded-xl transition-all shadow-sm"
                         >
                             <X size={18} />
                         </button>
                     </div>
 
-                    <div className="p-5 lg:p-6 border-b border-zinc-200/60 bg-white shadow-sm z-10">
-                        <div className="flex justify-between items-end mb-3">
-                            <h3 className="text-[10px] font-black text-zinc-400 uppercase tracking-[0.2em]">Network Status</h3>
-                            <span className="px-2 py-0.5 rounded bg-zinc-50 ring-1 ring-zinc-200 text-[10px] font-black text-zinc-700 shadow-sm">
+                    <div className="p-5 lg:p-6 border-b border-white/60 bg-gradient-to-br from-white/70 to-white/30 backdrop-blur-xl shadow-sm z-10 relative">
+                        <div className="absolute top-0 right-0 w-32 h-32 bg-orange-400/10 rounded-bl-full blur-2xl pointer-events-none" />
+                        <div className="flex justify-between items-end mb-4 relative z-10">
+                            <h3 className="text-[10px] font-black text-zinc-500 uppercase tracking-[0.2em]">Network Status</h3>
+                            <span className="px-3 py-1 rounded-lg bg-white/80 backdrop-blur-sm ring-1 ring-white shadow-sm text-[11px] font-black text-zinc-800">
                                 {activeUnits} <span className="text-zinc-400 font-bold">/ {totalUnits}</span>
                             </span>
                         </div>
-                        <div className="w-full bg-zinc-100 rounded-full h-1.5 overflow-hidden shadow-inner">
+                        <div className="w-full bg-black/5 rounded-full h-2 overflow-hidden shadow-inner relative z-10 p-0.5">
                             <div
-                                className="bg-orange-500 h-1.5 rounded-full transition-all duration-1000 ease-out"
+                                className="bg-gradient-to-r from-orange-400 to-orange-500 h-full rounded-full transition-all duration-1000 ease-out shadow-[0_0_10px_rgba(249,115,22,0.5)] relative"
                                 style={{ width: `${totalUnits > 0 ? (activeUnits / totalUnits) * 100 : 0}%` }}
-                            ></div>
+                            >
+                                <div className="absolute top-0 right-0 bottom-0 w-4 bg-white/30 blur-[2px]" />
+                            </div>
                         </div>
                     </div>
 
-                    {/* Add Monitor Button */}
-                    <div className="px-3 lg:px-4 py-2">
+                    {/* Add Monitor & Management Buttons */}
+                    <div className="px-4 lg:px-5 flex flex-col gap-3 py-4 bg-white/20">
                         <button
                             onClick={() => setIsAddNodeOpen(true)}
-                            className="w-full py-3 bg-zinc-900 text-white rounded-xl font-black uppercase tracking-widest text-[10px] flex items-center justify-center gap-2 hover:bg-zinc-800 transition-all shadow-lg shadow-zinc-900/10 group"
+                            className="w-full py-4 bg-gradient-to-r from-zinc-900 to-zinc-800 text-white rounded-[1.25rem] font-black uppercase tracking-widest text-[11px] flex items-center justify-center gap-2 hover:shadow-[0_8px_25px_rgba(0,0,0,0.15)] hover:scale-[1.02] active:scale-95 transition-all duration-300 group ring-1 ring-zinc-800/50"
                         >
-                            <Zap className="w-3.5 h-3.5 text-orange-500 group-hover:animate-pulse" />
-                            Add Monitor
+                            <Zap className="w-4 h-4 text-orange-400 group-hover:text-orange-300 group-hover:drop-shadow-[0_0_8px_rgba(251,146,60,0.8)] transition-all" />
+                            Deploy Monitor
                         </button>
+
+                        {user?.role === 'ROOT' && (
+                            <button
+                                onClick={() => {
+                                    setActiveTab(activeTab === 'management' ? 'metrics' : 'management');
+                                    setIsMobileMenuOpen(false);
+                                }}
+                                className={cn(
+                                    "w-full py-3.5 rounded-[1.25rem] font-black uppercase tracking-widest text-[10px] flex items-center justify-center gap-2 transition-all duration-300 ring-1 shadow-sm hover:scale-[1.02] active:scale-95",
+                                    activeTab === 'management'
+                                        ? "bg-gradient-to-br from-orange-400 to-orange-500 text-white shadow-[0_4px_15px_rgba(249,115,22,0.3)] ring-orange-400/50"
+                                        : "bg-white/60 backdrop-blur-md text-zinc-600 hover:bg-white hover:text-orange-500 ring-white hover:shadow-[0_8px_20px_rgba(0,0,0,0.08)]"
+                                )}
+                            >
+                                <Shield className="w-4 h-4" />
+                                {activeTab === 'management' ? 'Exit Management' : 'System Management'}
+                            </button>
+                        )}
                     </div>
 
-                    <div className="flex-1 overflow-y-auto p-3 lg:p-4 space-y-4 lg:space-y-6 custom-scrollbar bg-white/50">
+                    <div className="flex-1 overflow-y-auto p-4 lg:p-5 space-y-4 lg:space-y-6 custom-scrollbar bg-white/10 relative">
+                        <div className="absolute inset-x-0 top-0 h-6 bg-gradient-to-b from-white/40 to-transparent pointer-events-none" />
                         {loading ? (
-                            <div className="flex flex-col items-center justify-center p-8 text-zinc-400 gap-3">
-                                <div className="w-6 h-6 border-2 border-zinc-200 border-t-orange-500 rounded-full animate-spin" />
-                                <span className="text-[10px] font-bold uppercase tracking-widest">Scanning Nodes...</span>
+                            <div className="flex flex-col items-center justify-center p-8 text-zinc-500 gap-4">
+                                <div className="w-8 h-8 border-[3px] border-zinc-200/50 border-t-orange-500 rounded-full animate-spin shadow-[0_0_15px_rgba(249,115,22,0.2)]" />
+                                <span className="text-[10px] font-black uppercase tracking-[0.2em]">Scanning Nodes...</span>
                             </div>
                         ) : units.length === 0 ? (
                             <div className="text-center p-8 bg-white rounded-2xl border border-zinc-200 border-dashed m-2">
@@ -445,7 +467,7 @@ export default function DashboardView({ orgId: propOrgId }: DashboardViewProps) 
                                 <div key={org} className="space-y-2 lg:space-y-3">
                                     <div className="flex items-center gap-2 px-1 mb-2">
                                         <div className="p-1 px-2 bg-zinc-900 rounded-lg text-[9px] font-black text-white border border-zinc-800 uppercase tracking-widest shadow-sm">
-                                            {orgUnits[0].org_name} 
+                                            {orgUnits[0].org_name}
                                             <span className="ml-1.5 opacity-40 font-bold border-l border-white/20 pl-1.5 text-orange-400">
                                                 {orgUnits[0].org_slug}
                                             </span>
@@ -463,21 +485,22 @@ export default function DashboardView({ orgId: propOrgId }: DashboardViewProps) 
                                                     key={unit.id}
                                                     onClick={() => handleUnitToggle(unit)}
                                                     className={cn(
-                                                        "w-full text-left p-3 lg:p-4 rounded-xl transition-all duration-200 relative overflow-hidden group/card shadow-sm",
+                                                        "w-full text-left p-4 lg:p-5 rounded-[1.5rem] transition-all duration-300 relative overflow-hidden group/card backdrop-blur-md",
                                                         isSelected
-                                                            ? 'bg-white ring-1 ring-orange-500 shadow-[0_4px_12px_rgba(249,115,22,0.08)]'
-                                                            : 'bg-white ring-1 ring-zinc-200/60 hover:ring-zinc-300 hover:shadow-md hover:-translate-y-0.5'
+                                                            ? 'bg-white/90 ring-[1.5px] ring-orange-400 shadow-[0_8px_30px_rgba(249,115,22,0.15)] scale-[1.02]'
+                                                            : 'bg-white/40 ring-1 ring-white/60 hover:ring-orange-200 hover:bg-white/60 hover:shadow-[0_4px_20px_rgba(0,0,0,0.05)] hover:-translate-y-1'
                                                     )}
                                                 >
-                                                    <div className="flex justify-between items-start mb-2.5">
-                                                        <div className="flex items-center gap-2.5 lg:gap-3">
-                                                            <div className={cn("p-1.5 lg:p-2 rounded-lg transition-colors", 
-                                                                isSelected ? 'bg-orange-50 text-orange-600' : 'bg-zinc-50 text-zinc-400 group-hover/card:text-zinc-700'
+                                                    {isSelected && <div className="absolute inset-0 bg-gradient-to-br from-orange-400/5 to-transparent pointer-events-none" />}
+                                                    <div className="flex justify-between items-start mb-3 relative z-10">
+                                                        <div className="flex items-center gap-3 lg:gap-4">
+                                                            <div className={cn("p-2 lg:p-2.5 rounded-xl transition-all duration-300",
+                                                                isSelected ? 'bg-gradient-to-br from-orange-400 to-orange-500 text-white shadow-[0_4px_12px_rgba(249,115,22,0.3)]' : 'bg-white/80 ring-1 ring-white text-zinc-500 group-hover/card:text-orange-500 group-hover/card:shadow-md'
                                                             )}>
-                                                                <Monitor className="w-4 h-4" />
+                                                                <Monitor className="w-4 h-4 lg:w-5 lg:h-5" />
                                                             </div>
                                                             <div className="flex flex-col min-w-0">
-                                                                <span className={cn("font-bold truncate text-xs lg:text-sm transition-colors", isSelected ? 'text-zinc-900' : 'text-zinc-600 group-hover/card:text-zinc-900')}>
+                                                                <span className={cn("font-black truncate text-sm lg:text-base tracking-tight transition-colors", isSelected ? 'text-zinc-900' : 'text-zinc-700 group-hover/card:text-zinc-900')}>
                                                                     {unit.name.split('/').pop()}
                                                                 </span>
                                                                 {isPending && (
@@ -487,14 +510,16 @@ export default function DashboardView({ orgId: propOrgId }: DashboardViewProps) 
                                                                 )}
                                                             </div>
                                                         </div>
-                                                        <div className={cn("w-2 h-2 rounded-full mt-2 shrink-0 shadow-sm", 
-                                                            isOnline ? 'bg-emerald-500 shadow-emerald-500/20' : 
-                                                            isPending ? 'bg-orange-400 animate-ping shadow-orange-400/20' : 'bg-zinc-300'
-                                                        )} />
+                                                        <div className={cn("w-2.5 h-2.5 rounded-full mt-2.5 shrink-0 shadow-sm relative",
+                                                            isOnline ? 'bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.8)]' :
+                                                                isPending ? 'bg-orange-400 animate-ping shadow-[0_0_10px_rgba(251,146,60,0.8)]' : 'bg-zinc-300'
+                                                        )}>
+                                                            {isOnline && <div className="absolute inset-0 rounded-full ring-2 ring-emerald-500/30 animate-ping" />}
+                                                        </div>
                                                     </div>
 
-                                                    <div className="flex justify-between items-center text-xs pl-[36px] lg:pl-[44px]">
-                                                        <span className={cn("font-mono text-[10px] lg:text-[11px] font-medium truncate pr-2", isSelected ? 'text-orange-600' : 'text-zinc-400')}>
+                                                    <div className="flex justify-between items-center text-xs pl-[48px] lg:pl-[60px] relative z-10">
+                                                        <span className={cn("font-mono text-[10px] lg:text-[11px] font-bold truncate pr-2 tracking-tight", isSelected ? 'text-orange-600/80' : 'text-zinc-500')}>
                                                             {isPending ? 'DEPLOYMENT PENDING' : unit.ip}
                                                         </span>
                                                     </div>
@@ -508,237 +533,220 @@ export default function DashboardView({ orgId: propOrgId }: DashboardViewProps) 
                     </div>
 
                     {/* Constant Professional Logo Section */}
-                    <div className="relative border-t border-zinc-200/60 flex flex-col items-center justify-center shrink-0 shadow-[0_-4px_20px_rgba(0,0,0,0.02)] z-10 py-6 px-4 overflow-hidden">
-                        <div className="absolute inset-0 bg-gradient-to-r from-orange-500/10 via-white to-white z-0 pointer-events-none" />
+                    <div className="relative border-t border-white/60 flex flex-col items-center justify-center shrink-0 z-10 py-6 px-4 overflow-hidden bg-white/30 backdrop-blur-md">
+                        <div className="absolute inset-0 bg-gradient-to-t from-white/80 to-transparent z-0 pointer-events-none" />
                         <div className="flex items-center justify-between w-full gap-3 mb-5 relative z-10">
-                            <div className="flex-1 h-16 flex items-center justify-center p-1 transition-transform hover:scale-105">
+                            <div className="flex-1 h-14 flex items-center justify-center p-1 transition-transform hover:scale-105">
                                 <img
                                     src="/krishishayogi.png"
                                     alt="Krishi Sahayogi"
-                                    className="max-h-full max-w-full object-contain drop-shadow-md"
+                                    className="max-h-full max-w-full object-contain drop-shadow-lg"
                                 />
                             </div>
-                            <div className="flex-1 h-16 rounded-xl bg-white/70 backdrop-blur-md border border-zinc-200/50 flex items-center justify-center p-1.5 shadow-sm transition-all hover:scale-105">
+                            <div className="flex-1 h-16 rounded-[1rem] bg-white/80 backdrop-blur-xl ring-1 ring-white flex items-center justify-center p-2 shadow-[0_4px_15px_rgba(0,0,0,0.05)] transition-all hover:scale-110 hover:shadow-[0_8px_25px_rgba(0,0,0,0.1)]">
                                 <img
                                     src="/Nielit_logo.jpeg"
                                     alt="NIELIT"
-                                    className="h-full w-full object-contain mix-blend-multiply opacity-90"
+                                    className="h-full w-full object-contain mix-blend-multiply opacity-95"
                                 />
                             </div>
-                            <div className="flex-1 h-16 rounded-xl bg-white/70 backdrop-blur-md border border-zinc-200/50 flex items-center justify-center p-1.5 shadow-sm transition-all hover:scale-105">
+                            <div className="flex-1 h-16 rounded-[1rem] bg-white/80 backdrop-blur-xl ring-1 ring-white flex items-center justify-center p-2 shadow-[0_4px_15px_rgba(0,0,0,0.05)] transition-all hover:scale-110 hover:shadow-[0_8px_25px_rgba(0,0,0,0.1)]">
                                 <img
                                     src="/India-AI_logo.jpeg"
                                     alt="India AI"
-                                    className="h-full w-full object-contain mix-blend-multiply opacity-90"
+                                    className="h-full w-full object-contain mix-blend-multiply opacity-95"
                                 />
                             </div>
                         </div>
                         <div className="text-center space-y-1.5 relative z-10">
-                            <p className="text-[10px] font-black uppercase tracking-[0.25em] text-zinc-400">
-                                Built by <span className="text-orange-500 font-black">Krishi Sahayogi</span>
+                            <p className="text-[9px] font-black uppercase tracking-[0.3em] text-zinc-500">
+                                Built by <span className="text-orange-500 font-black drop-shadow-sm">Krishi Sahayogi</span>
                             </p>
-                            <p className="text-[9px] text-zinc-300 font-bold tracking-[0.35em] uppercase">
+                            <p className="text-[8px] text-zinc-400 font-black tracking-[0.4em] uppercase">
                                 NIELIT Bhubaneswar
                             </p>
                         </div>
                     </div>
 
                     {/* User Profile & Logout */}
-                    <div className="p-4 border-t border-zinc-200/60 bg-white">
-                        <div className="flex items-center gap-3 p-3 bg-zinc-50 rounded-2xl ring-1 ring-zinc-200/50">
-                            <div className="w-10 h-10 bg-zinc-900 rounded-xl flex items-center justify-center text-orange-500 font-black text-xs shadow-lg shadow-zinc-900/10">
+                    <div className="p-4 border-t border-white/60 bg-white/50 backdrop-blur-xl">
+                        <div className="flex items-center gap-3 p-3 bg-white/80 rounded-[1.25rem] ring-1 ring-white shadow-sm hover:shadow-md transition-shadow">
+                            <div className="w-11 h-11 bg-gradient-to-br from-zinc-800 to-zinc-900 rounded-[1rem] flex items-center justify-center text-orange-400 font-black text-sm shadow-[0_4px_15px_rgba(0,0,0,0.15)] ring-1 ring-zinc-700/50">
                                 {user?.email.charAt(0).toUpperCase() || 'U'}
                             </div>
                             <div className="flex-1 min-w-0">
-                                <p className="text-xs font-black text-zinc-900 truncate">{user?.email}</p>
-                                <div className="flex items-center gap-1.5 mt-0.5">
-                                    <span className="text-[9px] font-black uppercase tracking-widest text-orange-600 bg-orange-50 px-1.5 py-0.5 rounded border border-orange-100">
+                                <p className="text-sm font-black text-zinc-900 truncate tracking-tight">{user?.email}</p>
+                                <div className="flex items-center gap-1.5 mt-1">
+                                    <span className="text-[9px] font-black uppercase tracking-[0.15em] text-orange-600 bg-orange-100/50 backdrop-blur-sm px-2 py-0.5 rounded-md ring-1 ring-orange-200">
                                         {user?.role}
                                     </span>
-                                    <span className="text-[9px] font-bold text-zinc-400 uppercase tracking-widest">
-                                        {user?.org_id}
+                                    <span className="text-[9px] font-black text-zinc-500 uppercase tracking-widest truncate">
+                                        ID: {user?.org_id}
                                     </span>
                                 </div>
                             </div>
-                            {user?.role === 'ROOT' && (
-                                <button
-                                    onClick={() => {
-                                        setActiveTab(activeTab === 'management' ? 'metrics' : 'management');
-                                        setIsMobileMenuOpen(false);
-                                    }}
-                                    className={cn(
-                                        "p-2 rounded-lg transition-all",
-                                        activeTab === 'management'
-                                            ? "bg-orange-500 text-white shadow-lg shadow-orange-500/20"
-                                            : "text-zinc-400 hover:text-orange-500 hover:bg-orange-50"
-                                    )}
-                                    title="System Management"
-                                >
-                                    <Shield size={16} />
-                                </button>
-                            )}
                             <button
                                 onClick={logout}
-                                className="p-2 text-zinc-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                                className="p-2.5 text-zinc-400 bg-white border border-transparent hover:border-red-200 hover:text-red-500 hover:bg-red-50 hover:shadow-[0_4px_15px_rgba(239,68,68,0.1)] rounded-xl transition-all shadow-sm"
                                 title="Log Out"
                             >
-                                <LogOut size={16} />
+                                <LogOut size={18} />
                             </button>
                         </div>
                     </div>
                 </aside>
 
 
-            {/* ADD MONITOR MODAL */}
-            <AnimatePresence>
-                {isAddNodeOpen && (
-                    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-                        <motion.div
-                            initial={{ opacity: 0 }}
-                            animate={{ opacity: 1 }}
-                            exit={{ opacity: 0 }}
-                            onClick={() => setIsAddNodeOpen(false)}
-                            className="absolute inset-0 bg-zinc-900/40 backdrop-blur-sm"
-                        />
-                        <motion.div
-                            initial={{ opacity: 0, scale: 0.95, y: 20 }}
-                            animate={{ opacity: 1, scale: 1, y: 0 }}
-                            exit={{ opacity: 0, scale: 0.95, y: 20 }}
-                            className="relative w-full max-w-md bg-white rounded-[2.5rem] shadow-[0_32px_64px_-16px_rgba(0,0,0,0.2)] p-10 overflow-hidden"
-                        >
-                            <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-orange-500 to-emerald-500" />
-                            
-                            <div className="flex justify-between items-start mb-8">
-                                <div className="p-3 bg-zinc-900 rounded-2xl shadow-lg shadow-zinc-900/20">
-                                    <Activity className="w-6 h-6 text-orange-500" />
+                {/* ADD MONITOR MODAL */}
+                <AnimatePresence>
+                    {isAddNodeOpen && (
+                        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+                            <motion.div
+                                initial={{ opacity: 0 }}
+                                animate={{ opacity: 1 }}
+                                exit={{ opacity: 0 }}
+                                onClick={() => setIsAddNodeOpen(false)}
+                                className="absolute inset-0 bg-zinc-900/40 backdrop-blur-sm"
+                            />
+                            <motion.div
+                                initial={{ opacity: 0, scale: 0.95, y: 20 }}
+                                animate={{ opacity: 1, scale: 1, y: 0 }}
+                                exit={{ opacity: 0, scale: 0.95, y: 20 }}
+                                className="relative w-full max-w-md bg-white rounded-[2.5rem] shadow-[0_32px_64px_-16px_rgba(0,0,0,0.2)] p-10 overflow-hidden"
+                            >
+                                <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-orange-500 to-emerald-500" />
+
+                                <div className="flex justify-between items-start mb-8">
+                                    <div className="p-3 bg-zinc-900 rounded-2xl shadow-lg shadow-zinc-900/20">
+                                        <Activity className="w-6 h-6 text-orange-500" />
+                                    </div>
+                                    <button
+                                        onClick={() => setIsAddNodeOpen(false)}
+                                        className="p-2 text-zinc-400 hover:text-zinc-900 hover:bg-zinc-100 rounded-xl transition-all"
+                                    >
+                                        <X size={20} />
+                                    </button>
                                 </div>
+
+                                <h2 className="text-2xl font-black text-zinc-900 mb-2 tracking-tight">Add New Monitor.</h2>
+                                <p className="text-sm font-medium text-zinc-500 mb-8">Deploy a telemetry agent to your system</p>
+
+                                <div className="space-y-6">
+                                    <div className="space-y-2">
+                                        <label className="text-[10px] font-black uppercase tracking-widest text-zinc-400 ml-4">Unit Identifier</label>
+                                        <div className="relative">
+                                            <Terminal className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
+                                            <input
+                                                type="text"
+                                                value={newNodeName}
+                                                onChange={(e) => setNewNodeName(e.target.value)}
+                                                className="w-full bg-zinc-50 border-none ring-1 ring-zinc-200 rounded-2xl py-4 pl-12 pr-4 text-sm text-zinc-900 focus:ring-2 focus:ring-orange-500/20 transition-all font-bold placeholder:text-zinc-300"
+                                                placeholder="e.g. primary-server"
+                                            />
+                                        </div>
+                                    </div>
+
+                                    {addNodeError && (
+                                        <div className="flex items-center gap-2 bg-red-50 text-red-600 p-4 rounded-2xl text-[11px] font-black ring-1 ring-red-100 animate-shake">
+                                            <AlertTriangle className="w-4 h-4" />
+                                            {addNodeError.toUpperCase()}
+                                        </div>
+                                    )}
+
+                                    <div className="p-5 bg-orange-50/50 rounded-2xl border border-orange-100 flex flex-col gap-3">
+                                        <div className="flex items-center gap-3">
+                                            <div className="p-1.5 bg-orange-500 rounded-lg shadow-sm">
+                                                <Download className="w-3 h-3 text-white" />
+                                            </div>
+                                            <span className="text-[10px] font-black uppercase tracking-widest text-orange-600">Generated Bundle</span>
+                                        </div>
+                                        <p className="text-[11px] text-zinc-600 font-medium leading-relaxed">
+                                            We will generate a specialized ZIP package pre-configured for your account. Simply extract and run <code className="font-black text-orange-600">install.bat</code>.
+                                        </p>
+                                    </div>
+
+                                    <button
+                                        onClick={handleAddNode}
+                                        disabled={isDownloading}
+                                        className="w-full bg-zinc-900 text-white rounded-2xl py-5 font-black uppercase tracking-widest text-xs flex items-center justify-center gap-3 hover:bg-zinc-800 transition-all disabled:opacity-50 group shadow-xl shadow-zinc-900/10"
+                                    >
+                                        {isDownloading ? (
+                                            <div className="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin" />
+                                        ) : (
+                                            <>
+                                                Download Installer
+                                                <ChevronRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+                                            </>
+                                        )}
+                                    </button>
+                                </div>
+                            </motion.div>
+                        </div>
+                    )}
+                </AnimatePresence>
+
+                {/* UPGRADE MODAL */}
+                <AnimatePresence>
+                    {isUpgradeModalOpen && (
+                        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+                            <motion.div
+                                initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                                onClick={() => setIsUpgradeModalOpen(false)}
+                                className="absolute inset-0 bg-zinc-900/50 backdrop-blur-sm"
+                            />
+                            <motion.div
+                                initial={{ opacity: 0, scale: 0.95, y: 20 }}
+                                animate={{ opacity: 1, scale: 1, y: 0 }}
+                                exit={{ opacity: 0, scale: 0.95, y: 20 }}
+                                className="relative w-full max-w-xl bg-white rounded-[2.5rem] shadow-[0_32px_64px_-16px_rgba(0,0,0,0.25)] p-10 overflow-hidden"
+                            >
+                                <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-orange-500 to-emerald-500" />
                                 <button
-                                    onClick={() => setIsAddNodeOpen(false)}
-                                    className="p-2 text-zinc-400 hover:text-zinc-900 hover:bg-zinc-100 rounded-xl transition-all"
+                                    onClick={() => setIsUpgradeModalOpen(false)}
+                                    className="absolute top-6 right-6 p-2 text-zinc-400 hover:text-zinc-900 hover:bg-zinc-100 rounded-xl transition-all"
                                 >
                                     <X size={20} />
                                 </button>
-                            </div>
 
-                            <h2 className="text-2xl font-black text-zinc-900 mb-2 tracking-tight">Add New Monitor.</h2>
-                            <p className="text-sm font-medium text-zinc-500 mb-8">Deploy a telemetry agent to your system</p>
-
-                            <div className="space-y-6">
-                                <div className="space-y-2">
-                                    <label className="text-[10px] font-black uppercase tracking-widest text-zinc-400 ml-4">Unit Identifier</label>
-                                    <div className="relative">
-                                        <Terminal className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
-                                        <input
-                                            type="text"
-                                            value={newNodeName}
-                                            onChange={(e) => setNewNodeName(e.target.value)}
-                                            className="w-full bg-zinc-50 border-none ring-1 ring-zinc-200 rounded-2xl py-4 pl-12 pr-4 text-sm text-zinc-900 focus:ring-2 focus:ring-orange-500/20 transition-all font-bold placeholder:text-zinc-300"
-                                            placeholder="e.g. primary-server"
-                                        />
+                                <div className="mb-6">
+                                    <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-orange-50 ring-1 ring-orange-200 mb-4">
+                                        <AlertTriangle className="w-3.5 h-3.5 text-orange-500" />
+                                        <span className="text-[10px] font-black uppercase tracking-[0.2em] text-orange-600">Node Limit Reached</span>
                                     </div>
+                                    <h2 className="text-2xl font-black text-zinc-900 tracking-tight mb-2">Upgrade Your Plan</h2>
+                                    <p className="text-sm font-medium text-zinc-500">You've used all your available node slots. Upgrade below to unlock more monitors instantly.</p>
                                 </div>
 
-                                {addNodeError && (
-                                    <div className="flex items-center gap-2 bg-red-50 text-red-600 p-4 rounded-2xl text-[11px] font-black ring-1 ring-red-100 animate-shake">
-                                        <AlertTriangle className="w-4 h-4" />
-                                        {addNodeError.toUpperCase()}
-                                    </div>
-                                )}
-
-                                <div className="p-5 bg-orange-50/50 rounded-2xl border border-orange-100 flex flex-col gap-3">
-                                    <div className="flex items-center gap-3">
-                                        <div className="p-1.5 bg-orange-500 rounded-lg shadow-sm">
-                                            <Download className="w-3 h-3 text-white" />
-                                        </div>
-                                        <span className="text-[10px] font-black uppercase tracking-widest text-orange-600">Generated Bundle</span>
-                                    </div>
-                                    <p className="text-[11px] text-zinc-600 font-medium leading-relaxed">
-                                        We will generate a specialized ZIP package pre-configured for your account. Simply extract and run <code className="font-black text-orange-600">install.bat</code>.
-                                    </p>
-                                </div>
-
-                                <button
-                                    onClick={handleAddNode}
-                                    disabled={isDownloading}
-                                    className="w-full bg-zinc-900 text-white rounded-2xl py-5 font-black uppercase tracking-widest text-xs flex items-center justify-center gap-3 hover:bg-zinc-800 transition-all disabled:opacity-50 group shadow-xl shadow-zinc-900/10"
-                                >
-                                    {isDownloading ? (
-                                        <div className="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin" />
-                                    ) : (
-                                        <>
-                                            Download Installer
-                                            <ChevronRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
-                                        </>
-                                    )}
-                                </button>
-                            </div>
-                        </motion.div>
-                    </div>
-                )}
-            </AnimatePresence>
-
-            {/* UPGRADE MODAL */}
-            <AnimatePresence>
-                {isUpgradeModalOpen && (
-                    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-                        <motion.div
-                            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-                            onClick={() => setIsUpgradeModalOpen(false)}
-                            className="absolute inset-0 bg-zinc-900/50 backdrop-blur-sm"
-                        />
-                        <motion.div
-                            initial={{ opacity: 0, scale: 0.95, y: 20 }}
-                            animate={{ opacity: 1, scale: 1, y: 0 }}
-                            exit={{ opacity: 0, scale: 0.95, y: 20 }}
-                            className="relative w-full max-w-xl bg-white rounded-[2.5rem] shadow-[0_32px_64px_-16px_rgba(0,0,0,0.25)] p-10 overflow-hidden"
-                        >
-                            <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-orange-500 to-emerald-500" />
-                            <button
-                                onClick={() => setIsUpgradeModalOpen(false)}
-                                className="absolute top-6 right-6 p-2 text-zinc-400 hover:text-zinc-900 hover:bg-zinc-100 rounded-xl transition-all"
-                            >
-                                <X size={20} />
-                            </button>
-
-                            <div className="mb-6">
-                                <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-orange-50 ring-1 ring-orange-200 mb-4">
-                                    <AlertTriangle className="w-3.5 h-3.5 text-orange-500" />
-                                    <span className="text-[10px] font-black uppercase tracking-[0.2em] text-orange-600">Node Limit Reached</span>
-                                </div>
-                                <h2 className="text-2xl font-black text-zinc-900 tracking-tight mb-2">Upgrade Your Plan</h2>
-                                <p className="text-sm font-medium text-zinc-500">You've used all your available node slots. Upgrade below to unlock more monitors instantly.</p>
-                            </div>
-
-                            <div className="space-y-4">
-                                {plans.map((plan) => (
-                                    <div key={plan.plan_id} className={`relative flex items-center justify-between p-5 rounded-2xl ring-1 transition-all ${plan.slug === 'pro' ? 'ring-orange-300 bg-orange-50/50' : 'ring-zinc-200 bg-zinc-50/50'}`}>
-                                        {plan.slug === 'pro' && (
-                                            <div className="absolute -top-2.5 left-4 px-3 py-0.5 bg-orange-500 text-white text-[9px] font-black uppercase tracking-widest rounded-full shadow-sm">
-                                                Recommended
+                                <div className="space-y-4">
+                                    {plans.map((plan) => (
+                                        <div key={plan.plan_id} className={`relative flex items-center justify-between p-5 rounded-2xl ring-1 transition-all ${plan.slug === 'pro' ? 'ring-orange-300 bg-orange-50/50' : 'ring-zinc-200 bg-zinc-50/50'}`}>
+                                            {plan.slug === 'pro' && (
+                                                <div className="absolute -top-2.5 left-4 px-3 py-0.5 bg-orange-500 text-white text-[9px] font-black uppercase tracking-widest rounded-full shadow-sm">
+                                                    Recommended
+                                                </div>
+                                            )}
+                                            <div>
+                                                <p className="font-black text-zinc-900 uppercase tracking-wider text-sm">{plan.name}</p>
+                                                <p className="text-xs font-medium text-zinc-500 mt-0.5">{plan.node_limit} Active Nodes • ₹{plan.price_monthly}/mo</p>
                                             </div>
-                                        )}
-                                        <div>
-                                            <p className="font-black text-zinc-900 uppercase tracking-wider text-sm">{plan.name}</p>
-                                            <p className="text-xs font-medium text-zinc-500 mt-0.5">{plan.node_limit} Active Nodes • ₹{plan.price_monthly}/mo</p>
+                                            <button
+                                                onClick={() => handlePayment(plan)}
+                                                disabled={paymentLoading === plan.slug}
+                                                className={`px-5 py-2.5 rounded-xl font-black uppercase tracking-widest text-[10px] flex items-center gap-2 transition-all disabled:opacity-50 ${plan.slug === 'pro' ? 'bg-zinc-900 text-white hover:bg-zinc-800 shadow-lg shadow-zinc-900/10' : 'bg-white text-zinc-700 ring-1 ring-zinc-200 hover:ring-zinc-300'}`}
+                                            >
+                                                {paymentLoading === plan.slug ? (
+                                                    <div className="w-3.5 h-3.5 border-2 border-current/30 border-t-current rounded-full animate-spin" />
+                                                ) : 'Upgrade Now'}
+                                            </button>
                                         </div>
-                                        <button
-                                            onClick={() => handlePayment(plan)}
-                                            disabled={paymentLoading === plan.slug}
-                                            className={`px-5 py-2.5 rounded-xl font-black uppercase tracking-widest text-[10px] flex items-center gap-2 transition-all disabled:opacity-50 ${plan.slug === 'pro' ? 'bg-zinc-900 text-white hover:bg-zinc-800 shadow-lg shadow-zinc-900/10' : 'bg-white text-zinc-700 ring-1 ring-zinc-200 hover:ring-zinc-300'}`}
-                                        >
-                                            {paymentLoading === plan.slug ? (
-                                                <div className="w-3.5 h-3.5 border-2 border-current/30 border-t-current rounded-full animate-spin" />
-                                            ) : 'Upgrade Now'}
-                                        </button>
-                                    </div>
-                                ))}
-                            </div>
-                        </motion.div>
-                    </div>
-                )}
-            </AnimatePresence>
+                                    ))}
+                                </div>
+                            </motion.div>
+                        </div>
+                    )}
+                </AnimatePresence>
 
-            <main className="flex-1 flex flex-col relative overflow-hidden w-full h-full">
+                <main className="flex-1 flex flex-col relative overflow-hidden w-full h-full">
                     <AnimatePresence mode="wait">
                         {activeTab === 'management' ? (
                             <motion.div
@@ -839,7 +847,7 @@ export default function DashboardView({ orgId: propOrgId }: DashboardViewProps) 
                                     <div className="flex-1 flex items-center justify-center p-4 lg:p-8">
                                         <div className="max-w-xl w-full bg-white rounded-[2.5rem] border border-zinc-200/60 p-10 lg:p-12 text-center shadow-sm relative overflow-hidden">
                                             <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-orange-500/20 via-orange-500 to-orange-500/20" />
-                                            
+
                                             <div className="mb-8 relative inline-block">
                                                 <div className="w-24 h-24 bg-orange-50 rounded-full flex items-center justify-center ring-4 ring-white shadow-xl">
                                                     <Download className="w-10 h-10 text-orange-500 animate-bounce" />
@@ -851,7 +859,7 @@ export default function DashboardView({ orgId: propOrgId }: DashboardViewProps) 
 
                                             <h2 className="text-3xl font-black text-zinc-900 mb-4 tracking-tight">Awaiting Installation.</h2>
                                             <p className="text-zinc-500 font-medium mb-10 text-sm lg:text-base leading-relaxed">
-                                                We've registered your unit <span className="text-zinc-900 font-black px-2 py-1 bg-zinc-100 rounded-lg">{selectedUnit.name.split('/').pop()}</span>. 
+                                                We've registered your unit <span className="text-zinc-900 font-black px-2 py-1 bg-zinc-100 rounded-lg">{selectedUnit.name.split('/').pop()}</span>.
                                                 Now, you need to deploy the telemetry agent to start receiving live metrics.
                                             </p>
 
@@ -887,7 +895,7 @@ export default function DashboardView({ orgId: propOrgId }: DashboardViewProps) 
                                                         </>
                                                     )}
                                                 </button>
-                                                <button 
+                                                <button
                                                     onClick={handleDeleteUnit}
                                                     className="px-8 bg-zinc-100 hover:bg-red-50 hover:text-red-600 text-zinc-500 rounded-2xl py-5 font-black uppercase tracking-widest text-[11px] transition-all"
                                                 >

@@ -278,6 +278,6 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_transactions_order_id ON transactions(razo
 INSERT INTO pricing_plans (name, slug, price_monthly, node_limit, features) 
 VALUES 
 ('Free', 'free', 0.00, 1, '["1 Active Node", "Real-time Telemetry", "Basic Support"]'::jsonb),
-('Pro', 'pro', 99.00, 10, '["100 Active Nodes", "Advanced Metrics", "Priority Support"]'::jsonb),
-('Business', 'business', 199.00, 50, '["Unlimited Nodes", "Global Fleet Control", "24/7 Support"]'::jsonb)
+('Pro', 'pro', 99.00, 10, '["10 Active Nodes", "Advanced Metrics", "Priority Support"]'::jsonb),
+('Business', 'business', 199.00, 50, '["50 Active Nodes", "Global Fleet Control", "24/7 Support"]'::jsonb)
 ON CONFLICT (slug) DO NOTHING;

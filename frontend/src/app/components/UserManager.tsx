@@ -37,9 +37,10 @@ export function UserManager() {
 
     const fetchData = async () => {
         try {
+            const timestamp = new Date().getTime();
             const [orgsResp, usersResp] = await Promise.all([
-                apiFetch('/api/orgs'),
-                apiFetch('/api/users')
+                apiFetch(`/api/orgs?t=${timestamp}`),
+                apiFetch(`/api/users?t=${timestamp}`)
             ]);
 
             if (orgsResp.ok) {
@@ -53,7 +54,8 @@ export function UserManager() {
 
             if (usersResp.ok) {
                 const data = await usersResp.json();
-                setUsers(data);
+                // Sort by descending user_id so newest users appear first
+                setUsers(data.sort((a: any, b: any) => b.user_id - a.user_id));
             }
         } catch (err) {
             console.error('Failed to fetch user management data:', err);
@@ -102,14 +104,16 @@ export function UserManager() {
     if (loading) return null;
 
     return (
-        <div className="bg-white rounded-3xl p-8 ring-1 ring-zinc-200/80 shadow-sm mt-8">
-            <div className="flex items-center gap-3 mb-6">
-                <div className="w-10 h-10 bg-blue-500/10 rounded-xl flex items-center justify-center">
-                    <UserPlus className="w-5 h-5 text-blue-500" />
+        <div className="bg-white/40 backdrop-blur-2xl rounded-[2.5rem] p-8 ring-[1px] ring-white/60 shadow-[0_8px_32px_0_rgba(59,130,246,0.15)] mt-6 relative overflow-hidden border border-blue-100/20">
+            <div className="absolute -top-32 -left-32 w-96 h-96 bg-gradient-to-br from-blue-500/20 via-indigo-500/10 to-transparent rounded-full blur-3xl pointer-events-none" />
+            
+            <div className="flex items-center gap-4 mb-8 relative z-10">
+                <div className="w-12 h-12 bg-gradient-to-br from-blue-50 to-blue-100/50 rounded-2xl flex items-center justify-center ring-1 ring-blue-200/50 shadow-sm">
+                    <UserPlus className="w-6 h-6 text-blue-600" />
                 </div>
                 <div>
-                    <h2 className="text-xl font-black text-zinc-900 tracking-tight">Identity Management</h2>
-                    <p className="text-zinc-500 text-xs font-medium">Provision single users for organizations</p>
+                    <h2 className="text-2xl font-black text-zinc-900 tracking-tight">Identity Management</h2>
+                    <p className="text-zinc-500 text-sm font-medium mt-0.5">Provision single users for organizations</p>
                 </div>
             </div>
 
@@ -121,7 +125,7 @@ export function UserManager() {
                             placeholder="e.g. john_doe"
                             value={username}
                             onChange={e => setUsername(e.target.value)}
-                            className="w-full bg-zinc-50 border-none ring-1 ring-zinc-200 rounded-2xl p-4 pl-12 text-sm font-bold text-zinc-900 focus:ring-2 focus:ring-blue-500/20"
+                            className="w-full bg-white/50 backdrop-blur-md border border-blue-200/50 shadow-inner rounded-2xl p-4 pl-12 text-sm font-bold text-zinc-900 focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500 transition-all hover:bg-white/80"
                             required
                         />
                         <Shield className="w-4 h-4 text-zinc-400 absolute left-4 top-1/2 -translate-y-1/2" />
@@ -136,7 +140,7 @@ export function UserManager() {
                             placeholder="user@example.com"
                             value={email}
                             onChange={e => setEmail(e.target.value)}
-                            className="w-full bg-zinc-50 border-none ring-1 ring-zinc-200 rounded-2xl p-4 pl-12 text-sm font-bold text-zinc-900 focus:ring-2 focus:ring-blue-500/20"
+                            className="w-full bg-white/50 backdrop-blur-md border border-blue-200/50 shadow-inner rounded-2xl p-4 pl-12 text-sm font-bold text-zinc-900 focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500 transition-all hover:bg-white/80"
                             required
                         />
                         <Mail className="w-4 h-4 text-zinc-400 absolute left-4 top-1/2 -translate-y-1/2" />
@@ -151,7 +155,7 @@ export function UserManager() {
                             placeholder="••••••••"
                             value={password}
                             onChange={e => setPassword(e.target.value)}
-                            className="w-full bg-zinc-50 border-none ring-1 ring-zinc-200 rounded-2xl p-4 pl-12 text-sm font-bold text-zinc-900 focus:ring-2 focus:ring-blue-500/20"
+                            className="w-full bg-white/50 backdrop-blur-md border border-blue-200/50 shadow-inner rounded-2xl p-4 pl-12 text-sm font-bold text-zinc-900 focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500 transition-all hover:bg-white/80"
                             required
                         />
                         <Key className="w-4 h-4 text-zinc-400 absolute left-4 top-1/2 -translate-y-1/2" />
@@ -163,7 +167,7 @@ export function UserManager() {
                     <select
                         value={role}
                         onChange={e => setRole(e.target.value)}
-                        className="w-full bg-zinc-50 border-none ring-1 ring-zinc-200 rounded-2xl p-4 text-sm font-bold text-zinc-900 focus:ring-2 focus:ring-blue-500/20"
+                        className="w-full bg-white/50 backdrop-blur-md border border-blue-200/50 shadow-inner rounded-2xl p-4 text-sm font-bold text-zinc-900 focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500 transition-all hover:bg-white/80"
                     >
                         <option value="USER">User (Standard Access)</option>
                         <option value="ADMIN">Admin (Org Manager)</option>
@@ -177,7 +181,7 @@ export function UserManager() {
                         <select
                             value={orgId}
                             onChange={e => setOrgId(e.target.value)}
-                            className="w-full bg-zinc-50 border-none ring-1 ring-zinc-200 rounded-2xl p-4 pl-12 text-sm font-bold text-zinc-900 focus:ring-2 focus:ring-blue-500/20"
+                            className="w-full bg-white/50 backdrop-blur-md border border-blue-200/50 shadow-inner rounded-2xl p-4 pl-12 text-sm font-bold text-zinc-900 focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500 transition-all hover:bg-white/80"
                         >
                             {orgs.map(org => (
                                 <option key={org.org_id} value={org.org_id}>
@@ -193,9 +197,9 @@ export function UserManager() {
                     <button
                         type="submit"
                         disabled={createLoading}
-                        className="w-full bg-zinc-900 text-white rounded-2xl p-4 font-black uppercase tracking-widest text-[10px] flex items-center justify-center gap-2 hover:bg-zinc-800 disabled:opacity-50 transition-all active:scale-[0.98]"
+                        className="w-full bg-gradient-to-r from-blue-500 to-indigo-500 text-white rounded-2xl p-4 font-black uppercase tracking-widest text-[11px] flex items-center justify-center gap-2 shadow-[0_0_20px_rgba(59,130,246,0.4)] hover:shadow-[0_0_30px_rgba(59,130,246,0.6)] hover:scale-[1.02] active:scale-95 transition-all duration-300 disabled:opacity-50 disabled:hover:scale-100 disabled:hover:shadow-none"
                     >
-                        <UserPlus className="w-4 h-4 text-blue-400" />
+                        <UserPlus className="w-5 h-5 text-white" />
                         {createLoading ? 'Provisioning...' : 'Add Single User'}
                     </button>
                 </div>
@@ -231,22 +235,33 @@ export function UserManager() {
                     </div>
                     <div className="text-[10px] font-bold text-zinc-300 uppercase tracking-widest">{users.length} total</div>
                 </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                    {users.slice(0, showAllUsers ? undefined : 3).map(u => (
-                        <div key={u.user_id} className="bg-zinc-50 rounded-2xl p-4 ring-1 ring-zinc-100 hover:ring-blue-500/20 transition-all group">
-                            <div className="flex items-center justify-between mb-2">
-                                <div className="px-2 py-0.5 bg-zinc-900 text-white rounded-md text-[8px] font-black tracking-widest uppercase">
+                <div className="flex flex-col gap-3">
+                    {users.slice(0, showAllUsers ? undefined : 5).map(u => (
+                        <div key={u.user_id} className="relative bg-white/60 backdrop-blur-md rounded-2xl p-3.5 ring-1 ring-blue-200/50 shadow-sm hover:shadow-md hover:bg-white/90 hover:ring-blue-300 transition-all duration-300 group overflow-hidden flex items-center justify-between gap-4">
+                            <div className="absolute -left-10 w-20 h-full bg-blue-400/5 blur-xl group-hover:bg-blue-400/10 transition-all pointer-events-none" />
+                            
+                            <div className="flex items-center gap-4 relative z-10 w-full">
+                                {/* Left side: Role Badge */}
+                                <div className="w-12 h-10 rounded-xl bg-zinc-900 text-white flex items-center justify-center text-[9px] font-black tracking-widest uppercase shadow-md flex-shrink-0">
                                     {u.role}
                                 </div>
-                                <div className="text-[8px] font-black text-zinc-400 uppercase tracking-tight">
-                                    ID: {u.user_id}
+                                
+                                {/* Middle: User Details */}
+                                <div className="flex-1 min-w-0 flex flex-col justify-center">
+                                    <div className="text-[13px] font-black text-zinc-900 group-hover:text-blue-600 transition-colors truncate">{u.username}</div>
+                                    <div className="text-[10px] font-bold text-zinc-500 truncate mt-0.5">{u.email}</div>
                                 </div>
-                            </div>
-                            <div className="text-sm font-black text-zinc-900 group-hover:text-blue-600 transition-colors line-clamp-1">{u.username}</div>
-                            <div className="text-[10px] font-bold text-zinc-400 truncate">{u.email}</div>
-                            <div className="mt-2 pt-2 border-t border-zinc-200/50 flex items-center gap-1.5">
-                                <Building className="w-3 h-3 text-zinc-300" />
-                                <span className="text-[9px] font-black text-zinc-500 uppercase tracking-tight truncate">{u.org_name || 'No Org'}</span>
+
+                                {/* Right side: Org and ID */}
+                                <div className="flex items-center gap-3 text-right">
+                                    <div className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-50/50 rounded-lg ring-1 ring-blue-100/50">
+                                        <Building className="w-3 h-3 text-blue-400" />
+                                        <span className="text-[9px] font-black text-zinc-600 uppercase tracking-tight truncate max-w-[120px]">{u.org_name || 'No Org'}</span>
+                                    </div>
+                                    <div className="text-[9px] font-black text-zinc-400 uppercase tracking-tight w-8">
+                                        #{u.user_id}
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     ))}

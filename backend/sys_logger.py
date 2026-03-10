@@ -330,19 +330,30 @@ def get_me(current_user):
 @app.route('/api/users', methods=['GET'])
 @token_required
 def get_users(current_user):
-    """List all users (ROOT only)"""
-    if current_user['role'] != 'ROOT':
+    """List users (ROOT sees all, ADMIN sees org only)"""
+    if current_user['role'] not in ['ROOT', 'ADMIN']:
         return jsonify({'error': 'Unauthorized'}), 403
         
     try:
         conn = get_db_connection()
         cur = conn.cursor(cursor_factory=RealDictCursor)
-        cur.execute("""
-            SELECT u.user_id, u.username, u.email, u.role, o.name as org_name 
-            FROM users u 
-            LEFT JOIN organizations o ON u.org_id = o.org_id
-            ORDER BY u.user_id DESC
-        """)
+        
+        if current_user['role'] == 'ROOT':
+            cur.execute("""
+                SELECT u.user_id, u.username, u.email, u.role, o.name as org_name 
+                FROM users u 
+                LEFT JOIN organizations o ON u.org_id = o.org_id
+                ORDER BY u.user_id DESC
+            """)
+        else:
+            cur.execute("""
+                SELECT u.user_id, u.username, u.email, u.role, o.name as org_name 
+                FROM users u 
+                LEFT JOIN organizations o ON u.org_id = o.org_id
+                WHERE u.org_id::varchar = %s::varchar
+                ORDER BY u.user_id DESC
+            """, (current_user['org_id'],))
+            
         users = cur.fetchall()
         cur.close()
         conn.close()
@@ -353,8 +364,8 @@ def get_users(current_user):
 @app.route('/api/users', methods=['POST'])
 @token_required
 def create_user(current_user):
-    """Create a new user (ROOT only)"""
-    if current_user['role'] != 'ROOT':
+    """Create a new user (ROOT writes anywhere, ADMIN writes to own org)"""
+    if current_user['role'] not in ['ROOT', 'ADMIN']:
         return jsonify({'error': 'Unauthorized'}), 403
         
     data = request.get_json()
@@ -362,7 +373,12 @@ def create_user(current_user):
     email = data.get('email')
     password = data.get('password')
     role = data.get('role', 'USER')
-    org_id = data.get('org_id')
+    
+    # If ADMIN, they can only create users in their own org
+    if current_user['role'] == 'ADMIN':
+        org_id = current_user['org_id']
+    else:
+        org_id = data.get('org_id')
     
     if not username or not email or not password:
         return jsonify({'error': 'Missing required fields (username, email, password)'}), 400

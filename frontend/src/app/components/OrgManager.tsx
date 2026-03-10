@@ -188,14 +188,16 @@ export function OrgManager() {
     return (
         <div className="space-y-8 p-1">
             {/* Create Org Section */}
-            <div className="bg-white rounded-3xl p-8 ring-1 ring-zinc-200/80 shadow-sm">
-                <div className="flex items-center gap-3 mb-6">
-                    <div className="w-10 h-10 bg-orange-500/10 rounded-xl flex items-center justify-center">
-                        <Building2 className="w-5 h-5 text-orange-500" />
+            <div className="bg-white/40 backdrop-blur-2xl rounded-[2.5rem] p-8 ring-[1px] ring-white/60 shadow-[0_8px_32px_0_rgba(249,115,22,0.15)] relative overflow-hidden border border-orange-100/20">
+                <div className="absolute -top-32 -right-32 w-96 h-96 bg-gradient-to-br from-orange-500/20 via-amber-500/10 to-transparent rounded-full blur-3xl pointer-events-none" />
+                
+                <div className="flex items-center gap-4 mb-8 relative z-10">
+                    <div className="w-12 h-12 bg-gradient-to-br from-orange-50 to-orange-100/50 rounded-2xl flex items-center justify-center ring-1 ring-orange-200/50 shadow-sm">
+                        <Building2 className="w-6 h-6 text-orange-600" />
                     </div>
                     <div>
-                        <h2 className="text-xl font-black text-zinc-900 tracking-tight">System Registry</h2>
-                        <p className="text-zinc-500 text-xs font-medium">Create and manage organizational hubs</p>
+                        <h2 className="text-2xl font-black text-zinc-900 tracking-tight">System Registry</h2>
+                        <p className="text-zinc-500 text-sm font-medium mt-0.5">Create and manage organizational hubs</p>
                     </div>
                 </div>
 
@@ -204,20 +206,20 @@ export function OrgManager() {
                         placeholder="ORG_ID (e.g. NIELIT)"
                         value={newOrgId}
                         onChange={e => setNewOrgId(e.target.value.toUpperCase())}
-                        className="bg-zinc-50 border-none ring-1 ring-zinc-200 rounded-2xl p-4 text-sm font-bold text-zinc-900 focus:ring-2 focus:ring-orange-500/20"
+                        className="bg-white/50 backdrop-blur-md border border-orange-200/50 shadow-inner rounded-2xl p-4 text-sm font-bold text-zinc-900 focus:ring-4 focus:ring-orange-500/20 focus:border-orange-500 transition-all hover:bg-white/80"
                         required
                     />
                     <input
                         placeholder="Organization Name"
                         value={newOrgName}
                         onChange={e => setNewOrgName(e.target.value)}
-                        className="bg-zinc-50 border-none ring-1 ring-zinc-200 rounded-2xl p-4 text-sm font-bold text-zinc-900 focus:ring-2 focus:ring-orange-500/20"
+                        className="bg-white/50 backdrop-blur-md border border-orange-200/50 shadow-inner rounded-2xl p-4 text-sm font-bold text-zinc-900 focus:ring-4 focus:ring-orange-500/20 focus:border-orange-500 transition-all hover:bg-white/80"
                         required
                     />
                     <select
                         value={newOrgTier}
                         onChange={e => setNewOrgTier(e.target.value)}
-                        className="bg-zinc-50 border-none ring-1 ring-zinc-200 rounded-2xl p-4 text-sm font-bold text-zinc-900 focus:ring-2 focus:ring-orange-500/20"
+                        className="bg-white/50 backdrop-blur-md border border-orange-200/50 shadow-inner rounded-2xl p-4 text-sm font-bold text-zinc-900 focus:ring-4 focus:ring-orange-500/20 focus:border-orange-500 transition-all hover:bg-white/80"
                         required
                     >
                         {plans.map(plan => (
@@ -229,9 +231,9 @@ export function OrgManager() {
                     <button
                         type="submit"
                         disabled={createLoading}
-                        className="bg-zinc-900 text-white rounded-2xl p-4 font-black uppercase tracking-widest text-[10px] flex items-center justify-center gap-2 hover:bg-zinc-800 disabled:opacity-50"
+                        className="bg-gradient-to-r from-orange-500 to-amber-500 text-white rounded-2xl p-4 font-black uppercase tracking-widest text-[11px] flex items-center justify-center gap-2 shadow-[0_0_20px_rgba(249,115,22,0.4)] hover:shadow-[0_0_30px_rgba(249,115,22,0.6)] hover:scale-[1.02] active:scale-95 transition-all duration-300 disabled:opacity-50 disabled:hover:scale-100 disabled:hover:shadow-none"
                     >
-                        <Plus className="w-4 h-4" />
+                        <Plus className="w-5 h-5" />
                         {createLoading ? 'Executing...' : 'Register Organization'}
                     </button>
                 </form>
@@ -250,27 +252,28 @@ export function OrgManager() {
                 {/* Pricing Management Logic (Admin only view - will show if plans exist) */}
                 {plans.length > 0 && (
                     <div className="mt-10 pt-8 border-t border-zinc-100">
-                        <div className="flex items-center gap-3 mb-6">
-                            <div className="w-8 h-8 bg-emerald-500/10 rounded-lg flex items-center justify-center">
-                                <Shield className="w-4 h-4 text-emerald-600" />
+                        <div className="flex items-center gap-4 mb-8">
+                            <div className="w-10 h-10 bg-gradient-to-br from-emerald-50 to-emerald-100/50 rounded-xl flex items-center justify-center ring-1 ring-emerald-200/50 shadow-sm">
+                                <Shield className="w-5 h-5 text-emerald-600" />
                             </div>
                             <div>
-                                <h3 className="text-sm font-black text-zinc-900 uppercase tracking-tight">Revenue & Plan Control</h3>
-                                <p className="text-zinc-500 text-[10px] font-medium uppercase tracking-widest">Live financial configuration</p>
+                                <h3 className="text-lg font-black text-zinc-900 uppercase tracking-tight">Revenue & Plan Control</h3>
+                                <p className="text-zinc-500 text-[11px] font-bold uppercase tracking-widest mt-0.5">Live financial configuration</p>
                             </div>
                         </div>
 
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                             {plans.map(plan => (
-                                <div key={plan.plan_id} className="p-5 rounded-2xl bg-zinc-50 ring-1 ring-zinc-100 hover:ring-emerald-500/20 transition-all group">
-                                    <div className="flex justify-between items-start mb-4">
+                                <div key={plan.plan_id} className="relative p-6 rounded-[2rem] bg-gradient-to-br from-white/80 to-emerald-50/20 shadow-xl ring-1 ring-emerald-200/50 hover:ring-2 hover:ring-emerald-400 hover:shadow-[0_0_40px_rgba(16,185,129,0.25)] hover:-translate-y-2 transition-all duration-300 overflow-hidden backdrop-blur-xl group">
+                                    <div className="absolute -top-20 -right-20 w-40 h-40 bg-emerald-400/20 rounded-full blur-2xl group-hover:bg-emerald-400/30 transition-all duration-500" />
+                                    <div className="flex justify-between items-start mb-4 relative z-10">
                                         <div>
                                             <div className="text-[10px] font-black text-zinc-400 uppercase tracking-[0.2em] mb-1">{plan.name} {plan.is_active ? <span className="text-emerald-500">(LIVE)</span> : <span className="text-red-500">(INACTIVE)</span>}</div>
                                             <div className="text-xl font-black text-zinc-900">₹{plan.price_monthly} <span className="text-[10px] text-zinc-400 font-bold uppercase tracking-widest">/ mo</span></div>
                                         </div>
                                         <button 
                                             onClick={() => setEditingPlan(plan)}
-                                            className="px-3 py-1.5 bg-zinc-900 text-white rounded-lg text-[9px] font-black uppercase tracking-widest hover:bg-zinc-800 transition-all shadow-sm flex items-center gap-1.5"
+                                            className="px-3 py-1.5 bg-zinc-900 text-white rounded-lg text-[9px] font-black uppercase tracking-widest hover:bg-zinc-800 hover:scale-105 transition-all shadow-sm flex items-center gap-1.5 cursor-pointer relative z-20"
                                         >
                                             <Activity className="w-3 h-3" />
                                             Edit
@@ -319,7 +322,7 @@ export function OrgManager() {
                                             />
                                         </div>
                                         <div>
-                                            <label className="text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-2 block ml-1">Node Limit</label>
+                                            <label className="text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-2 block ml-1 flex items-center gap-1.5"><Activity className="w-3.5 h-3.5"/> Node Limit</label>
                                             <input 
                                                 type="number"
                                                 value={editingPlan.node_limit}
@@ -386,19 +389,28 @@ export function OrgManager() {
                         </div>
                         <div className="text-[10px] font-bold text-zinc-300 uppercase tracking-widest">{orgs.length} total</div>
                     </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                        {orgs.slice(0, showAllOrgs ? undefined : 3).map(org => (
-                            <div key={org.org_id} className="bg-zinc-50 rounded-2xl p-4 ring-1 ring-zinc-100 hover:ring-orange-500/20 transition-all group">
-                                <div className="flex items-center justify-between mb-2">
-                                    <div className="px-2 py-0.5 bg-zinc-900 text-white rounded-md text-[8px] font-black tracking-widest uppercase">
-                                        ID: {org.org_id}
+                    <div className="flex flex-col gap-3">
+                        {orgs.slice(0, showAllOrgs ? undefined : 5).map(org => (
+                            <div key={org.org_id} className="relative bg-white/60 backdrop-blur-md rounded-2xl p-3.5 ring-1 ring-orange-200/50 shadow-sm hover:shadow-md hover:bg-white/90 hover:ring-orange-300 transition-all duration-300 group overflow-hidden flex items-center justify-between">
+                                <div className="absolute -left-10 w-20 h-full bg-orange-400/5 blur-xl group-hover:bg-orange-400/10 transition-all pointer-events-none" />
+                                
+                                <div className="flex items-center gap-4 relative z-10 w-full">
+                                    {/* Left side: ID block */}
+                                    <div className="w-10 h-10 rounded-xl bg-zinc-900 text-white flex items-center justify-center text-[10px] font-black shadow-md flex-shrink-0">
+                                        #{org.org_id}
                                     </div>
-                                    <div className="px-2 py-0.5 bg-orange-50 text-orange-600 rounded-md text-[8px] font-black tracking-widest uppercase ring-1 ring-orange-100">
+                                    
+                                    {/* Middle: Name and Slug */}
+                                    <div className="flex-1 min-w-0 flex flex-col justify-center">
+                                        <div className="text-[13px] font-black text-zinc-900 group-hover:text-orange-600 transition-colors truncate">{org.name}</div>
+                                        <div className="text-[9px] font-bold text-zinc-400 font-mono tracking-tight truncate mt-0.5">{org.slug}</div>
+                                    </div>
+
+                                    {/* Right side: Tier */}
+                                    <div className="px-3 py-1.5 bg-gradient-to-r from-orange-100 to-orange-50 text-orange-600 rounded-lg text-[9px] font-black tracking-widest uppercase ring-1 ring-orange-200/80 shadow-sm whitespace-nowrap">
                                         {org.tier}
                                     </div>
                                 </div>
-                                <div className="text-sm font-black text-zinc-900 group-hover:text-orange-600 transition-colors line-clamp-1">{org.name}</div>
-                                <div className="text-[9px] font-bold text-zinc-400 font-mono tracking-tight mt-0.5">slug: {org.slug}</div>
                             </div>
                         ))}
                     </div>
@@ -419,35 +431,37 @@ export function OrgManager() {
             <UserManager />
 
             {/* Unit Mapping Table */}
-            <div className="bg-white rounded-3xl overflow-hidden ring-1 ring-zinc-200/80 shadow-sm">
-                <div className="p-8 border-b border-zinc-100 flex justify-between items-center">
-                    <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 bg-zinc-900/5 rounded-xl flex items-center justify-center">
-                            <Server className="w-5 h-5 text-zinc-900" />
+            <div className="bg-white/40 backdrop-blur-2xl rounded-[2.5rem] overflow-hidden ring-[1px] ring-white/60 shadow-[0_8px_32px_0_rgba(14,165,233,0.15)] mt-6 border border-blue-100/20">
+                <div className="p-8 border-b border-white/40 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 relative">
+                    <div className="absolute -top-20 -right-20 w-64 h-64 bg-gradient-to-bl from-blue-500/20 via-sky-500/10 to-transparent rounded-full blur-3xl pointer-events-none" />
+                    <div className="flex items-center gap-4 relative z-10">
+                        <div className="w-14 h-14 bg-gradient-to-br from-white/80 to-white/40 backdrop-blur-md rounded-2xl flex items-center justify-center ring-1 ring-white/80 shadow-[0_4px_15px_rgba(0,0,0,0.05)]">
+                            <Server className="w-7 h-7 text-sky-600" />
                         </div>
                         <div>
-                            <h2 className="text-xl font-black text-zinc-900 tracking-tight">Active Fleet Mapping</h2>
-                            <p className="text-zinc-500 text-xs font-medium">Assign machines to specific organizations</p>
+                            <h2 className="text-2xl font-black text-transparent bg-clip-text bg-gradient-to-br from-zinc-900 to-zinc-600 tracking-tight">Active Fleet Mapping</h2>
+                            <p className="text-zinc-500 text-sm font-bold mt-1 uppercase tracking-widest">Assign machines to specific organizations</p>
                         </div>
                     </div>
-                    <div className="px-4 py-2 bg-zinc-50 rounded-full border border-zinc-100 text-[10px] font-black text-zinc-500 uppercase tracking-widest">
+                    <div className="px-6 py-3 bg-white/80 backdrop-blur-md rounded-2xl ring-1 ring-white/80 text-[11px] font-black text-zinc-700 uppercase tracking-widest shadow-[0_8px_30px_rgba(0,0,0,0.08)] flex items-center gap-3 relative z-10 hover:scale-105 transition-transform">
+                        <div className="w-2 h-2 rounded-full bg-emerald-500 ring-4 ring-emerald-500/20 animate-pulse" />
                         {units.length} System(s) Detected
                     </div>
                 </div>
 
                 <div className="overflow-x-auto">
-                    <table className="w-full text-left">
+                    <table className="w-full text-left border-collapse">
                         <thead>
-                            <tr className="bg-zinc-50/50">
-                                <th className="px-8 py-4 text-[10px] font-black text-zinc-400 uppercase tracking-widest">Machine Identity</th>
-                                <th className="px-8 py-4 text-[10px] font-black text-zinc-400 uppercase tracking-widest text-center">Status</th>
-                                <th className="px-8 py-4 text-[10px] font-black text-zinc-400 uppercase tracking-widest">Last Activity</th>
-                                <th className="px-8 py-4 text-[10px] font-black text-zinc-400 uppercase tracking-widest">Org Assignment</th>
+                            <tr className="bg-white/40 backdrop-blur-sm border-b border-white/60">
+                                <th className="px-8 py-5 text-[10px] font-black text-zinc-500 uppercase tracking-[0.2em]">Machine Identity</th>
+                                <th className="px-8 py-5 text-[10px] font-black text-zinc-500 uppercase tracking-[0.2em] text-center">Status</th>
+                                <th className="px-8 py-5 text-[10px] font-black text-zinc-500 uppercase tracking-[0.2em]">Last Activity</th>
+                                <th className="px-8 py-5 text-[10px] font-black text-zinc-500 uppercase tracking-[0.2em]">Org Assignment</th>
                             </tr>
                         </thead>
-                        <tbody className="divide-y divide-zinc-100">
+                        <tbody className="divide-y divide-white/40">
                             {units.map(unit => (
-                                <tr key={unit.id} className="hover:bg-zinc-50/50 transition-colors">
+                                <tr key={unit.id} className="hover:bg-white/60 hover:shadow-[0_4px_20px_rgba(0,0,0,0.03)] transition-all duration-300 relative group">
                                     <td className="px-8 py-5">
                                         <div className="flex items-center gap-3">
                                             <div className="w-8 h-8 bg-zinc-900 rounded-lg flex items-center justify-center text-orange-500">
@@ -493,7 +507,7 @@ export function OrgManager() {
                                             <select
                                                 value={unit.org_id || ''}
                                                 onChange={(e) => handleUpdateUnitOrg(unit.id, e.target.value)}
-                                                className="bg-zinc-50 border-none ring-1 ring-zinc-200 rounded-xl px-4 py-2 text-xs font-bold text-zinc-900 focus:ring-2 focus:ring-orange-500/20"
+                                                className="bg-white/60 backdrop-blur-md border border-white/80 ring-1 ring-zinc-200/50 shadow-inner rounded-xl px-4 py-2 text-xs font-black text-zinc-900 focus:ring-4 focus:ring-sky-500/20 focus:border-sky-500 outline-none transition-all hover:bg-white/90 cursor-pointer"
                                             >
                                                 <option value="" disabled>Select Org</option>
                                                 {orgs.map(org => (
