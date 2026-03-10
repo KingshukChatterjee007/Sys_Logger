@@ -721,15 +721,39 @@ def create_org(current_user):
     
     if not org_id or not name:
         return jsonify({'error': 'Missing org_id or name'}), 400
-        
+
+    def slugify(text):
+        text = text.lower().strip()
+        text = re.sub(r'[^\w\s-]', '', text)
+        text = re.sub(r'[\s_-]+', '-', text)
+        text = re.sub(r'^-+|-+$', '', text)
+        return text
+
+    # The incoming org_id from the frontend "System Registry" form is actually being used as a desired slug
+    slug = slugify(org_id)
+    
     try:
         conn = get_db_connection()
-        cur = conn.cursor()
-        cur.execute("INSERT INTO organizations (org_id, name) VALUES (%s, %s)", (org_id, name))
+        cur = conn.cursor(cursor_factory=RealDictCursor)
+        
+        # Check if slug exists
+        cur.execute("SELECT 1 FROM organizations WHERE slug = %s", (slug,))
+        if cur.fetchone():
+            return jsonify({'error': f'Organization ID/Slug "{slug}" is already taken.'}), 409
+            
+        cur.execute(
+            "INSERT INTO organizations (name, slug) VALUES (%s, %s) RETURNING org_id", 
+            (name, slug)
+        )
+        new_org = cur.fetchone()
         conn.commit()
         cur.close()
         conn.close()
-        return jsonify({'message': f'Organization {org_id} created successfully'}), 201
+        return jsonify({
+            'message': f'Organization created successfully',
+            'org_id': new_org['org_id'],
+            'slug': slug
+        }), 201
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
