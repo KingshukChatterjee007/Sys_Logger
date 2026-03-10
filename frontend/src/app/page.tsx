@@ -47,8 +47,8 @@ export default function HomeDashboard() {
                 console.error("Error fetching pricing, applying fallback plans:", err);
                 setPlans([
                     { plan_id: 1, name: "Free", slug: "free", price_monthly: 0, node_limit: 1, features: ["1 Active Node", "Real-time Telemetry", "Basic Support"], is_active: true },
-                    { plan_id: 2, name: "Pro", slug: "pro", price_monthly: 49, node_limit: 100, features: ["100 Active Nodes", "Advanced Metrics", "Priority Support"], is_active: true },
-                    { plan_id: 3, name: "Business", slug: "business", price_monthly: 199, node_limit: 99999, features: ["Unlimited Nodes", "Global Fleet Control", "24/7 Support"], is_active: true }
+                    { plan_id: 2, name: "Pro", slug: "pro", price_monthly: 99, node_limit: 10, features: ["10 Active Nodes", "Advanced Metrics", "Priority Support"], is_active: true },
+                    { plan_id: 3, name: "Business", slug: "business", price_monthly: 199, node_limit: 50, features: ["50 Nodes", "Global Fleet Control", "24/7 Support"], is_active: true }
                 ]);
             })
 
@@ -61,8 +61,11 @@ export default function HomeDashboard() {
     }, [])
 
     const handlePayment = async (plan: PricingPlan) => {
-        if (plan.price_monthly === 0) {
-            window.location.href = '/login';
+        // Robust check for free plan
+        if (Number(plan.price_monthly) === 0) {
+            // If it's the free plan, we just redirect to login/register or fleet if already logged in
+            const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+            window.location.href = token ? '/fleet' : '/login';
             return;
         }
 

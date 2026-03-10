@@ -878,6 +878,11 @@ def create_payment_order(current_user):
             conn.close()
             return jsonify({'error': 'Invalid or inactive plan'}), 404
             
+        # 1.1 Check if plan is free
+        if float(plan['price_monthly']) <= 0:
+            conn.close()
+            return jsonify({'error': 'Free plans do not require payment'}), 400
+            
         # 2. Create Razorpay order
         amount_in_paise = int(plan['price_monthly'] * 100)
         order_data = {

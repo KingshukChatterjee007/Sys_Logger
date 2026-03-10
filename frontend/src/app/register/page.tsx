@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
-import { Activity, Lock, Mail, ChevronRight, AlertCircle, User, Briefcase, CheckCircle2 } from 'lucide-react';
+import { Activity, Lock, Mail, ChevronRight, AlertCircle, User, Briefcase, CheckCircle2, Eye, EyeOff } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 
@@ -14,6 +14,7 @@ export default function RegisterPage() {
     const [error, setError] = useState('');
     const [success, setSuccess] = useState(false);
     const [loading, setLoading] = useState(false);
+    const [showPassword, setShowPassword] = useState(false);
     const router = useRouter();
 
     const handleSubmit = async (e: React.FormEvent) => {
@@ -141,13 +142,20 @@ export default function RegisterPage() {
                             <div className="relative">
                                 <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
                                 <input
-                                    type="password"
+                                    type={showPassword ? "text" : "password"}
                                     value={password}
                                     onChange={(e) => setPassword(e.target.value)}
-                                    className="w-full bg-zinc-50 border-none ring-1 ring-zinc-200/80 rounded-2xl py-4 pl-12 pr-4 text-sm text-zinc-900 focus:ring-2 focus:ring-orange-500/20 transition-all font-medium"
+                                    className="w-full bg-zinc-50 border-none ring-1 ring-zinc-200/80 rounded-2xl py-4 pl-12 pr-12 text-sm text-zinc-900 focus:ring-2 focus:ring-orange-500/20 transition-all font-medium"
                                     placeholder="Password"
                                     required
                                 />
+                                <button
+                                    type="button"
+                                    onClick={() => setShowPassword(!showPassword)}
+                                    className="absolute right-4 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-600 transition-colors p-1"
+                                >
+                                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                                </button>
                             </div>
                         </div>
 
