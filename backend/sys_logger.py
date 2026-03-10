@@ -453,7 +453,7 @@ class UnitStore:
             cur.execute("""
                 SELECT s.*, o.name as org_display_name, o.slug as org_slug 
                 FROM systems s 
-                LEFT JOIN organizations o ON s.org_id = o.org_id 
+                LEFT JOIN organizations o ON s.org_id::varchar = o.org_id::varchar 
                 WHERE s.system_id = %s OR s.system_name = %s
             """, (unit_id, unit_id))
             row = cur.fetchone()
@@ -477,8 +477,8 @@ class UnitStore:
             cur.execute("""
                 SELECT s.*, o.name as org_display_name, o.slug as org_slug 
                 FROM systems s 
-                LEFT JOIN organizations o ON s.org_id = o.org_id 
-                WHERE s.org_id = %s AND (s.system_name = %s OR s.system_name = %s)
+                LEFT JOIN organizations o ON s.org_id::varchar = o.org_id::varchar 
+                WHERE s.org_id::varchar = %s::varchar AND (s.system_name = %s OR s.system_name = %s)
             """, (org_id, name, comp_id))
             row = cur.fetchone()
             cur.close()
@@ -556,7 +556,7 @@ class UnitStore:
             query = """
                 SELECT s.*, o.name as org_display_name, o.slug as org_slug 
                 FROM systems s 
-                LEFT JOIN organizations o ON s.org_id = o.org_id
+                LEFT JOIN organizations o ON s.org_id::varchar = o.org_id::varchar
             """
             params = []
             
@@ -565,7 +565,7 @@ class UnitStore:
                 org_id = user.get('org_id')
                 if not org_id:
                     return []
-                query += " WHERE s.org_id = %s"
+                query += " WHERE s.org_id::varchar = %s::varchar"
                 params.append(org_id)
                 
             cur.execute(query, params)
