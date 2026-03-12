@@ -1,0 +1,3 @@
+root level access way to messy how to register org without email and aall
+razorpay not showing on create account
+sync fork not working (check your github) ;)
