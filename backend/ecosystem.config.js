@@ -13,6 +13,7 @@ module.exports = {
         PYTHONUNBUFFERED: "1",
         PORT: "5010"
       },
+      windowsHide: true,
       error_file: "./backend_err.log",
       out_file: "./backend_out.log",
       log_date_format: "YYYY-MM-DD HH:mm:ss Z",

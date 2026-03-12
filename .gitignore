@@ -70,3 +70,13 @@ coverage/
 *.db
 
 unit_data/
+backend/create_admin.py
+backend/env.example
+backend/audit_schema.py
+backend/reset_db.py
+backend/migrate_idx.py
+backend/migrate_hostname.py
+backend/setup_db.py
+backend/check_db.py
+backend/check_systems_schema.py
+backend/sync_json_to_sql.py
