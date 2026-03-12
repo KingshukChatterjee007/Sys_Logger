@@ -119,7 +119,7 @@ export const UsageGraph: React.FC<UsageGraphProps> = ({
     const labels = filteredData.map(log => {
       const d = new Date(log.timestamp)
       if (isNaN(d.getTime())) return 'N/A'
-      return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })
+      return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true })
     })
 
     const getMetricColor = () => {

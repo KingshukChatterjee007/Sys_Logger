@@ -636,8 +636,7 @@ class UnitStore:
             sys_int_id = res[0]
 
             timestamp = usage_data.get('timestamp')
-            if timestamp and timestamp.endswith('Z'): timestamp = timestamp[:-1]
-            if not timestamp: timestamp = datetime.now()
+            if not timestamp: timestamp = datetime.utcnow()
             
             cpu = usage_data.get('cpu', usage_data.get('cpu_usage', 0))
             ram = usage_data.get('ram', usage_data.get('ram_usage', 0))

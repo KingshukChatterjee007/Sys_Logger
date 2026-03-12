@@ -468,7 +468,7 @@ export default function DashboardView({ orgId: propOrgId }: DashboardViewProps) 
                                     <div className="flex items-center gap-2 px-1 mb-2">
                                         <div className="p-1 px-2 bg-zinc-900 rounded-lg text-[9px] font-black text-white border border-zinc-800 uppercase tracking-widest shadow-sm">
                                             {orgUnits[0].org_name}
-                                            <span className="ml-1.5 opacity-40 font-bold border-l border-white/20 pl-1.5 text-orange-400">
+                                            <span className="ml-1.5 font-bold border-l border-white/20 pl-1.5 text-orange-400">
                                                 {orgUnits[0].org_slug}
                                             </span>
                                         </div>
@@ -510,11 +510,28 @@ export default function DashboardView({ orgId: propOrgId }: DashboardViewProps) 
                                                                 )}
                                                             </div>
                                                         </div>
-                                                        <div className={cn("w-2.5 h-2.5 rounded-full mt-2.5 shrink-0 shadow-sm relative",
-                                                            isOnline ? 'bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.8)]' :
-                                                                isPending ? 'bg-orange-400 animate-ping shadow-[0_0_10px_rgba(251,146,60,0.8)]' : 'bg-zinc-300'
-                                                        )}>
-                                                            {isOnline && <div className="absolute inset-0 rounded-full ring-2 ring-emerald-500/30 animate-ping" />}
+                                                        <div className="flex items-center gap-2 mt-2.5 shrink-0">
+                                                            <button
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    downloadInstaller(unit.comp_id || unit.name.split('/').pop() || '');
+                                                                }}
+                                                                className={cn(
+                                                                    "p-1.5 rounded-lg transition-all duration-300",
+                                                                    isSelected 
+                                                                        ? "bg-zinc-100/80 text-orange-600 hover:bg-orange-600 hover:text-white" 
+                                                                        : "bg-white/50 text-zinc-400 hover:text-orange-500 hover:bg-white"
+                                                                )}
+                                                                title="Download Client"
+                                                            >
+                                                                <Download size={14} />
+                                                            </button>
+                                                            <div className={cn("w-2.5 h-2.5 rounded-full shadow-sm relative",
+                                                                isOnline ? 'bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.8)]' :
+                                                                    isPending ? 'bg-orange-400 animate-ping shadow-[0_0_10px_rgba(251,146,60,0.8)]' : 'bg-zinc-300'
+                                                            )}>
+                                                                {isOnline && <div className="absolute inset-0 rounded-full ring-2 ring-emerald-500/30 animate-ping" />}
+                                                            </div>
                                                         </div>
                                                     </div>
 
