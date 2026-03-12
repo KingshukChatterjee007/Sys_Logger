@@ -26,7 +26,8 @@ export const UnitCard: React.FC<UnitCardProps> = ({ unit, onClick }) => {
     }
   }
 
-  const getTimeAgo = (timestamp: string) => {
+  const getTimeAgo = (timestamp?: string | null) => {
+    if (!timestamp) return 'Never'
     const now = new Date()
     const lastSeen = new Date(timestamp)
     const diffMs = now.getTime() - lastSeen.getTime()
