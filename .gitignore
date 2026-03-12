@@ -80,3 +80,8 @@ backend/setup_db.py
 backend/check_db.py
 backend/check_systems_schema.py
 backend/sync_json_to_sql.py
+
+# Auto-pull automation
+git_auto_pull.bat
+git_auto_pull.log
+register_auto_pull.ps1
