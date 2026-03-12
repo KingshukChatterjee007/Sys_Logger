@@ -196,8 +196,9 @@ export const UsageGraph: React.FC<UsageGraphProps> = ({
             const value = context.parsed.y
             if (value === null || value === undefined) return '➤ DATA UNAVAILABLE'
             const unit = (metric === 'cpu' || metric === 'ram' || metric === 'gpu') ? '%' :
-              (metric === 'temperature') ? '°C' : ' KB/s'
-            return `➤ ${value.toFixed(1)}${unit}`
+              (metric === 'temperature') ? '°C' : ' MB/s'
+            const precision = (metric === 'network_rx' || metric === 'network_tx') ? 3 : 1
+            return `➤ ${value.toFixed(precision)}${unit}`
           },
         },
       },
@@ -234,6 +235,7 @@ export const UsageGraph: React.FC<UsageGraphProps> = ({
           padding: 12,
           callback: (value: any) => {
             if (metric === 'cpu' || metric === 'ram' || metric === 'gpu') return `${value}%`
+            if (metric === 'network_rx' || metric === 'network_tx') return `${value} MB/s`
             return value
           }
         },

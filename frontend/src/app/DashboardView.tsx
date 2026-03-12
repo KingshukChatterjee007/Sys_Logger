@@ -316,7 +316,7 @@ export default function DashboardView({ orgId: propOrgId }: DashboardViewProps) 
         { id: 'cpu', title: 'Processing', label: 'CPU Load', value: (lastData?.cpu ?? lastData?.cpu_usage ?? 0).toFixed(1), unit: '%', icon: <Cpu className="w-5 h-5" />, color: 'orange' },
         { id: 'gpu', title: 'Graphics', label: 'GPU Compute', value: (lastData?.gpu ?? lastData?.gpu_load ?? 0).toFixed(1), unit: '%', icon: <Zap className="w-5 h-5" />, color: 'emerald' },
         { id: 'ram', title: 'Memory', label: 'RAM Util', value: (lastData?.ram ?? lastData?.ram_usage ?? 0).toFixed(1), unit: '%', icon: <HardDrive className="w-5 h-5" />, color: 'orange' },
-        { id: 'network_rx', title: 'Network', label: 'RX Rate', value: (lastData?.network_rx ?? 0).toFixed(1), unit: 'KB/s', icon: <Wifi className="w-5 h-5" />, color: 'orange' }
+        { id: 'network_rx', title: 'Network', label: 'RX Rate', value: (lastData?.network_rx ?? 0).toFixed(3), unit: 'MB/s', icon: <Wifi className="w-5 h-5" />, color: 'orange' }
     ], [lastData])
 
     const activeMetricData = currentMetrics.find(m => m.id === selectedMetric)

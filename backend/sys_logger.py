@@ -701,31 +701,6 @@ class UnitStore:
         except Exception as e:
             print(f"Error in UnitStore.get_usage: {e}")
             return []
-            rows.reverse()
-            
-            # Format dates to string if needed by frontend, or let JSON encoder handle it
-            # Frontend likely expects 'timestamp' string in specific format?
-            # Existing JSONL had 'timestamp': '2026-...'
-            # DB returns datetime object.
-            
-            cleaned_rows = []
-            for r in rows:
-                r['timestamp'] = r['timestamp'].isoformat()
-                # Ensure Decimals are floats for JSON serialization
-                if r.get('cpu') is not None: r['cpu'] = float(r['cpu'])
-                if r.get('ram') is not None: r['ram'] = float(r['ram'])
-                if r.get('gpu') is not None: r['gpu'] = float(r['gpu'])
-                if r.get('network_rx') is not None: r['network_rx'] = float(r['network_rx'])
-                if r.get('network_tx') is not None: r['network_tx'] = float(r['network_tx'])
-                cleaned_rows.append(r)
-                
-            cur.close()
-            conn.close()
-            return cleaned_rows
-            
-        except Exception as e:
-            print(f"Error reading usage from DB: {e}")
-            return []
 
 
 def sync_units_state(org_id=None):
@@ -1565,11 +1540,11 @@ def export_unit_data(unit_id):
         conn = get_db_connection()
         cur = conn.cursor(cursor_factory=RealDictCursor)
         
-        # 1. Resolve System ID
-        cur.execute("SELECT system_id FROM systems WHERE system_name = %s", (unit_id,))
+        # 1. Resolve System ID - unit_id from frontend is usually systems.system_id (int) as string
+        cur.execute("SELECT system_id FROM systems WHERE system_id::varchar = %s OR system_name = %s", (unit_id, unit_id))
         res = cur.fetchone()
         if not res:
-             return jsonify({'error': 'No data found for this unit'}), 404
+             return jsonify({'error': f'No data found for unit {unit_id}'}), 404
         sys_int_id = res['system_id']
 
         # 2. Check for custom date range
