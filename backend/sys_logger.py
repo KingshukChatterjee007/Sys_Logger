@@ -168,8 +168,8 @@ def register():
             counter += 1
             
         cur.execute(
-            "INSERT INTO organizations (name, slug, tier, node_limit) VALUES (%s, %s, %s, %s) RETURNING org_id",
-            (org_name, slug, tier, node_limit)
+            "INSERT INTO organizations (name, slug, tier, node_limit, contact_email) VALUES (%s, %s, %s, %s, %s) RETURNING org_id",
+            (org_name, slug, tier, node_limit, email)
         )
         org_id = cur.fetchone()['org_id']
         
@@ -214,13 +214,34 @@ def download_installer(current_user):
         cur.execute("SELECT COUNT(*) FROM systems WHERE org_id = %s", (org_id,))
         current_count = cur.fetchone()['count']
         
-        if current_user.get('role') != 'ROOT' and current_count >= org['node_limit']:
-            return jsonify({
-                'error': 'limit_reached',
-                'current_count': current_count,
-                'limit': org['node_limit'],
-                'message': f"Tier limit reached! Your tier allows {org['node_limit']} nodes. Upgrade to add more monitors."
-            }), 403
+        if current_user.get('role') != 'ROOT':
+            # 1a. Per-Organization Limit
+            if current_count >= org['node_limit']:
+                return jsonify({
+                    'error': 'limit_reached',
+                    'current_count': current_count,
+                    'limit': org['node_limit'],
+                    'message': f"Organization limit reached! Your tier allows {org['node_limit']} nodes. Upgrade to add more monitors."
+                }), 403
+            
+            # 1b. Global Free Tier Check (Prevent multi-org free node loophole)
+            if org['tier'].upper() == 'INDIVIDUAL' or org['tier'].upper() == 'FREE':
+                contact_email = org.get('contact_email') or current_user.get('email')
+                if contact_email:
+                    cur.execute("""
+                        SELECT COUNT(*) 
+                        FROM systems s
+                        JOIN organizations o ON s.org_id = o.org_id
+                        WHERE o.contact_email = %s AND o.tier IN ('FREE', 'INDIVIDUAL')
+                    """, (contact_email,))
+                    global_free_count = cur.fetchone()['count']
+                    
+                    if global_free_count >= 1:
+                        return jsonify({
+                            'error': 'limit_reached',
+                            'global_notice': True,
+                            'message': "Global free node limit reached! You already have a free node in another organization. Upgrade to Business or Pro to add more monitors."
+                        }), 403
 
         # 2. Package Installer
         # Create a temporary ZIP file
@@ -1020,17 +1041,18 @@ def create_org(current_user):
             conn.close()
             return jsonify({'error': f'Organization ID/Slug "{slug}" is already taken.'}), 409
             
+        # Move email/password extraction up so admin_email is available for the org INSERT
+        admin_email = data.get('email')
+        admin_password = data.get('password')
+        
         cur.execute(
-            "INSERT INTO organizations (name, slug, tier, node_limit) VALUES (%s, %s, %s, %s) RETURNING org_id", 
-            (name, slug, tier, node_limit)
+            "INSERT INTO organizations (name, slug, tier, node_limit, contact_email) VALUES (%s, %s, %s, %s, %s) RETURNING org_id", 
+            (name, slug, tier, node_limit, admin_email)
         )
         new_org = cur.fetchone()
         org_db_id = new_org['org_id']
 
         # 3. Create Initial Admin User (Optional)
-        admin_email = data.get('email')
-        admin_password = data.get('password')
-        
         if admin_email and admin_password:
             admin_username = admin_email.split('@')[0]
             # Check if user exists

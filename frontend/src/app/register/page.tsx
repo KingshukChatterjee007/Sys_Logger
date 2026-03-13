@@ -162,16 +162,14 @@ export default function RegisterPage() {
                         {/* Tier Info */}
                         <div className="px-4 py-3 bg-zinc-50 rounded-2xl border border-zinc-100 flex items-start gap-3 mt-4">
                             <div className="p-1.5 bg-white rounded-lg ring-1 ring-zinc-200">
-                                {orgType === 'Individual' ? <User className="w-3 h-3 text-orange-500" /> : <Briefcase className="w-3 h-3 text-emerald-500" />}
+                                <CheckCircle2 className="w-3 h-3 text-emerald-500" />
                             </div>
                             <div>
                                 <p className="text-[10px] font-black uppercase tracking-widest text-zinc-900">
-                                    {orgType === 'Individual' ? 'Individual Tier' : 'Business Tier'}
+                                    Free-Tier Initialization
                                 </p>
                                 <p className="text-[10px] text-zinc-500 font-medium">
-                                    {orgType === 'Individual' 
-                                        ? 'Limited to 1 monitoring node. Perfect for personal machines.' 
-                                        : 'Unlimited monitoring nodes. Scalable fleet management.'}
+                                    All new hubs start on the Free tier (1 node). Upgrade to Pro (5) or Business (10) anytime from your dashboard.
                                 </p>
                             </div>
                         </div>
