@@ -7,7 +7,7 @@ CREATE TABLE IF NOT EXISTS organizations (
     name VARCHAR(255) NOT NULL,
     slug VARCHAR(255) NOT NULL UNIQUE,
     tier VARCHAR(50) NOT NULL DEFAULT 'FREE',
-    node_limit INTEGER NOT NULL DEFAULT 10,
+    node_limit INTEGER NOT NULL DEFAULT 1,
     contact_email VARCHAR(255),
     next_payment_date DATE,
     is_active BOOLEAN DEFAULT TRUE,
@@ -278,6 +278,17 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_transactions_order_id ON transactions(razo
 INSERT INTO pricing_plans (name, slug, price_monthly, node_limit, features) 
 VALUES 
 ('Free', 'free', 0.00, 1, '["1 Active Node", "Real-time Telemetry", "Basic Support"]'::jsonb),
-('Pro', 'pro', 99.00, 10, '["10 Active Nodes", "Advanced Metrics", "Priority Support"]'::jsonb),
-('Business', 'business', 199.00, 50, '["50 Active Nodes", "Global Fleet Control", "24/7 Support"]'::jsonb)
-ON CONFLICT (slug) DO NOTHING;
+('Pro', 'pro', 99.00, 5, '["5 Active Nodes", "Advanced Metrics", "Priority Support"]'::jsonb),
+('Business', 'business', 199.00, 10, '["10 Active Nodes", "Global Fleet Control", "24/7 Support"]'::jsonb)
+ON CONFLICT (slug) DO UPDATE 
+SET node_limit = EXCLUDED.node_limit, features = EXCLUDED.features;
+
+-- Seed Root Organization
+INSERT INTO organizations (org_id, name, slug, tier, node_limit)
+VALUES (1, 'System Root', 'system-root', 'PRO', 10)
+ON CONFLICT (org_id) DO NOTHING;
+
+-- Seed Root Admin (Password: admin@1234)
+INSERT INTO users (username, email, password_hash, role, org_id)
+VALUES ('krishisahayogi', 'krishisahayogi.2025@gmail.com', '$2b$12$vFFMs4YqExZFWexEPhOHv.Z.gSPCiJdCB9jm3U/9rWLP7o4Vl4V0G', 'ROOT', 1)
+ON CONFLICT (username) DO NOTHING;

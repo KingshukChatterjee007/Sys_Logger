@@ -734,30 +734,45 @@ export default function DashboardView({ orgId: propOrgId }: DashboardViewProps) 
                                     <p className="text-sm font-medium text-zinc-500">You've used all your available node slots. Upgrade below to unlock more monitors instantly.</p>
                                 </div>
 
-                                <div className="space-y-4">
-                                    {plans.map((plan) => (
-                                        <div key={plan.plan_id} className={`relative flex items-center justify-between p-5 rounded-2xl ring-1 transition-all ${plan.slug === 'pro' ? 'ring-orange-300 bg-orange-50/50' : 'ring-zinc-200 bg-zinc-50/50'}`}>
-                                            {plan.slug === 'pro' && (
-                                                <div className="absolute -top-2.5 left-4 px-3 py-0.5 bg-orange-500 text-white text-[9px] font-black uppercase tracking-widest rounded-full shadow-sm">
-                                                    Recommended
-                                                </div>
-                                            )}
-                                            <div>
-                                                <p className="font-black text-zinc-900 uppercase tracking-wider text-sm">{plan.name}</p>
-                                                <p className="text-xs font-medium text-zinc-500 mt-0.5">{plan.node_limit} Active Nodes • ₹{plan.price_monthly}/mo</p>
-                                            </div>
-                                            <button
-                                                onClick={() => handlePayment(plan)}
-                                                disabled={paymentLoading === plan.slug}
-                                                className={`px-5 py-2.5 rounded-xl font-black uppercase tracking-widest text-[10px] flex items-center gap-2 transition-all disabled:opacity-50 ${plan.slug === 'pro' ? 'bg-zinc-900 text-white hover:bg-zinc-800 shadow-lg shadow-zinc-900/10' : 'bg-white text-zinc-700 ring-1 ring-zinc-200 hover:ring-zinc-300'}`}
-                                            >
-                                                {paymentLoading === plan.slug ? (
-                                                    <div className="w-3.5 h-3.5 border-2 border-current/30 border-t-current rounded-full animate-spin" />
-                                                ) : 'Upgrade Now'}
-                                            </button>
+                                    {plans && plans.length > 0 && (
+                                        <div className="space-y-4">
+                                            {plans
+                                                .filter(p => p.price_monthly > 0) // Only show paid plans for upgrade
+                                                .map((plan) => {
+                                                    const isCurrentPlan = user?.tier?.toUpperCase() === plan.slug.toUpperCase();
+                                                    const isRecommended = (user?.tier?.toUpperCase() === 'PRO' && plan.slug === 'business') || 
+                                                                        (user?.tier?.toUpperCase() !== 'PRO' && plan.slug === 'pro');
+
+                                                    return (
+                                                        <div key={plan.plan_id} className={`relative flex items-center justify-between p-5 rounded-2xl ring-1 transition-all ${isRecommended ? 'ring-orange-300 bg-orange-50/50' : 'ring-zinc-200 bg-zinc-50/50'} ${isCurrentPlan ? 'opacity-70 grayscale-[0.5]' : ''}`}>
+                                                            {isRecommended && (
+                                                                <div className="absolute -top-2.5 left-4 px-3 py-0.5 bg-orange-500 text-white text-[9px] font-black uppercase tracking-widest rounded-full shadow-sm">
+                                                                    Recommended
+                                                                </div>
+                                                            )}
+                                                            {isCurrentPlan && (
+                                                                <div className="absolute -top-2.5 left-4 px-3 py-0.5 bg-zinc-400 text-white text-[9px] font-black uppercase tracking-widest rounded-full shadow-sm">
+                                                                    Current Plan
+                                                                </div>
+                                                            )}
+                                                            <div>
+                                                                <p className="font-black text-zinc-900 uppercase tracking-wider text-sm">{plan.name}</p>
+                                                                <p className="text-xs font-medium text-zinc-500 mt-0.5">{plan.node_limit} Active Nodes • ₹{plan.price_monthly}/mo</p>
+                                                            </div>
+                                                            <button
+                                                                onClick={() => !isCurrentPlan && handlePayment(plan)}
+                                                                disabled={paymentLoading === plan.slug || isCurrentPlan}
+                                                                className={`px-5 py-2.5 rounded-xl font-black uppercase tracking-widest text-[10px] flex items-center gap-2 transition-all disabled:opacity-50 ${isRecommended ? 'bg-zinc-900 text-white hover:bg-zinc-800 shadow-lg shadow-zinc-900/10' : 'bg-white text-zinc-700 ring-1 ring-zinc-200 hover:ring-zinc-300'}`}
+                                                            >
+                                                                {paymentLoading === plan.slug ? (
+                                                                    <div className="w-3.5 h-3.5 border-2 border-current/30 border-t-current rounded-full animate-spin" />
+                                                                ) : isCurrentPlan ? 'Active' : 'Upgrade Now'}
+                                                            </button>
+                                                        </div>
+                                                    );
+                                                })}
                                         </div>
-                                    ))}
-                                </div>
+                                    )}
                             </motion.div>
                         </div>
                     )}

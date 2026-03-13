@@ -214,7 +214,7 @@ def download_installer(current_user):
         cur.execute("SELECT COUNT(*) FROM systems WHERE org_id = %s", (org_id,))
         current_count = cur.fetchone()['count']
         
-        if current_count >= org['node_limit']:
+        if current_user.get('role') != 'ROOT' and current_count >= org['node_limit']:
             return jsonify({
                 'error': 'limit_reached',
                 'current_count': current_count,
@@ -294,7 +294,12 @@ def login():
     
     conn = get_db_connection()
     cur = conn.cursor(cursor_factory=RealDictCursor)
-    cur.execute("SELECT * FROM users WHERE email = %s", (auth.get('email'),))
+    cur.execute("""
+        SELECT u.*, o.tier 
+        FROM users u 
+        JOIN organizations o ON u.org_id = o.org_id 
+        WHERE u.email = %s
+    """, (auth.get('email'),))
     user = cur.fetchone()
     cur.close()
     conn.close()
@@ -308,6 +313,7 @@ def login():
             'email': user['email'],
             'role': user['role'],
             'org_id': user['org_id'],
+            'tier': user['tier'],
             'exp': datetime.utcnow() + timedelta(hours=24)
         }, app.config['SECRET_KEY'], algorithm="HS256")
         
@@ -316,7 +322,8 @@ def login():
             'user': {
                 'email': user['email'],
                 'role': user['role'],
-                'org_id': user['org_id']
+                'org_id': user['org_id'],
+                'tier': user['tier']
             }
         })
         
