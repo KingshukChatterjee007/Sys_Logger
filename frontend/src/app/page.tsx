@@ -50,8 +50,8 @@ export default function HomeDashboard() {
             .catch(err => {
                 console.error("Error fetching pricing, applying fallback plans:", err);
                 setPlans([
-                    { plan_id: 2, name: "Pro", slug: "pro", price_monthly: 99, node_limit: 10, features: ["10 Active Nodes", "Advanced Metrics", "Priority Support"], is_active: true },
-                    { plan_id: 3, name: "Business", slug: "business", price_monthly: 199, node_limit: 50, features: ["50 Nodes", "Global Fleet Control", "24/7 Support"], is_active: true }
+                    { plan_id: 2, name: "Pro", slug: "pro", price_monthly: 99, node_limit: 5, features: ["5 Active Nodes", "Advanced Metrics", "Priority Support"], is_active: true },
+                    { plan_id: 3, name: "Business", slug: "business", price_monthly: 199, node_limit: 10, features: ["10 Nodes", "Global Fleet Control", "24/7 Support"], is_active: true }
                 ]);
             })
 

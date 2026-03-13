@@ -500,20 +500,19 @@ export function OrgManager() {
                                     </td>
                                     <td className="px-8 py-5 text-right">
                                         <div className="flex items-center gap-3 justify-end">
-                                            <span className="px-2 py-1 bg-zinc-50 text-zinc-500 rounded-lg text-[10px] font-black tracking-widest uppercase ring-1 ring-zinc-100">
-                                                {unit.org_id || 'UNASSIGNED'}
-                                            </span>
-                                            <ArrowRight className="w-3 h-3 text-zinc-300" />
-                                            <select
-                                                value={unit.org_id || ''}
-                                                onChange={(e) => handleUpdateUnitOrg(unit.id, e.target.value)}
-                                                className="bg-white/60 backdrop-blur-md border border-white/80 ring-1 ring-zinc-200/50 shadow-inner rounded-xl px-4 py-2 text-xs font-black text-zinc-900 focus:ring-4 focus:ring-sky-500/20 focus:border-sky-500 outline-none transition-all hover:bg-white/90 cursor-pointer"
-                                            >
-                                                <option value="" disabled>Select Org</option>
-                                                {orgs.map(org => (
-                                                    <option key={org.org_id} value={org.org_id}>{org.slug} - {org.name}</option>
-                                                ))}
-                                            </select>
+                                            {(() => {
+                                                const assignedOrg = orgs.find(o => String(o.org_id) === String(unit.org_id));
+                                                return (
+                                                    <div className="flex flex-col items-end">
+                                                        <span className="text-[11px] font-black text-zinc-900 uppercase tracking-wider">
+                                                            {assignedOrg ? assignedOrg.name : 'Unknown Org'}
+                                                        </span>
+                                                        <span className="text-[10px] font-bold text-zinc-400 mt-0.5">
+                                                            ID: {unit.org_id || 'UNASSIGNED'}
+                                                        </span>
+                                                    </div>
+                                                );
+                                            })()}
                                         </div>
                                     </td>
                                 </tr>
