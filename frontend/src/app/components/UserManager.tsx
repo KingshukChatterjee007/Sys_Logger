@@ -244,7 +244,7 @@ export function UserManager() {
                     <div className="text-[10px] font-bold text-zinc-300 uppercase tracking-widest">{users.length} total</div>
                 </div>
                 <div className="flex flex-col gap-3">
-                    {users.slice(0, showAllUsers ? undefined : 5).map(u => (
+                    {users.slice(0, showAllUsers ? undefined : 2).map(u => (
                         <div key={u.user_id} className="relative bg-white/60 backdrop-blur-md rounded-2xl p-3.5 ring-1 ring-blue-200/50 shadow-sm hover:shadow-md hover:bg-white/90 hover:ring-blue-300 transition-all duration-300 group overflow-hidden flex items-center justify-between gap-4">
                             <div className="absolute -left-10 w-20 h-full bg-blue-400/5 blur-xl group-hover:bg-blue-400/10 transition-all pointer-events-none" />
                             
@@ -275,13 +275,13 @@ export function UserManager() {
                     ))}
                 </div>
 
-                {users.length > 3 && (
+                {users.length > 2 && (
                     <div className="mt-6 flex justify-center">
                         <button 
                             onClick={() => setShowAllUsers(!showAllUsers)}
                             className="px-6 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest text-zinc-500 hover:text-blue-600 hover:bg-blue-50 ring-1 ring-zinc-200 hover:ring-blue-200 transition-all active:scale-95"
                         >
-                            {showAllUsers ? 'Show Less' : `Show All (${users.length})`}
+                            {showAllUsers ? 'Show Less' : `Show More (${users.length - 2} more)`}
                         </button>
                     </div>
                 )}

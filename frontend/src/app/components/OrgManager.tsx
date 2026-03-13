@@ -428,7 +428,7 @@ export function OrgManager() {
                         <div className="text-[10px] font-bold text-zinc-300 uppercase tracking-widest">{orgs.length} total</div>
                     </div>
                     <div className="flex flex-col gap-3">
-                        {orgs.slice(0, showAllOrgs ? undefined : 5).map(org => (
+                        {orgs.slice(0, showAllOrgs ? undefined : 2).map(org => (
                             <div key={org.org_id} className="relative bg-white/60 backdrop-blur-md rounded-2xl p-3.5 ring-1 ring-orange-200/50 shadow-sm hover:shadow-md hover:bg-white/90 hover:ring-orange-300 transition-all duration-300 group overflow-hidden flex items-center justify-between">
                                 <div className="absolute -left-10 w-20 h-full bg-orange-400/5 blur-xl group-hover:bg-orange-400/10 transition-all pointer-events-none" />
                                 
@@ -453,13 +453,13 @@ export function OrgManager() {
                         ))}
                     </div>
 
-                    {orgs.length > 3 && (
+                    {orgs.length > 2 && (
                         <div className="mt-6 flex justify-center">
                             <button 
                                 onClick={() => setShowAllOrgs(!showAllOrgs)}
                                 className="px-6 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest text-zinc-500 hover:text-orange-600 hover:bg-orange-50 ring-1 ring-zinc-200 hover:ring-orange-200 transition-all active:scale-95"
                             >
-                                {showAllOrgs ? 'Show Less' : `Show All (${orgs.length})`}
+                                {showAllOrgs ? 'Show Less' : `Show More (${orgs.length - 2} more)`}
                             </button>
                         </div>
                     )}
