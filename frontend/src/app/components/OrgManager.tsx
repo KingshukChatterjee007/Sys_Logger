@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Building2, Plus, ArrowRight, Server, Shield, Globe, Check, AlertCircle, Activity } from 'lucide-react';
+import { Building2, Plus, ArrowRight, Server, Shield, Globe, Check, AlertCircle, Activity, Eye, EyeOff } from 'lucide-react';
 import { apiFetch } from './hooks/apiUtils';
 import { UserManager } from './UserManager';
 import { clsx, type ClassValue } from 'clsx';
@@ -56,6 +56,7 @@ export function OrgManager() {
     const [plans, setPlans] = useState<PricingPlan[]>([]);
     const [editingPlan, setEditingPlan] = useState<PricingPlan | null>(null);
     const [updateLoading, setUpdateLoading] = useState(false);
+    const [showAdminPassword, setShowAdminPassword] = useState(false);
 
     const fetchData = async () => {
         setLoading(true);
@@ -233,14 +234,23 @@ export function OrgManager() {
                             className="bg-zinc-50/50 border border-zinc-200/50 rounded-2xl p-4 text-sm font-bold text-zinc-900 focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
                             required
                         />
-                        <input
-                            type="password"
-                            placeholder="Admin Password"
-                            value={adminPassword}
-                            onChange={e => setAdminPassword(e.target.value)}
-                            className="bg-zinc-50/50 border border-zinc-200/50 rounded-2xl p-4 text-sm font-bold text-zinc-900 focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
-                            required
-                        />
+                        <div className="relative">
+                            <input
+                                type={showAdminPassword ? "text" : "password"}
+                                placeholder="Admin Password"
+                                value={adminPassword}
+                                onChange={e => setAdminPassword(e.target.value)}
+                                className="w-full bg-zinc-50/50 border border-zinc-200/50 rounded-2xl p-4 pr-12 text-sm font-bold text-zinc-900 focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+                                required
+                            />
+                            <button
+                                type="button"
+                                onClick={() => setShowAdminPassword(!showAdminPassword)}
+                                className="absolute right-4 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-600 transition-colors p-1"
+                            >
+                                {showAdminPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                            </button>
+                        </div>
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                         <select

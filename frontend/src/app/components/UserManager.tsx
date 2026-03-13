@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { UserPlus, Mail, Key, Shield, Building, AlertCircle } from 'lucide-react';
+import { UserPlus, Mail, Key, Shield, Building, AlertCircle, Eye, EyeOff } from 'lucide-react';
 import { apiFetch } from './hooks/apiUtils';
 
 interface Org {
@@ -34,6 +34,7 @@ export function UserManager() {
     const [createLoading, setCreateLoading] = useState(false);
     const [error, setError] = useState('');
     const [success, setSuccess] = useState('');
+    const [showPassword, setShowPassword] = useState(false);
 
     const fetchData = async () => {
         try {
@@ -47,7 +48,7 @@ export function UserManager() {
                 const data = await orgsResp.json();
                 setOrgs(data);
                 if (data.length > 0 && !orgId) {
-                    const rootOrg = data.find((o: any) => o.slug === 'root');
+                    const rootOrg = data.find((o: any) => o.slug === 'system-root');
                     setOrgId(rootOrg ? rootOrg.org_id.toString() : data[0].org_id.toString());
                 }
             }
@@ -151,14 +152,21 @@ export function UserManager() {
                     <label className="text-[10px] font-black text-zinc-400 uppercase tracking-widest pl-1">Password</label>
                     <div className="relative">
                         <input
-                            type="password"
+                            type={showPassword ? "text" : "password"}
                             placeholder="••••••••"
                             value={password}
                             onChange={e => setPassword(e.target.value)}
-                            className="w-full bg-white/50 backdrop-blur-md border border-blue-200/50 shadow-inner rounded-2xl p-4 pl-12 text-sm font-bold text-zinc-900 focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500 transition-all hover:bg-white/80"
+                            className="w-full bg-white/50 backdrop-blur-md border border-blue-200/50 shadow-inner rounded-2xl p-4 pl-12 pr-12 text-sm font-bold text-zinc-900 focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500 transition-all hover:bg-white/80"
                             required
                         />
                         <Key className="w-4 h-4 text-zinc-400 absolute left-4 top-1/2 -translate-y-1/2" />
+                        <button
+                            type="button"
+                            onClick={() => setShowPassword(!showPassword)}
+                            className="absolute right-4 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-600 transition-colors p-1"
+                        >
+                            {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                        </button>
                     </div>
                 </div>
 

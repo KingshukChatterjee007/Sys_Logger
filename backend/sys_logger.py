@@ -125,7 +125,7 @@ elif USE_REDIS and not redis:
 @app.route('/api/auth/register', methods=['POST'])
 def register():
     data = request.get_json()
-    email = data.get('email')
+    email = data.get('email', '').lower()
     password = data.get('password')
     org_name = data.get('org_name')
     org_type = data.get('org_type') # 'Individual' or 'Business'
@@ -211,7 +211,8 @@ def download_installer(current_user):
         if not org:
             return jsonify({'message': 'Organization not found!'}), 404
             
-        cur.execute("SELECT COUNT(*) FROM systems WHERE org_id = %s", (org_id,))
+        # Use ::text cast because org_id is VARCHAR in the systems table
+        cur.execute("SELECT COUNT(*) FROM systems WHERE org_id::text = %s::text", (str(org_id),))
         current_count = cur.fetchone()['count']
         
         if current_user.get('role') != 'ROOT':
@@ -231,7 +232,7 @@ def download_installer(current_user):
                     cur.execute("""
                         SELECT COUNT(*) 
                         FROM systems s
-                        JOIN organizations o ON s.org_id = o.org_id
+                        JOIN organizations o ON s.org_id::text = o.org_id::text
                         WHERE o.contact_email = %s AND o.tier IN ('FREE', 'INDIVIDUAL')
                     """, (contact_email,))
                     global_free_count = cur.fetchone()['count']
@@ -320,7 +321,7 @@ def login():
         FROM users u 
         JOIN organizations o ON u.org_id = o.org_id 
         WHERE u.email = %s
-    """, (auth.get('email'),))
+    """, (auth.get('email', '').lower(),))
     user = cur.fetchone()
     cur.close()
     conn.close()
@@ -398,7 +399,7 @@ def create_user(current_user):
         
     data = request.get_json()
     username = data.get('username')
-    email = data.get('email')
+    email = data.get('email', '').lower()
     password = data.get('password')
     role = data.get('role', 'USER')
     
@@ -1042,7 +1043,7 @@ def create_org(current_user):
             return jsonify({'error': f'Organization ID/Slug "{slug}" is already taken.'}), 409
             
         # Move email/password extraction up so admin_email is available for the org INSERT
-        admin_email = data.get('email')
+        admin_email = data.get('email', '').lower()
         admin_password = data.get('password')
         
         cur.execute(
