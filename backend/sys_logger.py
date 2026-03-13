@@ -205,8 +205,8 @@ def download_installer(current_user):
     cur = conn.cursor(cursor_factory=RealDictCursor)
     
     try:
-        # 1. Check Tier Limits
-        cur.execute("SELECT node_limit FROM organizations WHERE org_id = %s", (org_id,))
+        # 1. Check Tier Limits - now including tier and contact_email to avoid KeyError
+        cur.execute("SELECT node_limit, tier, contact_email FROM organizations WHERE org_id = %s", (org_id,))
         org = cur.fetchone()
         if not org:
             return jsonify({'message': 'Organization not found!'}), 404
