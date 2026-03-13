@@ -50,6 +50,8 @@ export function OrgManager() {
     const [createLoading, setCreateLoading] = useState(false);
     const [error, setError] = useState('');
     const [success, setSuccess] = useState('');
+    const [adminEmail, setAdminEmail] = useState('');
+    const [adminPassword, setAdminPassword] = useState('');
     const [showAllOrgs, setShowAllOrgs] = useState(false);
     const [plans, setPlans] = useState<PricingPlan[]>([]);
     const [editingPlan, setEditingPlan] = useState<PricingPlan | null>(null);
@@ -98,7 +100,9 @@ export function OrgManager() {
                 body: JSON.stringify({ 
                     org_id: newOrgId, 
                     name: newOrgName,
-                    tier: newOrgTier
+                    tier: newOrgTier,
+                    email: adminEmail,
+                    password: adminPassword
                 })
             });
             
@@ -115,7 +119,9 @@ export function OrgManager() {
 
             setNewOrgId('');
             setNewOrgName('');
-            setSuccess(`Organization "${newOrgName}" registered successfully!`);
+            setAdminEmail('');
+            setAdminPassword('');
+            setSuccess(`Organization "${newOrgName}" registered successfully with Admin Email: ${adminEmail}`);
             await fetchData();
         } catch (err: any) {
             console.error('Org creation error:', err);
@@ -201,41 +207,63 @@ export function OrgManager() {
                     </div>
                 </div>
 
-                <form onSubmit={handleCreateOrg} className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <input
-                        placeholder="ORG_ID (e.g. NIELIT)"
-                        value={newOrgId}
-                        onChange={e => setNewOrgId(e.target.value.toUpperCase())}
-                        className="bg-white/50 backdrop-blur-md border border-orange-200/50 shadow-inner rounded-2xl p-4 text-sm font-bold text-zinc-900 focus:ring-4 focus:ring-orange-500/20 focus:border-orange-500 transition-all hover:bg-white/80"
-                        required
-                    />
-                    <input
-                        placeholder="Organization Name"
-                        value={newOrgName}
-                        onChange={e => setNewOrgName(e.target.value)}
-                        className="bg-white/50 backdrop-blur-md border border-orange-200/50 shadow-inner rounded-2xl p-4 text-sm font-bold text-zinc-900 focus:ring-4 focus:ring-orange-500/20 focus:border-orange-500 transition-all hover:bg-white/80"
-                        required
-                    />
-                    <select
-                        value={newOrgTier}
-                        onChange={e => setNewOrgTier(e.target.value)}
-                        className="bg-white/50 backdrop-blur-md border border-orange-200/50 shadow-inner rounded-2xl p-4 text-sm font-bold text-zinc-900 focus:ring-4 focus:ring-orange-500/20 focus:border-orange-500 transition-all hover:bg-white/80"
-                        required
-                    >
-                        {plans.map(plan => (
-                             <option key={plan.plan_id} value={plan.slug.toUpperCase()}>
-                                {plan.name} Tier ({plan.node_limit === 99999 ? 'Unlimited' : `${plan.node_limit} Nodes`})
-                             </option>
-                        ))}
-                    </select>
-                    <button
-                        type="submit"
-                        disabled={createLoading}
-                        className="bg-gradient-to-r from-orange-500 to-amber-500 text-white rounded-2xl p-4 font-black uppercase tracking-widest text-[11px] flex items-center justify-center gap-2 shadow-[0_0_20px_rgba(249,115,22,0.4)] hover:shadow-[0_0_30px_rgba(249,115,22,0.6)] hover:scale-[1.02] active:scale-95 transition-all duration-300 disabled:opacity-50 disabled:hover:scale-100 disabled:hover:shadow-none"
-                    >
-                        <Plus className="w-5 h-5" />
-                        {createLoading ? 'Executing...' : 'Register Organization'}
-                    </button>
+                <form onSubmit={handleCreateOrg} className="space-y-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <input
+                            placeholder="ORG_ID (e.g. NIELIT)"
+                            value={newOrgId}
+                            onChange={e => setNewOrgId(e.target.value.toUpperCase())}
+                            className="bg-white/50 backdrop-blur-md border border-orange-200/50 shadow-inner rounded-2xl p-4 text-sm font-bold text-zinc-900 focus:ring-4 focus:ring-orange-500/20 focus:border-orange-500 transition-all hover:bg-white/80"
+                            required
+                        />
+                        <input
+                            placeholder="Organization Name"
+                            value={newOrgName}
+                            onChange={e => setNewOrgName(e.target.value)}
+                            className="bg-white/50 backdrop-blur-md border border-orange-200/50 shadow-inner rounded-2xl p-4 text-sm font-bold text-zinc-900 focus:ring-4 focus:ring-orange-500/20 focus:border-orange-500 transition-all hover:bg-white/80"
+                            required
+                        />
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <input
+                            type="email"
+                            placeholder="Admin Email (Initial Owner)"
+                            value={adminEmail}
+                            onChange={e => setAdminEmail(e.target.value)}
+                            className="bg-zinc-50/50 border border-zinc-200/50 rounded-2xl p-4 text-sm font-bold text-zinc-900 focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+                            required
+                        />
+                        <input
+                            type="password"
+                            placeholder="Admin Password"
+                            value={adminPassword}
+                            onChange={e => setAdminPassword(e.target.value)}
+                            className="bg-zinc-50/50 border border-zinc-200/50 rounded-2xl p-4 text-sm font-bold text-zinc-900 focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+                            required
+                        />
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <select
+                            value={newOrgTier}
+                            onChange={e => setNewOrgTier(e.target.value)}
+                            className="md:col-span-2 bg-white/50 backdrop-blur-md border border-orange-200/50 shadow-inner rounded-2xl p-4 text-sm font-bold text-zinc-900 focus:ring-4 focus:ring-orange-500/20 focus:border-orange-500 transition-all hover:bg-white/80"
+                            required
+                        >
+                            {plans.map(plan => (
+                                <option key={plan.plan_id} value={plan.slug.toUpperCase()}>
+                                    {plan.name} Tier ({plan.node_limit === 99999 ? 'Unlimited' : `${plan.node_limit} Nodes`})
+                                </option>
+                            ))}
+                        </select>
+                        <button
+                            type="submit"
+                            disabled={createLoading}
+                            className="bg-gradient-to-r from-orange-500 to-amber-500 text-white rounded-2xl p-4 font-black uppercase tracking-widest text-[11px] flex items-center justify-center gap-2 shadow-[0_0_20px_rgba(249,115,22,0.4)] hover:shadow-[0_0_30px_rgba(249,115,22,0.6)] hover:scale-[1.02] active:scale-95 transition-all duration-300 disabled:opacity-50 disabled:hover:scale-100 disabled:hover:shadow-none"
+                        >
+                            <Plus className="w-5 h-5" />
+                            {createLoading ? 'Executing...' : 'Register Organization'}
+                        </button>
+                    </div>
                 </form>
                 {error && <div className="mt-4 text-red-500 text-[10px] font-black uppercase flex items-center gap-2 bg-red-50 p-3 rounded-xl ring-1 ring-red-100">
                     <AlertCircle className="w-4 h-4" /> {error}

@@ -1018,6 +1018,27 @@ def create_org(current_user):
             (name, slug, tier, node_limit)
         )
         new_org = cur.fetchone()
+        org_db_id = new_org['org_id']
+
+        # 3. Create Initial Admin User (Optional)
+        admin_email = data.get('email')
+        admin_password = data.get('password')
+        
+        if admin_email and admin_password:
+            admin_username = admin_email.split('@')[0]
+            # Check if user exists
+            cur.execute("SELECT 1 FROM users WHERE email = %s OR username = %s", (admin_email, admin_username))
+            if cur.fetchone():
+                conn.rollback()
+                conn.close()
+                return jsonify({'error': f'Admin user with email/username "{admin_email}" already exists.'}), 409
+                
+            password_hash = bcrypt.hashpw(admin_password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+            cur.execute(
+                "INSERT INTO users (username, email, password_hash, role, org_id) VALUES (%s, %s, %s, %s, %s)",
+                (admin_username, admin_email, password_hash, 'ADMIN', org_db_id)
+            )
+
         conn.commit()
         cur.close()
         conn.close()
