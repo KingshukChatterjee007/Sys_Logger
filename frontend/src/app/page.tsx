@@ -3,7 +3,8 @@
 import React, { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
 import Link from 'next/link'
-import { Activity, Globe, ChevronRight } from 'lucide-react'
+import { Activity, Globe, ChevronRight, Cpu, Layers, Zap, Network, ShieldCheck, LayoutDashboard } from 'lucide-react'
+import MockFleetGraphs from './components/MockFleetGraphs'
 
 interface PricingPlan {
     plan_id: number;
@@ -249,6 +250,138 @@ export default function HomeDashboard() {
                                 <div className="absolute inset-0 bg-gradient-to-r from-orange-500/20 to-emerald-500/20 translate-x-[-100%] group-hover:translate-x-0 transition-transform duration-500 ease-in-out" />
                             </button>
                         </Link>
+                    </motion.div>
+                </div>
+
+                {/* Metric Showcase Section */}
+                <div className="mt-48 max-w-7xl mx-auto px-4 w-full relative">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                        {[
+                            { 
+                                icon: <Cpu className="w-6 h-6" />, 
+                                title: "CPU Intelligence", 
+                                desc: "Track per-core loads, thermal metrics, and process overhead in real-time.",
+                                color: "text-orange-500",
+                                bg: "bg-orange-50"
+                            },
+                            { 
+                                icon: <Layers className="w-6 h-6" />, 
+                                title: "Memory Dynamics", 
+                                desc: "Visualize RAM pooling, swap usage, and leak detection across units.",
+                                color: "text-emerald-500",
+                                bg: "bg-emerald-50"
+                            },
+                            { 
+                                icon: <Zap className="w-6 h-6" />, 
+                                title: "GPU Acceleration", 
+                                desc: "Full NVIDIA/CUDA workload monitoring for compute-heavy node clusters.",
+                                color: "text-blue-500",
+                                bg: "bg-blue-50"
+                            },
+                            { 
+                                icon: <Network className="w-6 h-6" />, 
+                                title: "Network Flux", 
+                                desc: "High-precision bandwidth analysis and packet-loss tracking for remote nodes.",
+                                color: "text-purple-500",
+                                bg: "bg-purple-50"
+                            }
+                        ].map((metric, i) => (
+                            <motion.div
+                                key={i}
+                                initial={{ opacity: 0, y: 30 }}
+                                whileInView={{ opacity: 1, y: 0 }}
+                                viewport={{ once: true }}
+                                transition={{ delay: i * 0.1, duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
+                                className="group p-8 rounded-[2.5rem] bg-white ring-1 ring-zinc-200 shadow-sm hover:shadow-xl hover:ring-zinc-300 transition-all duration-500"
+                            >
+                                <div className={`w-14 h-14 rounded-2xl ${metric.bg} flex items-center justify-center ${metric.color} mb-6 group-hover:scale-110 transition-transform`}>
+                                    {metric.icon}
+                                </div>
+                                <h3 className="text-lg font-black text-zinc-900 uppercase tracking-widest mb-3">{metric.title}</h3>
+                                <p className="text-zinc-500 font-medium text-sm leading-relaxed">{metric.desc}</p>
+                            </motion.div>
+                        ))}
+                    </div>
+                </div>
+
+                {/* Architecture Highlights */}
+                <div className="mt-48 max-w-7xl mx-auto px-4 w-full text-left">
+                    <div className="flex flex-col lg:flex-row gap-12 lg:gap-24 items-center">
+                        <div className="flex-1 lg:max-w-md">
+                            <motion.div
+                                initial={{ opacity: 0, x: -30 }}
+                                whileInView={{ opacity: 1, x: 0 }}
+                                viewport={{ once: true }}
+                                className="space-y-8"
+                            >
+                                <div className="space-y-4">
+                                    <span className="text-[10px] font-black uppercase tracking-[0.3em] text-orange-500">Fleet Architecture</span>
+                                    <h2 className="text-4xl md:text-6xl font-black tracking-tighter text-zinc-900 leading-none">
+                                        Scale from One <br /> to <span className="text-zinc-400">Thousands.</span>
+                                    </h2>
+                                </div>
+                                
+                                <div className="space-y-6">
+                                    {[
+                                        { title: "One-Click Deployment", desc: "Native installers for Windows and Linux ensure your fleet is online in seconds.", icon: <ChevronRight className="w-4 h-4" /> },
+                                        { title: "Real-Time Sync", desc: "Ultra-low latency telemetry powered by WebSocket synchronization.", icon: <ChevronRight className="w-4 h-4" /> },
+                                        { title: "Multi-Tenant Isolation", desc: "Securely manage multiple organizations and departments from a single hub.", icon: <ChevronRight className="w-4 h-4" /> }
+                                    ].map((feature, i) => (
+                                        <div key={i} className="flex gap-4 group">
+                                            <div className="mt-1 w-5 h-5 rounded-full bg-zinc-900 flex items-center justify-center text-white shrink-0 group-hover:bg-orange-500 transition-colors">
+                                                {feature.icon}
+                                            </div>
+                                            <div className="space-y-1">
+                                                <h4 className="font-bold text-zinc-900 uppercase tracking-widest text-xs">{feature.title}</h4>
+                                                <p className="text-zinc-500 text-sm leading-relaxed">{feature.desc}</p>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </motion.div>
+                        </div>
+                        
+                        <div className="flex-[1.5] w-full relative">
+                            <motion.div
+                                initial={{ opacity: 0, scale: 0.9, rotate: -2 }}
+                                whileInView={{ opacity: 1, scale: 1, rotate: 0 }}
+                                viewport={{ once: true }}
+                                className="relative p-3 bg-white ring-1 ring-zinc-200 rounded-[3rem] shadow-2xl overflow-hidden aspect-video flex items-center justify-center scale-105"
+                            >
+                                <div className="absolute inset-0 bg-gradient-to-br from-orange-500/5 to-emerald-500/5" />
+                                <MockFleetGraphs />
+                            </motion.div>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Cross-Platform Support */}
+                <div className="mt-48 max-w-5xl mx-auto px-4 w-full">
+                    <motion.div
+                        initial={{ opacity: 0, y: 20 }}
+                        whileInView={{ opacity: 1, y: 0 }}
+                        viewport={{ once: true }}
+                        className="bg-zinc-900 rounded-[3rem] p-12 md:p-20 relative overflow-hidden text-center"
+                    >
+                        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(249,115,22,0.15),transparent_70%)]" />
+                        <div className="relative z-10 space-y-8">
+                            <h2 className="text-3xl md:text-5xl font-black tracking-tight text-white uppercase">Universal Compatibility</h2>
+                            <p className="text-zinc-400 max-w-2xl mx-auto text-lg leading-relaxed">
+                                Our lightweight monitor agent runs everywhere. Deploy across your hybrid infrastructure with native support for all major operating systems.
+                            </p>
+                            <div className="flex flex-wrap justify-center gap-8 pt-8">
+                                {[
+                                    { name: "Windows", detail: "Full GPU/CPU/RAM Tracking" },
+                                    { name: "Linux", detail: "Server & Edge Optimization" },
+                                    { name: "macOS", detail: "Precision Core Monitoring" }
+                                ].map((os, i) => (
+                                    <div key={i} className="space-y-2">
+                                        <div className="text-white font-black text-xl tracking-tighter italic">{os.name}</div>
+                                        <div className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">{os.detail}</div>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
                     </motion.div>
                 </div>
 
