@@ -323,7 +323,7 @@ export default function HomeDashboard() {
                                 
                                 <div className="space-y-6">
                                     {[
-                                        { title: "One-Click Deployment", desc: "Native installers for Windows and Linux ensure your fleet is online in seconds.", icon: <ChevronRight className="w-4 h-4" /> },
+                                        { title: "One-Click Deployment", desc: "Native installers for Windows ensure your fleet is online in seconds.", icon: <ChevronRight className="w-4 h-4" /> },
                                         { title: "Real-Time Sync", desc: "Ultra-low latency telemetry powered by WebSocket synchronization.", icon: <ChevronRight className="w-4 h-4" /> },
                                         { title: "Multi-Tenant Isolation", desc: "Securely manage multiple organizations and departments from a single hub.", icon: <ChevronRight className="w-4 h-4" /> }
                                     ].map((feature, i) => (
@@ -372,7 +372,6 @@ export default function HomeDashboard() {
                             <div className="flex flex-wrap justify-center gap-8 pt-8">
                                 {[
                                     { name: "Windows", detail: "Full GPU/CPU/RAM Tracking" },
-                                    { name: "Linux", detail: "Server & Edge Optimization" },
                                     { name: "macOS", detail: "Precision Core Monitoring" }
                                 ].map((os, i) => (
                                     <div key={i} className="space-y-2">
