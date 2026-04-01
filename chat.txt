@@ -35,8 +35,8 @@ FIX 2: CLIENT AUTO-START (PM2 Persistence)
 DEBUGGING & NEXT STEPS FOR AGENT
 -----------------------------------------------------------------------------
 If the user reports "Graphs are not working":
-1. Verify `NEXT_PUBLIC_API_URL` in Vercel settings (Must be: http://203.193.145.59:5010).
-2. Check backend health: `curl http://203.193.145.59:5010/health`.
+1. Verify `NEXT_PUBLIC_API_URL` in Vercel settings (Must be: http://187.127.142.58:5010).
+2. Check backend health: `curl http://187.127.142.58:5010/health`.
 3. Check Browser Network Tab: Look for 500 errors on `/api/units/...` routes.
 4. Check PostgreSQL: If API is 200 OK but returns `[]`, the DB is failing or empty.
 

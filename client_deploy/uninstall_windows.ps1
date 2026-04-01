@@ -34,7 +34,7 @@ $compId = $null
 if (Test-Path $configFile) {
     try {
         $configData = Get-Content $configFile -Raw | ConvertFrom-Json
-        $serverUrl = "http://203.193.145.59:5010"  # Hardcoded server URL
+        $serverUrl = "http://187.127.142.58:5010"  # Hardcoded server URL
         $systemId = $configData.system_id
         $orgId = $configData.org_id
         $compId = $configData.comp_id

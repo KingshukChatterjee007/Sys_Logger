@@ -53,7 +53,7 @@ WHAT NEEDS TO BE DONE (Deployment Steps)
 
 Step 1: Set Environment Variable on Vercel
    - Go to: Vercel Dashboard → sys-logger → Settings → Environment Variables
-   - Set: NEXT_PUBLIC_API_URL = http://203.193.145.59:5010
+   - Set: NEXT_PUBLIC_API_URL = http://187.127.142.58:5010
    - (Replace with your actual backend server's public IP and port)
    - Make sure it applies to "All Environments"
    - Click Save
@@ -84,7 +84,7 @@ If graphs still don't appear after deployment:
    - Look for errors like "ECONNREFUSED" (backend unreachable)
 
 2. Check if backend is running:
-   - From any machine: curl http://203.193.145.59:5010/health
+   - From any machine: curl http://187.127.142.58:5010/health
    - Should return {"status": "ok", ...}
 
 3. Check PostgreSQL:
@@ -96,10 +96,10 @@ If graphs still don't appear after deployment:
    - Must include http:// prefix
    - Must include the port number
    - Must NOT have a trailing slash
-   - Correct:   http://203.193.145.59:5010
+   - Correct:   http://187.127.142.58:5010
    - Incorrect: https://203.193.145.59:5010  (backend is HTTP, not HTTPS)
    - Incorrect: 203.193.145.59:5010          (missing http://)
-   - Incorrect: http://203.193.145.59:5010/  (trailing slash)
+   - Incorrect: http://187.127.142.58:5010/  (trailing slash)
 
 =============================================================================
 
