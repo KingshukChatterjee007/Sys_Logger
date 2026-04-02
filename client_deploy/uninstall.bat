@@ -23,7 +23,7 @@ if %errorLevel% == 0 (
 REM Run the PowerShell uninstall script
 echo Starting uninstallation...
 echo.
-powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0uninstall_windows.ps1"
+powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0src\uninstall_windows.ps1"
 
 echo.
 echo ==========================================

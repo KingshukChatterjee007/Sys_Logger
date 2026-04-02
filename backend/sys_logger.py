@@ -278,7 +278,7 @@ def download_installer(current_user):
                 'comp_id': comp_id,
                 'install_token': install_token
             }
-            zipf.writestr('sys_logger_installer/unit_client_config.json', json.dumps(config_data, indent=4))
+            zipf.writestr('sys_logger_installer/src/unit_client_config.json', json.dumps(config_data, indent=4))
 
         # 3. Create Node in Database (Pending State) with install_token
         name = f"{org_id}/{comp_id}"
@@ -307,6 +307,105 @@ def download_installer(current_user):
     finally:
         cur.close()
         conn.close()
+
+@app.route('/api/units/installer/<signed_token>', methods=['GET'])
+def download_installer_signed(signed_token):
+    """Public GET endpoint for downloading pre-configured installer via signed token"""
+    try:
+        # Note: JWT decode will verify the signature using SECRET_KEY
+        data = jwt.decode(signed_token, app.config['SECRET_KEY'], algorithms=["HS256"])
+        org_id = data.get('org_id')
+        comp_id = data.get('comp_id')
+        
+        if not org_id or not comp_id:
+            return jsonify({'message': 'Invalid token content!'}), 400
+            
+        if data.get('type') != 'installer_download':
+            return jsonify({'message': 'Invalid token type!'}), 400
+
+        # Create package (re-using logic from download_installer)
+        temp_dir = tempfile.mkdtemp()
+        zip_path = os.path.join(temp_dir, f"sys_logger_installer_{comp_id}.zip")
+        deploy_src = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'client_deploy'))
+        
+        if not os.path.exists(deploy_src):
+             return jsonify({'message': 'Source directory not found'}), 500
+
+        with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
+            for root, dirs, files in os.walk(deploy_src):
+                if 'venv' in dirs: dirs.remove('venv')
+                if 'logs' in dirs: dirs.remove('logs')
+                for file in files:
+                    file_path = os.path.join(root, file)
+                    arcname = os.path.relpath(file_path, deploy_src)
+                    zipf.write(file_path, os.path.join('sys_logger_installer', arcname))
+            
+            # Inject config into the src/ folder as expected by the updated setup scripts
+            install_token = str(uuid.uuid4())
+            config_data = {
+                'system_id': str(uuid.uuid4()),
+                'org_id': str(org_id),
+                'comp_id': comp_id,
+                'install_token': install_token
+            }
+            zipf.writestr('sys_logger_installer/src/unit_client_config.json', json.dumps(config_data, indent=4))
+
+        # Register pending node
+        conn = get_db_connection()
+        cur = conn.cursor(cursor_factory=RealDictCursor)
+        name = f"{org_id}/{comp_id}"
+        cur.execute("""
+            INSERT INTO systems (system_name, org_id, install_token, created_at)
+            VALUES (%s, %s, %s, NOW())
+            ON CONFLICT (system_name) DO UPDATE SET
+                org_id = EXCLUDED.org_id,
+                install_token = EXCLUDED.install_token
+        """, (name, org_id, install_token))
+        conn.commit()
+        cur.close()
+        conn.close()
+
+        print(f"DEBUG: Node created/verified via SIGNED LINK for {name}")
+        sync_units_state(str(org_id))
+
+        return send_file(
+            zip_path,
+            mimetype='application/zip',
+            as_attachment=True,
+            download_name=f"sys_logger_installer_{comp_id}.zip"
+        )
+    except jwt.ExpiredSignatureError:
+        return jsonify({'message': 'Download link has expired!'}), 401
+    except jwt.InvalidTokenError:
+        return jsonify({'message': 'Invalid download link!'}), 401
+    except Exception as e:
+        print(f"ERROR downloading signed installer: {str(e)}")
+        return jsonify({'message': f'Internal error: {str(e)}'}), 500
+
+@app.route('/api/units/generate-link', methods=['POST'])
+@token_required
+def generate_installer_link(current_user):
+    """Generate a short-lived (24h) signed download link"""
+    data = request.get_json()
+    comp_id = data.get('comp_id')
+    
+    if not comp_id:
+        return jsonify({'message': 'Component ID is required!'}), 400
+        
+    org_id = current_user.get('org_id')
+    
+    token = jwt.encode({
+        'org_id': org_id,
+        'comp_id': comp_id,
+        'type': 'installer_download',
+        'exp': datetime.utcnow() + timedelta(hours=24)
+    }, app.config['SECRET_KEY'], algorithm="HS256")
+    
+    host = request.host_url.rstrip('/')
+    download_url = f"{host}/api/units/installer/{token}"
+    
+    return jsonify({'download_url': download_url})
+
 
 @app.route('/api/auth/login', methods=['POST'])
 def login():

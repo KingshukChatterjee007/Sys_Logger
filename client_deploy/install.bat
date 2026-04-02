@@ -23,7 +23,7 @@ if %errorLevel% == 0 (
 REM Run the PowerShell setup script
 echo Starting setup...
 echo.
-powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0setup_windows.ps1"
+powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0src\setup_windows.ps1"
 
 echo.
 echo ==========================================
