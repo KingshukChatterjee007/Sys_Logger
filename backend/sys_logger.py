@@ -62,14 +62,25 @@ RAZORPAY_KEY_SECRET = os.getenv('RAZORPAY_KEY_SECRET', 'secret_placeholder')
 razorpay_client = razorpay.Client(auth=(RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET))
 
 # DB Config
-DB_HOST = os.getenv('DB_HOST', 'localhost')
-DB_USER = os.getenv('DB_USER', 'postgres')
-DB_PASS = os.getenv('DB_PASS', 'postgres')
-DB_NAME = 'sys_logger'
+DATABASE_URL = os.getenv('DATABASE_URL')
+if DATABASE_URL:
+    # Use connection string if provided
+    DB_HOST = None 
+    DB_USER = None
+    DB_PASS = None
+    DB_NAME = None
+else:
+    DB_HOST = os.getenv('DB_HOST', 'localhost')
+    DB_USER = os.getenv('DB_USER', 'postgres')
+    DB_PASS = os.getenv('DB_PASS', 'postgres')
+    DB_NAME = os.getenv('DB_NAME', 'sys_logger')
 
 def get_db_connection():
     try:
-        conn = psycopg2.connect(host=DB_HOST, user=DB_USER, password=DB_PASS, dbname=DB_NAME)
+        if DATABASE_URL:
+            conn = psycopg2.connect(DATABASE_URL)
+        else:
+            conn = psycopg2.connect(host=DB_HOST, user=DB_USER, password=DB_PASS, dbname=DB_NAME)
         return conn
     except psycopg2.OperationalError as e:
         logging.error(f"DATABASE CONNECTION FAILED: host={DB_HOST}, user={DB_USER}, db={DB_NAME}")
