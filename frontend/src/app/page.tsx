@@ -36,7 +36,7 @@ export default function HomeDashboard() {
         setIsLoggedIn(!!localStorage.getItem('token'));
 
         // Fetch Dynamic Pricing
-        fetch(`${process.env.NEXT_PUBLIC_API_URL || ''}/api/pricing`)
+        fetch('/api/pricing')
             .then(res => {
                 if (!res.ok) throw new Error('Failed to fetch');
                 return res.json();
@@ -83,7 +83,7 @@ export default function HomeDashboard() {
             }
 
             // 1. Create Order
-            const orderResp = await fetch(`${process.env.NEXT_PUBLIC_API_URL || ''}/api/payments/create-order`, {
+            const orderResp = await fetch('/api/payments/create-order', {
                 method: 'POST',
                 headers: { 
                     'Content-Type': 'application/json',
@@ -105,7 +105,7 @@ export default function HomeDashboard() {
                 order_id: orderData.order_id,
                 handler: async (response: any) => {
                     // 3. Verify Payment
-                    const verifyResp = await fetch(`${process.env.NEXT_PUBLIC_API_URL || ''}/api/payments/verify`, {
+                    const verifyResp = await fetch('/api/payments/verify', {
                         method: 'POST',
                         headers: { 
                             'Content-Type': 'application/json',

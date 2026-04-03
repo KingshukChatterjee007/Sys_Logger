@@ -41,6 +41,13 @@ except ImportError:
     NVIDIA_AVAILABLE = False
 AMD_AVAILABLE = False
 
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s [%(levelname)s] %(message)s',
+    handlers=[logging.StreamHandler()]
+)
+
 # Load environment variables
 if getattr(sys, 'frozen', False):
     bundle_dir = getattr(sys, '_MEIPASS', '.')
@@ -61,11 +68,27 @@ DB_PASS = os.getenv('DB_PASS', 'postgres')
 DB_NAME = 'sys_logger'
 
 def get_db_connection():
-    conn = psycopg2.connect(host=DB_HOST, user=DB_USER, password=DB_PASS, dbname=DB_NAME)
-    return conn
+    try:
+        conn = psycopg2.connect(host=DB_HOST, user=DB_USER, password=DB_PASS, dbname=DB_NAME)
+        return conn
+    except psycopg2.OperationalError as e:
+        logging.error(f"DATABASE CONNECTION FAILED: host={DB_HOST}, user={DB_USER}, db={DB_NAME}")
+        logging.error(f"Error details: {e}")
+        raise
+    except Exception as e:
+        logging.error(f"Unexpected DB error: {e}")
+        raise
 
 app = Flask(__name__)
-CORS(app)
+
+# CORS Configuration — read allowed origins from env, fallback to allow-all for dev
+cors_origins_env = os.getenv('CORS_ORIGINS', '*')
+if cors_origins_env == '*':
+    CORS(app)
+else:
+    allowed_origins = [o.strip() for o in cors_origins_env.split(',') if o.strip()]
+    CORS(app, origins=allowed_origins, supports_credentials=True)
+
 app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'sys-logger-super-secret-key')
 socketio = SocketIO(app, cors_allowed_origins="*")
 
