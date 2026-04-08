@@ -1,7 +1,8 @@
+import { NextRequest } from 'next/server'
 import { getBackendUrl } from '../../../proxyUtils'
 
-export async function GET(request: Request, { params }: { params: { token: string } }) {
-    const token = await params.token
+export async function GET(request: NextRequest, { params }: { params: Promise<{ token: string }> }) {
+    const { token } = await params
     const url = `${getBackendUrl()}/api/units/installer/${token}`
 
     const response = await fetch(url, {
