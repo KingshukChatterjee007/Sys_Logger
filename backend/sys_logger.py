@@ -103,7 +103,9 @@ else:
     allowed_origins = [o.strip() for o in cors_origins_env.split(',') if o.strip()]
     CORS(app, origins=allowed_origins, supports_credentials=True)
 
-app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'sys-logger-super-secret-key')
+app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'sys-logger-super-secret-key-32-chars-long-for-jwt')
+from werkzeug.middleware.proxy_fix import ProxyFix
+app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
 socketio = SocketIO(app, cors_allowed_origins="*")
 
 # Auth Decorator
@@ -845,9 +847,7 @@ class UnitStore:
                 INSERT INTO system_metrics 
                 (system_id, timestamp, cpu_usage, ram_usage, gpu_usage, network_rx_mb, network_tx_mb)
                 VALUES (%s, %s, %s, %s, %s, %s, %s)
-                ON CONFLICT (system_id, timestamp) DO UPDATE SET
-                    cpu_usage = EXCLUDED.cpu_usage,
-                    ram_usage = EXCLUDED.ram_usage
+                ON CONFLICT DO NOTHING
             """, (sys_int_id, timestamp, cpu, ram, gpu, net_rx, net_tx))
             
             # CRITICAL: Always update status to online and refresh last_seen
