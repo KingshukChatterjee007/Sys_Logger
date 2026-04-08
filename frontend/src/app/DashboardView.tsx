@@ -40,41 +40,6 @@ interface PricingPlan {
 import { useAuth } from './components/AuthContext';
 import { useRouter } from 'next/navigation';
 
-// --- FIXED DUMMY DATA (Moved outside to prevent hydration mismatch) ---
-const DUMMY_UNITS: Unit[] = [
-    {
-        id: 'dummy-1',
-        name: 'Production/Main-Frame',
-        status: 'online',
-        ip: '192.168.1.105',
-        last_seen: '2026-04-08T14:17:00.000Z',
-        metrics: { cpu: 42, ram: 65, gpu: 12, network_rx: 4.5, network_tx: 1.2 }
-    },
-    {
-        id: 'dummy-2',
-        name: 'Edge/Sensor-Alpha',
-        status: 'online',
-        ip: '10.0.0.42',
-        last_seen: '2026-04-08T14:17:00.000Z',
-        metrics: { cpu: 8, ram: 12, gpu: 0, network_rx: 0.2, network_tx: 0.1 }
-    },
-    {
-        id: 'dummy-3',
-        name: 'Cloud/Database-Relay',
-        status: 'offline',
-        ip: '172.16.0.5',
-        last_seen: '2026-04-08T13:17:00.000Z',
-        metrics: { cpu: 0, ram: 0, gpu: 0, network_rx: 0, network_tx: 0 }
-    },
-    {
-        id: 'dummy-4',
-        name: 'Dev/Test-Environment',
-        status: 'online',
-        ip: '127.0.0.1',
-        last_seen: '2026-04-08T14:17:00.000Z',
-        metrics: { cpu: 95, ram: 88, gpu: 75, network_rx: 24.8, network_tx: 15.2 }
-    }
-];
 // ----------------------------------------------------------------------
 
 const CompactStatCard = ({ unit, onClick }: { unit: Unit; onClick: () => void }) => {
@@ -174,7 +139,7 @@ export default function DashboardView({ orgId: propOrgId }: DashboardViewProps) 
 
     // Sync selected unit with usage hook
     useEffect(() => {
-        if (selectedUnit && !selectedUnit.id.startsWith('dummy-')) {
+        if (selectedUnit) {
             apiUsage.setSelectedUnitId(selectedUnit.id);
         } else {
             apiUsage.setSelectedUnitId(null);
@@ -182,32 +147,9 @@ export default function DashboardView({ orgId: propOrgId }: DashboardViewProps) 
     }, [selectedUnit, apiUsage]);
 
     // Determine which data to use
-    const units = [...apiUnits.units, ...DUMMY_UNITS]
+    const units = apiUnits.units
 
-    // Sync mock data for dummy units
-    useEffect(() => {
-        if (selectedUnit?.id.startsWith('dummy-')) {
-            const now = Date.now();
-            const fakeData: UsageData[] = Array.from({ length: 100 }).map((_, i) => {
-                const ts = new Date(now - (100 - i) * 2000).toISOString();
-                const m = selectedUnit.metrics || { cpu: 0, ram: 0, gpu: 0, network_rx: 0, network_tx: 0 };
-                const jitter = (val: number, range: number) => Math.max(0, Math.min(100, val + (Math.random() * range - range / 2)));
-                return {
-                    timestamp: ts,
-                    cpu: jitter(m.cpu, 15),
-                    ram: jitter(m.ram, 5),
-                    gpu_load: jitter(m.gpu, 10),
-                    network_rx: Math.max(0, m.network_rx + (Math.random() * 0.5 - 0.25)),
-                    network_tx: Math.max(0, m.network_tx + (Math.random() * 0.1 - 0.05))
-                } as any;
-            });
-            setMockUsageData(fakeData);
-        } else {
-            setMockUsageData([]);
-        }
-    }, [selectedUnit]);
-
-    const usageData = selectedUnit?.id.startsWith('dummy-') ? mockUsageData : apiUsage.data
+    const usageData = apiUsage.data
     const loading = apiUnits.loading
     const selectedUnitId = apiUsage.selectedUnitId
 
