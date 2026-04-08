@@ -814,16 +814,26 @@ class UnitStore:
             cur = conn.cursor()
             
             # Resolve System ID (unit_id is the string representation of system_id PK)
-            # We try system_id first, then system_name
-            cur.execute("SELECT system_id FROM systems WHERE system_id = %s OR system_name = %s LIMIT 1", (unit_id, unit_id))
+            # We try system_id first if it's numeric, otherwise system_name
+            try:
+                # Test if it's a numeric ID (Integer PK)
+                int(unit_id)
+                cur.execute("SELECT system_id FROM systems WHERE system_id = %s OR system_name = %s LIMIT 1", (unit_id, unit_id))
+            except (ValueError, TypeError):
+                # It's a string name (e.g. "1/TEST_LAPTOP_1")
+                cur.execute("SELECT system_id FROM systems WHERE system_name = %s LIMIT 1", (unit_id,))
+
             res = cur.fetchone()
             if not res:
                 print(f"Error: Unit {unit_id} not found in DB for usage reporting")
+                cur.close()
+                conn.close()
                 return
             sys_int_id = res[0]
 
             timestamp = usage_data.get('timestamp')
-            if not timestamp: timestamp = datetime.utcnow()
+            if not timestamp: 
+                timestamp = datetime.now()
             
             cpu = usage_data.get('cpu', usage_data.get('cpu_usage', 0))
             ram = usage_data.get('ram', usage_data.get('ram_usage', 0))
@@ -835,13 +845,16 @@ class UnitStore:
                 INSERT INTO system_metrics 
                 (system_id, timestamp, cpu_usage, ram_usage, gpu_usage, network_rx_mb, network_tx_mb)
                 VALUES (%s, %s, %s, %s, %s, %s, %s)
-                ON CONFLICT DO NOTHING
+                ON CONFLICT (system_id, timestamp) DO UPDATE SET
+                    cpu_usage = EXCLUDED.cpu_usage,
+                    ram_usage = EXCLUDED.ram_usage
             """, (sys_int_id, timestamp, cpu, ram, gpu, net_rx, net_tx))
             
-            # Also update last_seen on systems table
-            cur.execute("UPDATE systems SET last_seen = %s WHERE system_id = %s", (timestamp, sys_int_id))
+            # CRITICAL: Always update status to online and refresh last_seen
+            cur.execute("UPDATE systems SET last_seen = %s, status = 'online' WHERE system_id = %s", (timestamp, sys_int_id))
             
             conn.commit()
+            print(f"Successfully recorded metrics for unit {unit_id} (ID: {sys_int_id})")
             cur.close()
             conn.close()
         except Exception as e:
@@ -1611,13 +1624,23 @@ def register_unit():
             'status': 'online'
         }
 
+        # Save or Update Unit
         UnitStore.save_unit(unit_id, unit)
         
-        # Get the actual assigned ID from DB
+        # Get the actual assigned ID and verify status is online
         new_unit = UnitStore.get_unit_by_org_comp(org_id, comp_id)
-        if new_unit: unit_id = new_unit['id']
+        if new_unit: 
+            unit_id = new_unit['id']
+            # Force status check if not already online
+            if new_unit.get('status') != 'online':
+                conn = get_db_connection()
+                cur = conn.cursor()
+                cur.execute("UPDATE systems SET status = 'online', last_seen = now() WHERE system_id = %s", (new_unit.get('system_id'),))
+                conn.commit()
+                cur.close()
+                conn.close()
 
-        print(f"Unit registered: {org_id}/{comp_id} (ID: {unit_id})")
+        print(f"Unit registered & activated: {org_id}/{comp_id} (ID: {unit_id})")
         if org_id: sync_units_state(str(org_id))
 
         return jsonify({'unit_id': unit_id, 'org_id': org_id, 'comp_id': comp_id}), 201
