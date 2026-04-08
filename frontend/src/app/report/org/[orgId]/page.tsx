@@ -136,57 +136,63 @@ export default function OrgReportPage() {
                <h2 className="text-xl font-black text-zinc-900 uppercase tracking-tight">Node Load Comparison</h2>
             </div>
             
-            <div className="grid lg:grid-cols-2 gap-10">
-              {/* CPU Comparison */}
-              <div className="bg-zinc-50/50 p-10 rounded-[3rem] border border-zinc-100">
-                <div className="flex items-center gap-3 mb-8">
-                  <div className="p-2 bg-white rounded-xl shadow-sm border border-zinc-100">
-                    <Cpu size={18} className="text-zinc-400" />
-                  </div>
-                  <h3 className="text-sm font-black text-zinc-900 uppercase tracking-widest">Average CPU Load (%)</h3>
-                </div>
-                <div className="h-[300px]">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={data.node_summaries} layout="vertical">
-                      <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#e4e4e7" />
-                      <XAxis type="number" hide domain={[0, 100]} />
-                      <YAxis dataKey="name" type="category" width={80} tick={{fontSize: 10, fontWeight: 'black', fill: '#71717a'}} axisLine={false} tickLine={false} />
-                      <Tooltip cursor={{fill: 'transparent'}} contentStyle={{borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)'}} />
-                      <Bar dataKey="avg_cpu" radius={[0, 10, 10, 0]} barSize={20}>
-                        {data.node_summaries.map((entry, index) => (
-                          <Cell key={`cell-${index}`} fill={entry.avg_cpu > 70 ? '#f97316' : '#18181b'} />
-                        ))}
-                      </Bar>
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
+            {data.node_summaries.length === 0 ? (
+              <div className="bg-zinc-50 border border-dashed border-zinc-200 rounded-[2.5rem] p-16 text-center">
+                <p className="text-sm font-bold text-zinc-400 uppercase tracking-widest">No node data available for comparison</p>
               </div>
+            ) : (
+              <div className="grid lg:grid-cols-2 gap-10">
+                {/* CPU Comparison */}
+                <div className="bg-zinc-50/50 p-10 rounded-[3rem] border border-zinc-100">
+                  <div className="flex items-center gap-3 mb-8">
+                    <div className="p-2 bg-white rounded-xl shadow-sm border border-zinc-100">
+                      <Cpu size={18} className="text-zinc-400" />
+                    </div>
+                    <h3 className="text-sm font-black text-zinc-900 uppercase tracking-widest">Average CPU Load (%)</h3>
+                  </div>
+                  <div className="h-[300px]">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={data.node_summaries} layout="vertical" margin={{ left: 20, right: 20 }}>
+                        <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#e4e4e7" />
+                        <XAxis type="number" hide domain={[0, 100]} />
+                        <YAxis dataKey="name" type="category" width={80} tick={{fontSize: 10, fontWeight: 'black', fill: '#71717a'}} axisLine={false} tickLine={false} />
+                        <Tooltip cursor={{fill: 'transparent'}} contentStyle={{borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)'}} />
+                        <Bar dataKey="avg_cpu" radius={[0, 10, 10, 0]} barSize={20}>
+                          {data.node_summaries.map((entry, index) => (
+                            <Cell key={`cell-${index}`} fill={entry.avg_cpu > 70 ? '#f97316' : '#18181b'} />
+                          ))}
+                        </Bar>
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
 
-               {/* RAM Comparison */}
-               <div className="bg-zinc-50/50 p-10 rounded-[3rem] border border-zinc-100">
-                <div className="flex items-center gap-3 mb-8">
-                  <div className="p-2 bg-white rounded-xl shadow-sm border border-zinc-100">
-                    <HardDrive size={18} className="text-zinc-400" />
+                {/* RAM Comparison */}
+                <div className="bg-zinc-50/50 p-10 rounded-[3rem] border border-zinc-100">
+                  <div className="flex items-center gap-3 mb-8">
+                    <div className="p-2 bg-white rounded-xl shadow-sm border border-zinc-100">
+                      <HardDrive size={18} className="text-zinc-400" />
+                    </div>
+                    <h3 className="text-sm font-black text-zinc-900 uppercase tracking-widest">Average RAM Usage (%)</h3>
                   </div>
-                  <h3 className="text-sm font-black text-zinc-900 uppercase tracking-widest">Average RAM Usage (%)</h3>
-                </div>
-                <div className="h-[300px]">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={data.node_summaries} layout="vertical">
-                      <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#e4e4e7" />
-                      <XAxis type="number" hide domain={[0, 100]} />
-                      <YAxis dataKey="name" type="category" width={80} tick={{fontSize: 10, fontWeight: 'black', fill: '#71717a'}} axisLine={false} tickLine={false} />
-                      <Tooltip cursor={{fill: 'transparent'}} contentStyle={{borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)'}} />
-                      <Bar dataKey="avg_ram" radius={[0, 10, 10, 0]} barSize={20}>
-                        {data.node_summaries.map((entry, index) => (
-                          <Cell key={`cell-${index}`} fill={entry.avg_ram > 70 ? '#6366f1' : '#3f3f46'} />
-                        ))}
-                      </Bar>
-                    </BarChart>
-                  </ResponsiveContainer>
+                  <div className="h-[300px]">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={data.node_summaries} layout="vertical" margin={{ left: 20, right: 20 }}>
+                        <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#e4e4e7" />
+                        <XAxis type="number" hide domain={[0, 100]} />
+                        <YAxis dataKey="name" type="category" width={80} tick={{fontSize: 10, fontWeight: 'black', fill: '#71717a'}} axisLine={false} tickLine={false} />
+                        <Tooltip cursor={{fill: 'transparent'}} contentStyle={{borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)'}} />
+                        <Bar dataKey="avg_ram" radius={[0, 10, 10, 0]} barSize={20}>
+                          {data.node_summaries.map((entry, index) => (
+                            <Cell key={`cell-${index}`} fill={entry.avg_ram > 70 ? '#6366f1' : '#3f3f46'} />
+                          ))}
+                        </Bar>
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
                 </div>
               </div>
-            </div>
+            )}
           </section>
 
           {/* Node Metadata Table */}

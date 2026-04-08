@@ -208,82 +208,98 @@ export default function NodeReportPage() {
               <h2 className="text-xl font-black text-zinc-900 tracking-tight uppercase">Fleet Telemetry Timeline</h2>
             </div>
             
-            <div className="space-y-10">
-              {/* CPU Chart */}
-              <div className="bg-zinc-50/50 p-8 rounded-[2.5rem] border border-zinc-100 relative">
-                <div className="flex justify-between items-center mb-8">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 bg-white rounded-xl shadow-sm flex items-center justify-center border border-zinc-100">
-                      <Cpu className="w-5 h-5 text-zinc-400" />
-                    </div>
-                    <div>
-                      <h3 className="text-xs font-black text-zinc-900 uppercase tracking-widest">CPU Processor Load</h3>
-                      <p className="text-[10px] text-zinc-400 font-bold">AVG: {data.summary.avg_cpu.toFixed(1)}% | MAX: {data.summary.max_cpu.toFixed(1)}%</p>
+            {data.timeline.length === 0 ? (
+              <div className="bg-zinc-50 border border-dashed border-zinc-200 rounded-[2.5rem] p-20 text-center">
+                <AlertCircle className="w-10 h-10 text-zinc-300 mx-auto mb-4" />
+                <p className="text-sm font-bold text-zinc-400 uppercase tracking-widest">No timeline data available for this period</p>
+              </div>
+            ) : (
+              <div className="space-y-10">
+                {/* CPU Chart */}
+                <div className="bg-zinc-50/50 p-8 rounded-[2.5rem] border border-zinc-100 relative">
+                  <div className="flex justify-between items-center mb-8">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 bg-white rounded-xl shadow-sm flex items-center justify-center border border-zinc-100">
+                        <Cpu className="w-5 h-5 text-zinc-400" />
+                      </div>
+                      <div>
+                        <h3 className="text-xs font-black text-zinc-900 uppercase tracking-widest">CPU Processor Load</h3>
+                        <p className="text-[10px] text-zinc-400 font-bold">AVG: {data.summary.avg_cpu.toFixed(1)}% | MAX: {data.summary.max_cpu.toFixed(1)}%</p>
+                      </div>
                     </div>
                   </div>
+                  <div className="h-[250px] w-full min-h-[250px]">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <AreaChart data={data.timeline} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                        <defs>
+                          <linearGradient id="colorCpu" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor="#f97316" stopOpacity={0.1}/>
+                            <stop offset="95%" stopColor="#f97316" stopOpacity={0}/>
+                          </linearGradient>
+                        </defs>
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E4E4E7" />
+                        <XAxis 
+                          dataKey="timestamp" 
+                          tick={{fontSize: 8, fontWeight: 'bold', fill: '#A1A1AA'}}
+                          tickFormatter={(val) => new Date(val).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                          axisLine={false}
+                          tickLine={false}
+                        />
+                        <YAxis 
+                          tick={{fontSize: 10, fontWeight: 'bold', fill: '#A1A1AA'}}
+                          unit="%"
+                          domain={[0, 100]}
+                          axisLine={false}
+                          tickLine={false}
+                        />
+                        <Tooltip 
+                          contentStyle={{borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)', fontSize: '10px', fontWeight: 'bold'}}
+                        />
+                        <Area type="monotone" dataKey="cpu_usage" name="CPU Usage" stroke="#f97316" strokeWidth={3} fillOpacity={1} fill="url(#colorCpu)" animationDuration={1000} />
+                      </AreaChart>
+                    </ResponsiveContainer>
+                  </div>
                 </div>
-                <div className="h-[250px] w-full">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <AreaChart data={data.timeline}>
-                      <defs>
-                        <linearGradient id="colorCpu" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%" stopColor="#f97316" stopOpacity={0.1}/>
-                          <stop offset="95%" stopColor="#f97316" stopOpacity={0}/>
-                        </linearGradient>
-                      </defs>
-                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E4E4E7" />
-                      <XAxis 
-                        dataKey="timestamp" 
-                        hide 
-                      />
-                      <YAxis 
-                        tick={{fontSize: 10, fontWeight: 'bold', fill: '#A1A1AA'}}
-                        unit="%"
-                        domain={[0, 100]}
-                        axisLine={false}
-                        tickLine={false}
-                      />
-                      <Tooltip 
-                        contentStyle={{borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)', fontSize: '10px', fontWeight: 'bold'}}
-                      />
-                      <Area type="monotone" dataKey="cpu_usage" name="CPU Usage" stroke="#f97316" strokeWidth={3} fillOpacity={1} fill="url(#colorCpu)" />
-                    </AreaChart>
-                  </ResponsiveContainer>
-                </div>
-              </div>
 
-              {/* RAM Chart */}
-              <div className="bg-zinc-50/50 p-8 rounded-[2.5rem] border border-zinc-100 relative">
-                <div className="flex justify-between items-center mb-8">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 bg-white rounded-xl shadow-sm flex items-center justify-center border border-zinc-100">
-                      <HardDrive className="w-5 h-5 text-zinc-400" />
-                    </div>
-                    <div>
-                      <h3 className="text-xs font-black text-zinc-900 uppercase tracking-widest">Memory Utilization</h3>
-                      <p className="text-[10px] text-zinc-400 font-bold">AVG: {data.summary.avg_ram.toFixed(1)}% | MAX: {data.summary.max_ram.toFixed(1)}%</p>
+                {/* RAM Chart */}
+                <div className="bg-zinc-50/50 p-8 rounded-[2.5rem] border border-zinc-100 relative">
+                  <div className="flex justify-between items-center mb-8">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 bg-white rounded-xl shadow-sm flex items-center justify-center border border-zinc-100">
+                        <HardDrive className="w-5 h-5 text-zinc-400" />
+                      </div>
+                      <div>
+                        <h3 className="text-xs font-black text-zinc-900 uppercase tracking-widest">Memory Utilization</h3>
+                        <p className="text-[10px] text-zinc-400 font-bold">AVG: {data.summary.avg_ram.toFixed(1)}% | MAX: {data.summary.max_ram.toFixed(1)}%</p>
+                      </div>
                     </div>
                   </div>
-                </div>
-                <div className="h-[250px] w-full">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <AreaChart data={data.timeline}>
-                      <defs>
-                        <linearGradient id="colorRam" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%" stopColor="#6366f1" stopOpacity={0.1}/>
-                          <stop offset="95%" stopColor="#6366f1" stopOpacity={0}/>
-                        </linearGradient>
-                      </defs>
-                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E4E4E7" />
-                      <XAxis dataKey="timestamp" hide />
-                      <YAxis tick={{fontSize: 10, fontWeight: 'bold', fill: '#A1A1AA'}} unit="%" domain={[0, 100]} axisLine={false} tickLine={false} />
-                      <Tooltip contentStyle={{borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)', fontSize: '10px', fontWeight: 'bold'}} />
-                      <Area type="monotone" dataKey="ram_usage" name="RAM Usage" stroke="#6366f1" strokeWidth={3} fillOpacity={1} fill="url(#colorRam)" />
-                    </AreaChart>
-                  </ResponsiveContainer>
+                  <div className="h-[250px] w-full min-h-[250px]">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <AreaChart data={data.timeline} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                        <defs>
+                          <linearGradient id="colorRam" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor="#6366f1" stopOpacity={0.1}/>
+                            <stop offset="95%" stopColor="#6366f1" stopOpacity={0}/>
+                          </linearGradient>
+                        </defs>
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E4E4E7" />
+                        <XAxis 
+                          dataKey="timestamp" 
+                          tick={{fontSize: 8, fontWeight: 'bold', fill: '#A1A1AA'}}
+                          tickFormatter={(val) => new Date(val).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                          axisLine={false}
+                          tickLine={false}
+                        />
+                        <YAxis tick={{fontSize: 10, fontWeight: 'bold', fill: '#A1A1AA'}} unit="%" domain={[0, 100]} axisLine={false} tickLine={false} />
+                        <Tooltip contentStyle={{borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)', fontSize: '10px', fontWeight: 'bold'}} />
+                        <Area type="monotone" dataKey="ram_usage" name="RAM Usage" stroke="#6366f1" strokeWidth={3} fillOpacity={1} fill="url(#colorRam)" animationDuration={1000} />
+                      </AreaChart>
+                    </ResponsiveContainer>
+                  </div>
                 </div>
               </div>
-            </div>
+            )}
           </section>
 
           {/* Bottom Summary Table */}

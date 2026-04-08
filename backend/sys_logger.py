@@ -1882,7 +1882,11 @@ def get_intelligent_insights(metrics_rows, sys_info):
     """Generates human-readable analysis based on telemetry data patterns."""
     insights = []
     if not metrics_rows:
-        return ["Insufficient data points to perform intelligent analysis."]
+        return [{
+            "type": "info",
+            "title": "Data Scarcity",
+            "text": "Insufficient telemetry data detected for the selected period. Connect the node and allow some time for metrics to accumulate."
+        }]
 
     cpu_vals = [r['cpu_usage'] for r in metrics_rows]
     ram_vals = [r['ram_usage'] for r in metrics_rows]
@@ -1965,19 +1969,31 @@ def get_node_report(unit_id):
             query = "SELECT period_start as timestamp, avg_cpu_usage as cpu_usage, avg_ram_usage as ram_usage, avg_gpu_usage as gpu_usage, total_network_rx_mb as network_rx_mb, total_network_tx_mb as network_tx_mb FROM aggregated_metrics WHERE system_id = %s AND period_start >= %s AND period_type = %s ORDER BY period_start ASC"
             cur.execute(query, (sys_id, start_date, period_type))
             
-        rows = cur.fetchall()
-        
+        # Prepare timeline data for JSON serialization (convert datetime and decimals)
+        formatted_rows = []
+        for r in rows:
+            row_dict = dict(r)
+            if isinstance(row_dict.get('timestamp'), datetime):
+                row_dict['timestamp'] = row_dict['timestamp'].isoformat()
+            
+            # Ensure numbers are floats
+            for key in ['cpu_usage', 'ram_usage', 'gpu_usage', 'network_rx_mb', 'network_tx_mb']:
+                if row_dict.get(key) is not None:
+                    row_dict[key] = float(row_dict[key])
+            
+            formatted_rows.append(row_dict)
+
         # Perform Analysis
         insights = get_intelligent_insights(rows, system)
-        
+
         # Basic Summary
         summary = {
-            "avg_cpu": sum(r['cpu_usage'] for r in rows) / len(rows) if rows else 0,
-            "max_cpu": max([r['cpu_usage'] for r in rows]) if rows else 0,
-            "avg_ram": sum(r['ram_usage'] for r in rows) / len(rows) if rows else 0,
-            "max_ram": max([r['ram_usage'] for r in rows]) if rows else 0,
-            "total_rx": sum(r['network_rx_mb'] for r in rows) if rows else 0,
-            "total_tx": sum(r['network_tx_mb'] for r in rows) if rows else 0,
+            "avg_cpu": sum(float(r['cpu_usage'] or 0) for r in rows) / len(rows) if rows else 0,
+            "max_cpu": max([float(r['cpu_usage'] or 0) for r in rows]) if rows else 0,
+            "avg_ram": sum(float(r['ram_usage'] or 0) for r in rows) / len(rows) if rows else 0,
+            "max_ram": max([float(r['ram_usage'] or 0) for r in rows]) if rows else 0,
+            "total_rx": sum(float(r['network_rx_mb'] or 0) for r in rows) if rows else 0,
+            "total_tx": sum(float(r['network_tx_mb'] or 0) for r in rows) if rows else 0,
         }
         
         health_score = calculate_node_health(summary)
@@ -1993,7 +2009,7 @@ def get_node_report(unit_id):
             "summary": summary,
             "health_score": health_score,
             "insights": insights,
-            "timeline": rows
+            "timeline": formatted_rows
         })
         
     except Exception as e:
