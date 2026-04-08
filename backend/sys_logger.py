@@ -1405,6 +1405,14 @@ def get_system_usage_route():
     return jsonify([latest_server_stats])
 
 
+@app.route('/api/units/<unit_id>/usage', methods=['GET'])
+def get_unit_usage_route(unit_id):
+    """Fetch recent telemetry history for a specific unit (used by dashboard graphs)"""
+    limit = request.args.get('limit', default=100, type=int)
+    usage = UnitStore.get_usage(unit_id, limit=limit)
+    return jsonify(usage)
+
+
 # --- FLEET MANAGEMENT APIS ---
 
 @app.route('/api/units/<unit_id>', methods=['DELETE'])
@@ -1968,6 +1976,8 @@ def get_node_report(unit_id):
             period_type = 'hourly' if days <= 31 else 'daily'
             query = "SELECT period_start as timestamp, avg_cpu_usage as cpu_usage, avg_ram_usage as ram_usage, avg_gpu_usage as gpu_usage, total_network_rx_mb as network_rx_mb, total_network_tx_mb as network_tx_mb FROM aggregated_metrics WHERE system_id = %s AND period_start >= %s AND period_type = %s ORDER BY period_start ASC"
             cur.execute(query, (sys_id, start_date, period_type))
+            
+        rows = cur.fetchall()
             
         # Prepare timeline data for JSON serialization (convert datetime and decimals)
         formatted_rows = []
