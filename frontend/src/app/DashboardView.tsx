@@ -171,8 +171,8 @@ export default function DashboardView({ orgId: propOrgId }: DashboardViewProps) 
     const [isUpgradeModalOpen, setIsUpgradeModalOpen] = useState(false)
     const [plans, setPlans] = useState<PricingPlan[]>([])
     const [paymentLoading, setPaymentLoading] = useState<string | null>(null)
-
-    // Logo Carousel State
+    const [isReportModalOpen, setIsReportModalOpen] = useState(false)
+    const [reportTarget, setReportTarget] = useState<{id: string, name: string, type: 'node' | 'org'}>({id: '', name: '', type: 'node'})
     const [logoIndex, setLogoIndex] = useState(0)
 
     // Dynamic logos configuration
@@ -286,8 +286,21 @@ export default function DashboardView({ orgId: propOrgId }: DashboardViewProps) 
     }
 
     const handleCustomDownload = () => {
-        if (!selectedUnitId) return
-        window.open(`/api/units/${selectedUnitId}/export?range=1d`, '_blank')
+        if (!selectedUnit) return
+        setReportTarget({
+          id: selectedUnit.id.toString(),
+          name: (selectedUnit.name || 'Unknown Node').split('/').pop() || '',
+          type: 'node'
+        })
+        setIsReportModalOpen(true)
+    }
+
+    const triggerRawExport = (id: string, range: string) => {
+      window.open(`/api/units/${id}/export?range=${range}`, '_blank')
+    }
+
+    const triggerIntelligentReport = (id: string, type: 'node' | 'org', range: string) => {
+      window.open(`/report/${type}/${id}?range=${range}`, '_blank')
     }
 
     const handleUpdateUnit = async () => {
@@ -560,21 +573,40 @@ export default function DashboardView({ orgId: propOrgId }: DashboardViewProps) 
                         </button>
 
                         {user?.role === 'ROOT' && (
-                            <button
-                                onClick={() => {
-                                    setActiveTab(activeTab === 'management' ? 'metrics' : 'management');
-                                    setIsMobileMenuOpen(false);
-                                }}
-                                className={cn(
-                                    "w-full py-3.5 rounded-[1.25rem] font-black uppercase tracking-widest text-[10px] flex items-center justify-center gap-2 transition-all duration-300 ring-1 shadow-sm hover:scale-[1.02] active:scale-95",
-                                    activeTab === 'management'
-                                        ? "bg-gradient-to-br from-orange-400 to-orange-500 text-white shadow-[0_4px_15px_rgba(249,115,22,0.3)] ring-orange-400/50"
-                                        : "bg-white/60 backdrop-blur-md text-zinc-600 hover:bg-white hover:text-orange-500 ring-white hover:shadow-[0_8px_20px_rgba(0,0,0,0.08)]"
+                            <div className="flex flex-col gap-2">
+                                <button
+                                    onClick={() => {
+                                        setActiveTab(activeTab === 'management' ? 'metrics' : 'management');
+                                        setIsMobileMenuOpen(false);
+                                    }}
+                                    className={cn(
+                                        "w-full py-3.5 rounded-[1.25rem] font-black uppercase tracking-widest text-[10px] flex items-center justify-center gap-2 transition-all duration-300 ring-1 shadow-sm hover:scale-[1.02] active:scale-95",
+                                        activeTab === 'management'
+                                            ? "bg-gradient-to-br from-orange-400 to-orange-500 text-white shadow-[0_4px_15px_rgba(249,115,22,0.3)] ring-orange-400/50"
+                                            : "bg-white/60 backdrop-blur-md text-zinc-600 hover:bg-white hover:text-orange-500 ring-white hover:shadow-[0_8px_20px_rgba(0,0,0,0.08)]"
+                                    )}
+                                >
+                                    <Shield className="w-4 h-4" />
+                                    {activeTab === 'management' ? 'Exit Management' : 'System Management'}
+                                </button>
+                                
+                                {activeTab === 'management' && user.org_id && (
+                                    <button
+                                        onClick={() => {
+                                            setReportTarget({
+                                                id: user.org_id.toString(),
+                                                name: 'Full Fleet Audit',
+                                                type: 'org'
+                                            });
+                                            setIsReportModalOpen(true);
+                                        }}
+                                        className="w-full py-3 rounded-[1.25rem] bg-zinc-900 border border-zinc-800 text-white font-black uppercase tracking-widest text-[10px] flex items-center justify-center gap-2 hover:bg-zinc-800 transition-all hover:scale-[1.02] shadow-lg shadow-zinc-900/10"
+                                    >
+                                        <Activity className="w-4 h-4 text-orange-400" />
+                                        Generate Fleet Audit
+                                    </button>
                                 )}
-                            >
-                                <Shield className="w-4 h-4" />
-                                {activeTab === 'management' ? 'Exit Management' : 'System Management'}
-                            </button>
+                            </div>
                         )}
                     </div>
 

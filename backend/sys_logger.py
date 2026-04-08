@@ -1854,6 +1854,190 @@ def export_unit_data(unit_id):
         print(f"Export error: {e}")
         return jsonify({'error': str(e)}), 500
 
+# ============================================================
+# INTELLIGENT REPORT ANALYSIS ENGINE
+# ============================================================
+
+def calculate_node_health(metrics_summary):
+    """Calculates a health score from 0 to 100 based on metrics."""
+    if not metrics_summary: return 100
+    
+    cpu_avg = metrics_summary.get('avg_cpu', 0)
+    ram_avg = metrics_summary.get('avg_ram', 0)
+    gpu_avg = metrics_summary.get('avg_gpu', 0)
+    
+    # Simple weighted penalty system
+    score = 100
+    if cpu_avg > 80: score -= 20
+    elif cpu_avg > 60: score -= 10
+    
+    if ram_avg > 90: score -= 30
+    elif ram_avg > 75: score -= 15
+    
+    if gpu_avg > 85: score -= 15
+    
+    return max(0, score)
+
+def get_intelligent_insights(metrics_rows, sys_info):
+    """Generates human-readable analysis based on telemetry data patterns."""
+    insights = []
+    if not metrics_rows:
+        return ["Insufficient data points to perform intelligent analysis."]
+
+    cpu_vals = [r['cpu_usage'] for r in metrics_rows]
+    ram_vals = [r['ram_usage'] for r in metrics_rows]
+    
+    avg_cpu = sum(cpu_vals) / len(cpu_vals)
+    max_cpu = max(cpu_vals)
+    avg_ram = sum(ram_vals) / len(ram_vals)
+    max_ram = max(ram_vals)
+
+    # 1. Resource Utilization Insights
+    if avg_cpu < 5 and max_cpu < 15:
+        insights.append({
+            "type": "optimization",
+            "title": "Severe Under-utilization",
+            "text": "This node is consistently idle (Avg CPU < 5%). Consider downgrading resources or consolidating workloads to save costs."
+        })
+    elif avg_cpu > 70:
+        insights.append({
+            "type": "warning",
+            "title": "High Sustained Workload",
+            "text": "The CPU is under heavy load (70%+ average). This might lead to latency issues during peak operations."
+        })
+
+    if max_ram > 95:
+        insights.append({
+            "type": "critical",
+            "title": "RAM Exhaustion Detected",
+            "text": "System hit 95%+ RAM usage. This likely triggered swap-file usage, significantly slowing down performance."
+        })
+
+    # 2. Stability Analysis
+    if len(cpu_vals) > 5:
+        variance = sum((x - avg_cpu) ** 2 for x in cpu_vals) / len(cpu_vals)
+        if variance > 400: # High swing
+            insights.append({
+                "type": "info",
+                "title": "Unstable Load Profile",
+                "text": "We detected massive swings in CPU usage. This suggests bursty workloads or frequent periodic heavy tasks."
+            })
+
+    # 3. Recommendations
+    if avg_ram > 80:
+        insights.append({
+            "type": "recommendation",
+            "title": "Memory Upgrade Advised",
+            "text": f"Average RAM usage is {avg_ram:.1f}%. Increasing physical memory will provide more head-room for OS caching."
+        })
+
+    return insights
+
+@app.route('/api/reports/node/<unit_id>', methods=['GET'])
+def get_node_report(unit_id):
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor(cursor_factory=RealDictCursor)
+        
+        # Resolve Unit
+        cur.execute("SELECT * FROM systems WHERE system_id::varchar = %s OR system_name = %s", (unit_id, unit_id))
+        system = cur.fetchone()
+        if not system:
+            return jsonify({'error': 'Node not found'}), 404
+        
+        sys_id = system['system_id']
+        time_range = request.args.get('range', '7d')
+        days = 7
+        if time_range == '1d': days = 1
+        elif time_range == '30d': days = 30
+        elif time_range == '1y': days = 365
+        
+        start_date = datetime.now() - timedelta(days=days)
+        
+        # Decide granularity
+        if days <= 7:
+            # Raw data
+            query = "SELECT timestamp, cpu_usage, ram_usage, gpu_usage as gpu_usage, network_rx_mb, network_tx_mb FROM system_metrics WHERE system_id = %s AND timestamp >= %s ORDER BY timestamp ASC"
+            cur.execute(query, (sys_id, start_date))
+        else:
+            # Aggregated data
+            period_type = 'hourly' if days <= 31 else 'daily'
+            query = "SELECT period_start as timestamp, avg_cpu_usage as cpu_usage, avg_ram_usage as ram_usage, avg_gpu_usage as gpu_usage, total_network_rx_mb as network_rx_mb, total_network_tx_mb as network_tx_mb FROM aggregated_metrics WHERE system_id = %s AND period_start >= %s AND period_type = %s ORDER BY period_start ASC"
+            cur.execute(query, (sys_id, start_date, period_type))
+            
+        rows = cur.fetchall()
+        
+        # Perform Analysis
+        insights = get_intelligent_insights(rows, system)
+        
+        # Basic Summary
+        summary = {
+            "avg_cpu": sum(r['cpu_usage'] for r in rows) / len(rows) if rows else 0,
+            "max_cpu": max([r['cpu_usage'] for r in rows]) if rows else 0,
+            "avg_ram": sum(r['ram_usage'] for r in rows) / len(rows) if rows else 0,
+            "max_ram": max([r['ram_usage'] for r in rows]) if rows else 0,
+            "total_rx": sum(r['network_rx_mb'] for r in rows) if rows else 0,
+            "total_tx": sum(r['network_tx_mb'] for r in rows) if rows else 0,
+        }
+        
+        health_score = calculate_node_health(summary)
+        
+        return jsonify({
+            "system": {
+                "name": system['system_name'],
+                "os": system['os'],
+                "ip": system['ip_address'],
+                "cpu_model": system['cpu_model'],
+                "ram_gb": float(system['ram_gb']) if system['ram_gb'] else 0
+            },
+            "summary": summary,
+            "health_score": health_score,
+            "insights": insights,
+            "timeline": rows
+        })
+        
+    except Exception as e:
+        logging.error(f"Report Error: {e}")
+        return jsonify({'error': str(e)}), 500
+    finally:
+        cur.close()
+        conn.close()
+
+@app.route('/api/reports/org/<org_id>', methods=['GET'])
+def get_org_report(org_id):
+    # Fleet-wide intelligence aggregation
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor(cursor_factory=RealDictCursor)
+        
+        cur.execute("SELECT system_id, system_name FROM systems WHERE org_id::varchar = %s", (org_id,))
+        systems = cur.fetchall()
+        
+        report_data = []
+        for sys in systems:
+            # Fetch summary for each node (simplified for fleet report)
+            cur.execute("SELECT AVG(cpu_usage) as avg_cpu, AVG(ram_usage) as avg_ram FROM system_metrics WHERE system_id = %s AND timestamp >= NOW() - INTERVAL '7 days'", (sys['system_id'],))
+            res = cur.fetchone()
+            report_data.append({
+                "name": sys['system_name'],
+                "avg_cpu": float(res['avg_cpu'] or 0),
+                "avg_ram": float(res['avg_ram'] or 0)
+            })
+            
+        return jsonify({
+            "org_id": org_id,
+            "fleet_size": len(systems),
+            "node_summaries": report_data,
+            "insights": [
+                {"type": "info", "title": "Fleet Capacity", "text": f"Your fleet currently consists of {len(systems)} active monitoring nodes."}
+            ]
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        cur.close()
+        conn.close()
+
 @socketio.on('connect')
 def handle_connect():
     # Security: Do not emit all units on connect.
