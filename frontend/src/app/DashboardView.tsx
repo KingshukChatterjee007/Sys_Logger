@@ -167,6 +167,7 @@ export default function DashboardView({ orgId: propOrgId }: DashboardViewProps) 
     const [newNodeName, setNewNodeName] = useState('')
     const [isDownloading, setIsDownloading] = useState(false)
     const [addNodeError, setAddNodeError] = useState('')
+    const [generatedLink, setGeneratedLink] = useState('')
     const [isUpgradeModalOpen, setIsUpgradeModalOpen] = useState(false)
     const [plans, setPlans] = useState<PricingPlan[]>([])
     const [paymentLoading, setPaymentLoading] = useState<string | null>(null)
@@ -384,6 +385,49 @@ export default function DashboardView({ orgId: propOrgId }: DashboardViewProps) 
             setIsAddNodeOpen(false)
             setNewNodeName('')
             apiUnits.refetchUnits()
+        }
+    }
+
+    const handleGenerateLink = async (compName: string) => {
+        if (!compName.trim()) {
+            setAddNodeError('Unit Name is required')
+            return
+        }
+
+        setIsDownloading(true)
+        setAddNodeError('')
+        setGeneratedLink('')
+
+        try {
+            const response = await fetch('/api/units/generate-link', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({ comp_id: compName })
+            })
+
+            const data = await response.json()
+            if (!response.ok) {
+                if (data.error === 'limit_reached') {
+                    setIsAddNodeOpen(false)
+                    setIsUpgradeModalOpen(true)
+                    return false
+                }
+                setAddNodeError(data.message || 'Failed to generate link')
+                return false
+            }
+
+            const fullUrl = window.location.origin + data.download_url;
+            setGeneratedLink(fullUrl)
+            return true
+        } catch (err) {
+            console.error('Link generation error:', err)
+            setAddNodeError('Connection failure while generating link')
+            return false
+        } finally {
+            setIsDownloading(false)
         }
     }
 
@@ -776,20 +820,61 @@ export default function DashboardView({ orgId: propOrgId }: DashboardViewProps) 
                                         </p>
                                     </div>
 
-                                    <button
-                                        onClick={handleAddNode}
-                                        disabled={isDownloading}
-                                        className="w-full bg-zinc-900 text-white rounded-2xl py-5 font-black uppercase tracking-widest text-xs flex items-center justify-center gap-3 hover:bg-zinc-800 transition-all disabled:opacity-50 group shadow-xl shadow-zinc-900/10"
-                                    >
-                                        {isDownloading ? (
-                                            <div className="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin" />
-                                        ) : (
-                                            <>
-                                                Download Installer
-                                                <ChevronRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
-                                            </>
-                                        )}
-                                    </button>
+                                    {generatedLink ? (
+                                        <div className="flex flex-col gap-3">
+                                            <div className="p-4 bg-emerald-50 rounded-2xl border border-emerald-100 flex flex-col gap-2">
+                                                <div className="flex justify-between items-center">
+                                                    <span className="text-[10px] font-black uppercase tracking-widest text-emerald-600">Shareable Link</span>
+                                                    <span className="text-[9px] font-bold text-emerald-500 bg-emerald-100 px-2 py-0.5 rounded-full">Valid for 24h</span>
+                                                </div>
+                                                <input 
+                                                    type="text" 
+                                                    readOnly 
+                                                    value={generatedLink} 
+                                                    className="w-full bg-white border-none ring-1 ring-emerald-200 rounded-xl py-3 px-4 text-xs font-mono text-zinc-600 focus:outline-none"
+                                                    onClick={(e) => { e.currentTarget.select(); navigator.clipboard.writeText(generatedLink); }}
+                                                />
+                                                <p className="text-[10px] text-emerald-600 font-medium">Click the link above to copy it to your clipboard. Share it with your team to install the agent without logging in.</p>
+                                            </div>
+                                            <button
+                                                onClick={() => { setIsAddNodeOpen(false); setNewNodeName(''); setGeneratedLink(''); apiUnits.refetchUnits(); }}
+                                                className="w-full bg-zinc-900 text-white rounded-2xl py-4 font-black uppercase tracking-widest text-[11px] flex items-center justify-center gap-2 hover:bg-zinc-800 transition-all shadow-md"
+                                            >
+                                                Done
+                                            </button>
+                                        </div>
+                                    ) : (
+                                        <div className="flex flex-col sm:flex-row gap-3">
+                                            <button
+                                                onClick={handleAddNode}
+                                                disabled={isDownloading}
+                                                className="flex-1 bg-zinc-900 text-white rounded-2xl py-4 font-black uppercase tracking-widest text-[10px] sm:text-xs flex items-center justify-center gap-2 hover:bg-zinc-800 transition-all disabled:opacity-50 group shadow-lg"
+                                            >
+                                                {isDownloading ? (
+                                                    <div className="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin" />
+                                                ) : (
+                                                    <>
+                                                        Download directly
+                                                        <Download className="w-3.5 h-3.5" />
+                                                    </>
+                                                )}
+                                            </button>
+                                            <button
+                                                onClick={() => handleGenerateLink(newNodeName)}
+                                                disabled={isDownloading}
+                                                className="flex-1 bg-white text-zinc-700 ring-1 ring-zinc-200 rounded-2xl py-4 font-black uppercase tracking-widest text-[10px] sm:text-xs flex items-center justify-center gap-2 hover:ring-zinc-300 hover:bg-zinc-50 transition-all disabled:opacity-50 group"
+                                            >
+                                                {isDownloading ? (
+                                                    <div className="w-4 h-4 border-2 border-zinc-200 border-t-zinc-700 rounded-full animate-spin" />
+                                                ) : (
+                                                    <>
+                                                        Generate Link
+                                                        <Globe className="w-3.5 h-3.5" />
+                                                    </>
+                                                )}
+                                            </button>
+                                        </div>
+                                    )}
                                 </div>
                             </motion.div>
                         </div>
@@ -1006,28 +1091,61 @@ export default function DashboardView({ orgId: propOrgId }: DashboardViewProps) 
                                                 </div>
                                             </div>
 
-                                            <div className="flex flex-col sm:flex-row gap-3">
-                                                <button
-                                                    onClick={() => downloadInstaller(selectedUnit.name.split('/').pop() || '')}
-                                                    disabled={isDownloading}
-                                                    className="flex-1 bg-zinc-900 text-white rounded-2xl py-5 px-8 font-black uppercase tracking-widest text-[11px] flex items-center justify-center gap-3 hover:bg-zinc-800 transition-all shadow-xl shadow-zinc-900/10 disabled:opacity-50"
-                                                >
-                                                    {isDownloading ? (
-                                                        <div className="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin" />
-                                                    ) : (
-                                                        <>
-                                                            <Download className="w-4 h-4" />
-                                                            Download Installer Again
-                                                        </>
-                                                    )}
-                                                </button>
-                                                <button
-                                                    onClick={handleDeleteUnit}
-                                                    className="px-8 bg-zinc-100 hover:bg-red-50 hover:text-red-600 text-zinc-500 rounded-2xl py-5 font-black uppercase tracking-widest text-[11px] transition-all"
-                                                >
-                                                    Cancel Setup
-                                                </button>
-                                            </div>
+                                            {generatedLink ? (
+                                                <div className="flex flex-col gap-3">
+                                                    <div className="p-4 bg-emerald-50 rounded-2xl border border-emerald-100 flex flex-col gap-2 text-left">
+                                                        <div className="flex justify-between items-center">
+                                                            <span className="text-[10px] font-black uppercase tracking-widest text-emerald-600">Shareable Link</span>
+                                                            <span className="text-[9px] font-bold text-emerald-500 bg-emerald-100 px-2 py-0.5 rounded-full">Valid for 24h</span>
+                                                        </div>
+                                                        <input 
+                                                            type="text" 
+                                                            readOnly 
+                                                            value={generatedLink} 
+                                                            className="w-full bg-white border-none ring-1 ring-emerald-200 rounded-xl py-3 px-4 text-xs font-mono text-zinc-600 focus:outline-none"
+                                                            onClick={(e) => { e.currentTarget.select(); navigator.clipboard.writeText(generatedLink); }}
+                                                        />
+                                                        <p className="text-[10px] text-emerald-600 font-medium">Click the link above to copy it to your clipboard.</p>
+                                                    </div>
+                                                </div>
+                                            ) : (
+                                                <div className="flex flex-col sm:flex-row gap-3">
+                                                    <button
+                                                        onClick={() => downloadInstaller(selectedUnit.name.split('/').pop() || '')}
+                                                        disabled={isDownloading}
+                                                        className="flex-1 bg-zinc-900 text-white rounded-2xl py-5 px-8 font-black uppercase tracking-widest text-[11px] flex items-center justify-center gap-3 hover:bg-zinc-800 transition-all shadow-xl shadow-zinc-900/10 disabled:opacity-50"
+                                                    >
+                                                        {isDownloading ? (
+                                                            <div className="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin" />
+                                                        ) : (
+                                                            <>
+                                                                <Download className="w-4 h-4" />
+                                                                Download
+                                                            </>
+                                                        )}
+                                                    </button>
+                                                    <button
+                                                        onClick={() => handleGenerateLink(selectedUnit.name.split('/').pop() || '')}
+                                                        disabled={isDownloading}
+                                                        className="flex-1 bg-white text-zinc-700 ring-1 ring-zinc-200 rounded-2xl py-5 px-8 font-black uppercase tracking-widest text-[11px] flex items-center justify-center gap-3 hover:ring-zinc-300 hover:bg-zinc-50 transition-all disabled:opacity-50"
+                                                    >
+                                                        {isDownloading ? (
+                                                            <div className="w-4 h-4 border-2 border-zinc-200 border-t-zinc-700 rounded-full animate-spin" />
+                                                        ) : (
+                                                            <>
+                                                                <Globe className="w-4 h-4" />
+                                                                Get Link
+                                                            </>
+                                                        )}
+                                                    </button>
+                                                    <button
+                                                        onClick={handleDeleteUnit}
+                                                        className="px-8 bg-zinc-100 hover:bg-red-50 hover:text-red-600 text-zinc-500 rounded-2xl py-5 font-black uppercase tracking-widest text-[11px] transition-all"
+                                                    >
+                                                        Cancel Setup
+                                                    </button>
+                                                </div>
+                                            )}
                                         </div>
                                     </div>
                                 ) : activeTab === 'metrics' ? (
