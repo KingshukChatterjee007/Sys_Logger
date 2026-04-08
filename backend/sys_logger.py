@@ -77,6 +77,7 @@ else:
     DB_USER = os.getenv('DB_USER', 'postgres')
     DB_PASS = os.getenv('DB_PASS', 'postgres')
     DB_NAME = os.getenv('DB_NAME', 'sys_logger')
+PUBLIC_SERVER_URL = "http://187.127.142.58"
 
 def get_db_connection():
     try:
@@ -122,11 +123,16 @@ def token_required(f):
             return jsonify({'message': 'Token is missing!'}), 401
         
         try:
+            # Try new long key first
             data = jwt.decode(token, app.config['SECRET_KEY'], algorithms=["HS256"])
-            # In a real app, query DB for user to ensure they still exist
             current_user = data
-        except Exception as e:
-            return jsonify({'message': 'Token is invalid!', 'error': str(e)}), 401
+        except Exception:
+            try:
+                # Fallback to old short key
+                data = jwt.decode(token, 'sys-logger-super-secret-key', algorithms=["HS256"])
+                current_user = data
+            except Exception as e:
+                return jsonify({'message': 'Token is invalid!', 'error': str(e)}), 401
             
         return f(current_user, *args, **kwargs)
     return decorated
