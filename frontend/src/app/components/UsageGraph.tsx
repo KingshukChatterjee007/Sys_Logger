@@ -109,10 +109,10 @@ export const UsageGraph: React.FC<UsageGraphProps> = ({
     })
 
     if (filtered.length === 0 && sortedData.length > 0) {
-      return sortedData.slice(-20)
+      return sortedData.slice(-50)
     }
 
-    return filtered
+    return filtered;
   }, [data, selectedTimeRange, currentTime])
 
   const chartData = useMemo(() => {
@@ -139,9 +139,12 @@ export const UsageGraph: React.FC<UsageGraphProps> = ({
     const dataset = {
       label: metric.toUpperCase(),
       data: filteredData.map(log => {
+        // Handle all possible naming variations from agent/backend based on types.ts
         if (metric === 'cpu') return log.cpu ?? log.cpu_usage ?? 0
         if (metric === 'ram') return log.ram ?? log.ram_usage ?? 0
         if (metric === 'gpu') return typeof log.gpu === 'number' ? log.gpu : (log.gpu_load ?? log.gpu_usage ?? 0)
+        if (metric === 'network_rx') return log.network_rx ?? 0
+        if (metric === 'network_tx') return log.network_tx ?? 0
         return (log as any)[metric] ?? 0
       }),
       borderColor: colors.border,
@@ -156,6 +159,7 @@ export const UsageGraph: React.FC<UsageGraphProps> = ({
       },
       fill: true,
       tension: 0.4,
+      spanGaps: true,
       pointRadius: 0,
       pointHoverRadius: 5,
       pointHoverBackgroundColor: '#fff',

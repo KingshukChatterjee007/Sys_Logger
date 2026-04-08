@@ -10,7 +10,7 @@ import { useUnits } from './components/hooks/useUnits'
 import { clsx, type ClassValue } from 'clsx'
 import { twMerge } from 'tailwind-merge'
 
-import { Unit } from './components/types'
+import { Unit, UsageData } from './components/types'
 import {
     Monitor, Server, Database, Globe,
     ChevronRight, Download, Cpu, HardDrive,
@@ -40,6 +40,119 @@ interface PricingPlan {
 import { useAuth } from './components/AuthContext';
 import { useRouter } from 'next/navigation';
 
+// --- FIXED DUMMY DATA (Moved outside to prevent hydration mismatch) ---
+const DUMMY_UNITS: Unit[] = [
+    {
+        id: 'dummy-1',
+        name: 'Production/Main-Frame',
+        status: 'online',
+        ip: '192.168.1.105',
+        last_seen: '2026-04-08T14:17:00.000Z',
+        metrics: { cpu: 42, ram: 65, gpu: 12, network_rx: 4.5, network_tx: 1.2 }
+    },
+    {
+        id: 'dummy-2',
+        name: 'Edge/Sensor-Alpha',
+        status: 'online',
+        ip: '10.0.0.42',
+        last_seen: '2026-04-08T14:17:00.000Z',
+        metrics: { cpu: 8, ram: 12, gpu: 0, network_rx: 0.2, network_tx: 0.1 }
+    },
+    {
+        id: 'dummy-3',
+        name: 'Cloud/Database-Relay',
+        status: 'offline',
+        ip: '172.16.0.5',
+        last_seen: '2026-04-08T13:17:00.000Z',
+        metrics: { cpu: 0, ram: 0, gpu: 0, network_rx: 0, network_tx: 0 }
+    },
+    {
+        id: 'dummy-4',
+        name: 'Dev/Test-Environment',
+        status: 'online',
+        ip: '127.0.0.1',
+        last_seen: '2026-04-08T14:17:00.000Z',
+        metrics: { cpu: 95, ram: 88, gpu: 75, network_rx: 24.8, network_tx: 15.2 }
+    }
+];
+// ----------------------------------------------------------------------
+
+const CompactStatCard = ({ unit, onClick }: { unit: Unit; onClick: () => void }) => {
+    const isOnline = unit.status === 'online';
+    const metrics = unit.metrics;
+
+    return (
+        <motion.button
+            whileHover={{ scale: 1.02, y: -4 }}
+            whileTap={{ scale: 0.98 }}
+            onClick={onClick}
+            className={cn(
+                "flex flex-col p-5 bg-white rounded-3xl ring-1 text-left group overflow-hidden relative transition-shadow duration-300 hover:z-20",
+                isOnline
+                    ? "ring-zinc-200 hover:ring-orange-400 hover:shadow-[0_20px_40px_-15px_rgba(249,115,22,0.1)]"
+                    : "ring-zinc-100 opacity-60 hover:opacity-100 grayscale hover:grayscale-0"
+            )}
+        >
+            {isOnline && (
+                <div className="absolute top-0 right-0 w-24 h-24 bg-orange-500/5 blur-2xl rounded-full -mr-12 -mt-12 group-hover:bg-orange-500/10 transition-colors" />
+            )}
+
+            <div className="flex justify-between items-center mb-4 relative z-10">
+                <div className="flex items-center gap-2.5 min-w-0">
+                    <div className={cn(
+                        "w-2.5 h-2.5 rounded-full ring-4 shadow-sm",
+                        isOnline ? "bg-emerald-500 ring-emerald-500/20 animate-pulse" : "bg-zinc-300 ring-zinc-300/20"
+                    )} />
+                    <h3 className="font-black text-[11px] uppercase tracking-wider text-zinc-800 truncate">{unit.name.split('/').pop()}</h3>
+                </div>
+                <div className="p-1.5 rounded-lg bg-zinc-50 text-zinc-400 group-hover:text-orange-500 group-hover:bg-orange-50 transition-all">
+                    <ChevronRight size={14} />
+                </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-y-4 gap-x-6 relative z-10">
+                <div className="flex flex-col gap-0.5">
+                    <span className="text-[8px] font-black text-zinc-400 uppercase tracking-widest flex items-center gap-1">
+                        <Cpu size={10} className="text-zinc-300" /> CPU
+                    </span>
+                    <span className="text-lg font-black font-mono text-zinc-900 tracking-tighter leading-none">
+                        {metrics?.cpu !== undefined ? metrics.cpu.toFixed(0) : '--'}<span className="text-[10px] text-zinc-400 font-bold ml-0.5">%</span>
+                    </span>
+                </div>
+                <div className="flex flex-col gap-0.5 items-end">
+                    <span className="text-[8px] font-black text-zinc-400 uppercase tracking-widest flex items-center gap-1">
+                        <HardDrive size={10} className="text-zinc-300" /> RAM
+                    </span>
+                    <span className="text-lg font-black font-mono text-zinc-900 tracking-tighter leading-none">
+                        {metrics?.ram !== undefined ? metrics.ram.toFixed(0) : '--'}<span className="text-[10px] text-zinc-400 font-bold ml-0.5">%</span>
+                    </span>
+                </div>
+                <div className="flex flex-col gap-0.5">
+                    <span className="text-[8px] font-black text-zinc-400 uppercase tracking-widest flex items-center gap-1">
+                        <Zap size={10} className="text-zinc-300" /> GPU
+                    </span>
+                    <span className="text-lg font-black font-mono text-zinc-900 tracking-tighter leading-none">
+                        {metrics?.gpu !== undefined ? metrics.gpu.toFixed(0) : '--'}<span className="text-[10px] text-zinc-400 font-bold ml-0.5">%</span>
+                    </span>
+                </div>
+                <div className="flex flex-col gap-0.5 items-end">
+                    <span className="text-[8px] font-black text-zinc-400 uppercase tracking-widest flex items-center gap-1">
+                        <Wifi size={10} className="text-zinc-300" /> NET
+                    </span>
+                    <span className="text-lg font-black font-mono text-zinc-900 tracking-tighter leading-none">
+                        {metrics?.network_rx !== undefined ? metrics.network_rx.toFixed(1) : '--'}<span className="text-[8px] text-zinc-400 font-bold ml-0.5">MB/s</span>
+                    </span>
+                </div>
+            </div>
+
+            <div className="mt-4 pt-4 border-t border-zinc-50 flex items-center justify-between text-[9px] font-bold text-zinc-400">
+                <span className="truncate max-w-[100px]">{unit.ip || 'no-ip'}</span>
+                <span suppressHydrationWarning>{unit.last_seen ? new Date(unit.last_seen).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'never'}</span>
+            </div>
+        </motion.button>
+    );
+};
+
 export default function DashboardView({ orgId: propOrgId }: DashboardViewProps) {
     const { user, token, logout, isLoading } = useAuth();
     const router = useRouter();
@@ -50,24 +163,57 @@ export default function DashboardView({ orgId: propOrgId }: DashboardViewProps) 
         }
     }, [token, isLoading, router]);
 
+    const [selectedUnit, setSelectedUnit] = useState<Unit | null>(null)
+    const [mockUsageData, setMockUsageData] = useState<UsageData[]>([])
+    const [currentTime, setCurrentTime] = useState<string>('')
     const [viewOrgId] = useState<string | null>(propOrgId || null)
 
     // Real API Hooks
     const apiUsage = useUsageData(viewOrgId || undefined)
     const apiUnits = useUnits(viewOrgId || undefined)
 
+    // Sync selected unit with usage hook
+    useEffect(() => {
+        if (selectedUnit && !selectedUnit.id.startsWith('dummy-')) {
+            apiUsage.setSelectedUnitId(selectedUnit.id);
+        } else {
+            apiUsage.setSelectedUnitId(null);
+        }
+    }, [selectedUnit, apiUsage]);
+
     // Determine which data to use
-    const units = apiUnits.units
+    const units = [...apiUnits.units, ...DUMMY_UNITS]
+
+    // Sync mock data for dummy units
+    useEffect(() => {
+        if (selectedUnit?.id.startsWith('dummy-')) {
+            const now = Date.now();
+            const fakeData: UsageData[] = Array.from({ length: 100 }).map((_, i) => {
+                const ts = new Date(now - (100 - i) * 2000).toISOString();
+                const m = selectedUnit.metrics || { cpu: 0, ram: 0, gpu: 0, network_rx: 0, network_tx: 0 };
+                const jitter = (val: number, range: number) => Math.max(0, Math.min(100, val + (Math.random() * range - range / 2)));
+                return {
+                    timestamp: ts,
+                    cpu: jitter(m.cpu, 15),
+                    ram: jitter(m.ram, 5),
+                    gpu_load: jitter(m.gpu, 10),
+                    network_rx: Math.max(0, m.network_rx + (Math.random() * 0.5 - 0.25)),
+                    network_tx: Math.max(0, m.network_tx + (Math.random() * 0.1 - 0.05))
+                } as any;
+            });
+            setMockUsageData(fakeData);
+        } else {
+            setMockUsageData([]);
+        }
+    }, [selectedUnit]);
+
+    const usageData = selectedUnit?.id.startsWith('dummy-') ? mockUsageData : apiUsage.data
     const loading = apiUnits.loading
-    const usageData = apiUsage.data
     const selectedUnitId = apiUsage.selectedUnitId
 
-    const [selectedUnit, setSelectedUnit] = useState<Unit | null>(null)
-    const [currentTime, setCurrentTime] = useState<string>('')
     const [activeTab, setActiveTab] = useState<'metrics' | 'logs' | 'management'>('metrics')
-
-    // Track the selected component metric
     const [selectedMetric, setSelectedMetric] = useState<'cpu' | 'gpu' | 'ram' | 'network_rx'>('cpu')
+
 
     const [isEditing, setIsEditing] = useState(false)
     const [editModeData, setEditModeData] = useState({ org_id: '', comp_id: '' })
@@ -347,11 +493,14 @@ export default function DashboardView({ orgId: propOrgId }: DashboardViewProps) 
                             <ArrowLeft className="w-5 h-5" />
                         </Link>
 
-                        <div>
-                            <h1 className="text-xl lg:text-2xl font-black tracking-tight text-zinc-900 uppercase">
+                        <button
+                            onClick={clearSelection}
+                            className="text-left group"
+                        >
+                            <h1 className="text-xl lg:text-2xl font-black tracking-tight text-zinc-900 uppercase group-hover:text-orange-600 transition-colors">
                                 Dashboard
                             </h1>
-                        </div>
+                        </button>
                     </div>
                 </div>
 
@@ -481,11 +630,14 @@ export default function DashboardView({ orgId: propOrgId }: DashboardViewProps) 
                                             const isPending = unit.status === 'pending';
 
                                             return (
-                                                <button
+                                                <div
                                                     key={unit.id}
+                                                    role="button"
+                                                    tabIndex={0}
                                                     onClick={() => handleUnitToggle(unit)}
+                                                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') handleUnitToggle(unit); }}
                                                     className={cn(
-                                                        "w-full text-left p-4 lg:p-5 rounded-[1.5rem] transition-all duration-300 relative overflow-hidden group/card backdrop-blur-md",
+                                                        "w-full text-left p-4 lg:p-5 rounded-[1.5rem] transition-all duration-300 relative overflow-hidden group/card backdrop-blur-md cursor-pointer",
                                                         isSelected
                                                             ? 'bg-white/90 ring-[1.5px] ring-orange-400 shadow-[0_8px_30px_rgba(249,115,22,0.15)] scale-[1.02]'
                                                             : 'bg-white/40 ring-1 ring-white/60 hover:ring-orange-200 hover:bg-white/60 hover:shadow-[0_4px_20px_rgba(0,0,0,0.05)] hover:-translate-y-1'
@@ -518,8 +670,8 @@ export default function DashboardView({ orgId: propOrgId }: DashboardViewProps) 
                                                                 }}
                                                                 className={cn(
                                                                     "p-1.5 rounded-lg transition-all duration-300",
-                                                                    isSelected 
-                                                                        ? "bg-zinc-100/80 text-orange-600 hover:bg-orange-600 hover:text-white" 
+                                                                    isSelected
+                                                                        ? "bg-zinc-100/80 text-orange-600 hover:bg-orange-600 hover:text-white"
                                                                         : "bg-white/50 text-zinc-400 hover:text-orange-500 hover:bg-white"
                                                                 )}
                                                                 title="Download Client"
@@ -540,7 +692,7 @@ export default function DashboardView({ orgId: propOrgId }: DashboardViewProps) 
                                                             {isPending ? 'DEPLOYMENT PENDING' : unit.ip}
                                                         </span>
                                                     </div>
-                                                </button>
+                                                </div>
                                             )
                                         })}
                                     </div>
@@ -734,45 +886,45 @@ export default function DashboardView({ orgId: propOrgId }: DashboardViewProps) 
                                     <p className="text-sm font-medium text-zinc-500">You've used all your available node slots. Upgrade below to unlock more monitors instantly.</p>
                                 </div>
 
-                                    {plans && plans.length > 0 && (
-                                        <div className="space-y-4">
-                                            {plans
-                                                .filter(p => p.price_monthly > 0) // Only show paid plans for upgrade
-                                                .map((plan) => {
-                                                    const isCurrentPlan = user?.tier?.toUpperCase() === plan.slug.toUpperCase();
-                                                    const isRecommended = (user?.tier?.toUpperCase() === 'PRO' && plan.slug === 'business') || 
-                                                                        (user?.tier?.toUpperCase() !== 'PRO' && plan.slug === 'pro');
+                                {plans && plans.length > 0 && (
+                                    <div className="space-y-4">
+                                        {plans
+                                            .filter(p => p.price_monthly > 0) // Only show paid plans for upgrade
+                                            .map((plan) => {
+                                                const isCurrentPlan = user?.tier?.toUpperCase() === plan.slug.toUpperCase();
+                                                const isRecommended = (user?.tier?.toUpperCase() === 'PRO' && plan.slug === 'business') ||
+                                                    (user?.tier?.toUpperCase() !== 'PRO' && plan.slug === 'pro');
 
-                                                    return (
-                                                        <div key={plan.plan_id} className={`relative flex items-center justify-between p-5 rounded-2xl ring-1 transition-all ${isRecommended ? 'ring-orange-300 bg-orange-50/50' : 'ring-zinc-200 bg-zinc-50/50'} ${isCurrentPlan ? 'opacity-70 grayscale-[0.5]' : ''}`}>
-                                                            {isRecommended && (
-                                                                <div className="absolute -top-2.5 left-4 px-3 py-0.5 bg-orange-500 text-white text-[9px] font-black uppercase tracking-widest rounded-full shadow-sm">
-                                                                    Recommended
-                                                                </div>
-                                                            )}
-                                                            {isCurrentPlan && (
-                                                                <div className="absolute -top-2.5 left-4 px-3 py-0.5 bg-zinc-400 text-white text-[9px] font-black uppercase tracking-widest rounded-full shadow-sm">
-                                                                    Current Plan
-                                                                </div>
-                                                            )}
-                                                            <div>
-                                                                <p className="font-black text-zinc-900 uppercase tracking-wider text-sm">{plan.name}</p>
-                                                                <p className="text-xs font-medium text-zinc-500 mt-0.5">{plan.node_limit} Active Nodes • ₹{plan.price_monthly}/mo</p>
+                                                return (
+                                                    <div key={plan.plan_id} className={`relative flex items-center justify-between p-5 rounded-2xl ring-1 transition-all ${isRecommended ? 'ring-orange-300 bg-orange-50/50' : 'ring-zinc-200 bg-zinc-50/50'} ${isCurrentPlan ? 'opacity-70 grayscale-[0.5]' : ''}`}>
+                                                        {isRecommended && (
+                                                            <div className="absolute -top-2.5 left-4 px-3 py-0.5 bg-orange-500 text-white text-[9px] font-black uppercase tracking-widest rounded-full shadow-sm">
+                                                                Recommended
                                                             </div>
-                                                            <button
-                                                                onClick={() => !isCurrentPlan && handlePayment(plan)}
-                                                                disabled={paymentLoading === plan.slug || isCurrentPlan}
-                                                                className={`px-5 py-2.5 rounded-xl font-black uppercase tracking-widest text-[10px] flex items-center gap-2 transition-all disabled:opacity-50 ${isRecommended ? 'bg-zinc-900 text-white hover:bg-zinc-800 shadow-lg shadow-zinc-900/10' : 'bg-white text-zinc-700 ring-1 ring-zinc-200 hover:ring-zinc-300'}`}
-                                                            >
-                                                                {paymentLoading === plan.slug ? (
-                                                                    <div className="w-3.5 h-3.5 border-2 border-current/30 border-t-current rounded-full animate-spin" />
-                                                                ) : isCurrentPlan ? 'Active' : 'Upgrade Now'}
-                                                            </button>
+                                                        )}
+                                                        {isCurrentPlan && (
+                                                            <div className="absolute -top-2.5 left-4 px-3 py-0.5 bg-zinc-400 text-white text-[9px] font-black uppercase tracking-widest rounded-full shadow-sm">
+                                                                Current Plan
+                                                            </div>
+                                                        )}
+                                                        <div>
+                                                            <p className="font-black text-zinc-900 uppercase tracking-wider text-sm">{plan.name}</p>
+                                                            <p className="text-xs font-medium text-zinc-500 mt-0.5">{plan.node_limit} Active Nodes • ₹{plan.price_monthly}/mo</p>
                                                         </div>
-                                                    );
-                                                })}
-                                        </div>
-                                    )}
+                                                        <button
+                                                            onClick={() => !isCurrentPlan && handlePayment(plan)}
+                                                            disabled={paymentLoading === plan.slug || isCurrentPlan}
+                                                            className={`px-5 py-2.5 rounded-xl font-black uppercase tracking-widest text-[10px] flex items-center gap-2 transition-all disabled:opacity-50 ${isRecommended ? 'bg-zinc-900 text-white hover:bg-zinc-800 shadow-lg shadow-zinc-900/10' : 'bg-white text-zinc-700 ring-1 ring-zinc-200 hover:ring-zinc-300'}`}
+                                                        >
+                                                            {paymentLoading === plan.slug ? (
+                                                                <div className="w-3.5 h-3.5 border-2 border-current/30 border-t-current rounded-full animate-spin" />
+                                                            ) : isCurrentPlan ? 'Active' : 'Upgrade Now'}
+                                                        </button>
+                                                    </div>
+                                                );
+                                            })}
+                                    </div>
+                                )}
                             </motion.div>
                         </div>
                     )}
@@ -997,20 +1149,62 @@ export default function DashboardView({ orgId: propOrgId }: DashboardViewProps) 
                                 )}
                             </motion.div>
                         ) : (
-                            <motion.div key="empty" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="flex-1 flex flex-col items-center justify-center bg-white shadow-[0_2px_12px_rgba(0,0,0,0.03)] rounded-2xl lg:rounded-3xl ring-1 ring-zinc-200/80 h-full p-6 text-center">
-                                <div className="mb-6 lg:mb-8 p-6 lg:p-8 bg-zinc-50 rounded-full ring-1 ring-zinc-100 shadow-inner">
-                                    <Server className="w-12 h-12 lg:w-16 lg:h-16 text-zinc-300" />
+                            <motion.div
+                                key="fleet-overview"
+                                initial={{ opacity: 0, scale: 0.98 }}
+                                animate={{ opacity: 1, scale: 1 }}
+                                exit={{ opacity: 0, scale: 0.98 }}
+                                className="flex-1 flex flex-col min-h-0"
+                            >
+                                <div className="flex items-center justify-between mb-6 shrink-0 pt-2 px-1">
+                                    <div>
+                                        <h2 className="text-2xl lg:text-3xl font-black text-zinc-900 tracking-tight uppercase">Fleet Overview</h2>
+                                        <p className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-400 mt-1">Real-time health monitoring for {units.length} active nodes</p>
+                                    </div>
+                                    <div className="flex items-center gap-3">
+                                        <div className="px-4 py-2 bg-white ring-1 ring-zinc-200 rounded-xl shadow-sm flex items-center gap-3">
+                                            <div className="flex items-center gap-1.5">
+                                                <div className="w-2 h-2 rounded-full bg-emerald-500" />
+                                                <span className="text-[10px] font-black text-zinc-800 uppercase">{activeUnits} Online</span>
+                                            </div>
+                                            <div className="w-[1px] h-3 bg-zinc-200" />
+                                            <div className="flex items-center gap-1.5">
+                                                <div className="w-2 h-2 rounded-full bg-zinc-300" />
+                                                <span className="text-[10px] font-black text-zinc-500 uppercase">{totalUnits - activeUnits} Offline</span>
+                                            </div>
+                                        </div>
+                                    </div>
                                 </div>
-                                <h2 className="text-xl lg:text-2xl font-black text-zinc-900 tracking-tight uppercase mb-2 lg:mb-3">Awaiting Selection</h2>
-                                <p className="text-zinc-500 max-w-sm text-xs lg:text-sm font-medium leading-relaxed">
-                                    Choose a machine from the <span className="text-zinc-700 font-bold">Active Fleet</span> roster to monitor real-time telemetry and manage configurations.
-                                </p>
-                                <button
-                                    onClick={() => setIsMobileMenuOpen(true)}
-                                    className="mt-6 lg:hidden px-6 py-2.5 bg-orange-50 text-orange-600 font-bold rounded-xl ring-1 ring-orange-200 shadow-sm text-xs uppercase tracking-wider"
-                                >
-                                    Open Fleet Menu
-                                </button>
+
+                                <div className="flex-1 overflow-y-auto custom-scrollbar pr-1 p-1 pt-4">
+                                    {units.length === 0 ? (
+                                        <div className="flex-1 flex flex-col items-center justify-center p-12 bg-white rounded-3xl ring-1 ring-zinc-200/50 text-center shadow-sm">
+                                            <div className="mb-6 p-6 bg-zinc-50 rounded-full ring-1 ring-zinc-100 shadow-inner">
+                                                <Server className="w-12 h-12 text-zinc-300" />
+                                            </div>
+                                            <h2 className="text-xl font-black text-zinc-900 tracking-tight uppercase mb-2">No nodes found</h2>
+                                            <p className="text-zinc-500 max-w-sm text-xs font-medium leading-relaxed mb-8">
+                                                Start by deploying a monitor to your first system to see real-time statistics here.
+                                            </p>
+                                            <button
+                                                onClick={() => setIsAddNodeOpen(true)}
+                                                className="bg-zinc-900 text-white rounded-2xl py-4 px-8 font-black uppercase tracking-widest text-[11px] flex items-center justify-center gap-2 hover:bg-zinc-800 transition-all shadow-xl shadow-zinc-900/10"
+                                            >
+                                                <Zap className="w-4 h-4 text-orange-400" /> Deploy First Monitor
+                                            </button>
+                                        </div>
+                                    ) : (
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4 lg:gap-5 pb-8">
+                                            {units.map((unit) => (
+                                                <CompactStatCard
+                                                    key={unit.id}
+                                                    unit={unit}
+                                                    onClick={() => handleUnitToggle(unit)}
+                                                />
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
                             </motion.div>
                         )}
                     </AnimatePresence>

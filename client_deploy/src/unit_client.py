@@ -53,8 +53,9 @@ class UnitClient:
         self.comp_id = self.config.get('comp_id')
         self.install_token = self.config.get('install_token')  # One-time use token from admin
         
-        # Hardcode server URL as requested by user
-        self.server_url = DEFAULT_SERVER_URL
+        # Get server URL from config (injected by installer)
+        # Fallback to the default only if not in config
+        self.server_url = self.config.get('server_url', DEFAULT_SERVER_URL)
         
         if not self.org_id or self.org_id == 'default_org' or not self.comp_id:
             # Under PM2/Boot — config must be set up by admin-generated installer

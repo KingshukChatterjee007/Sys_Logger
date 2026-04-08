@@ -61,6 +61,9 @@ RAZORPAY_KEY_ID = os.getenv('RAZORPAY_KEY_ID', 'rzp_test_placeholder')
 RAZORPAY_KEY_SECRET = os.getenv('RAZORPAY_KEY_SECRET', 'secret_placeholder')
 razorpay_client = razorpay.Client(auth=(RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET))
 
+# Public URL for the agent to connect back to (useful for hosting/proxies)
+PUBLIC_SERVER_URL = os.getenv('PUBLIC_SERVER_URL')
+
 # DB Config
 DATABASE_URL = os.getenv('DATABASE_URL')
 if DATABASE_URL:
@@ -306,8 +309,15 @@ def download_installer(current_user):
             
             # Inject pre-filled config with one-time install_token
             install_token = str(uuid.uuid4())
+            
+            # Dynamically determine server URL
+            # 1. Use environment variable if set (best for hosting/proxies)
+            # 2. Fallback to browser's request URL
+            server_url = PUBLIC_SERVER_URL or request.host_url.rstrip('/')
+            
             config_data = {
                 'system_id': str(uuid.uuid4()),
+                'server_url': server_url,
                 'org_id': str(org_id),
                 'comp_id': comp_id,
                 'install_token': install_token
@@ -620,6 +630,13 @@ class UnitStore:
             'os_info': row['os'],
             'ram_total': float(row['ram_gb']) if row['ram_gb'] else 0,
             'ip': row['ip_address'],
+            'metrics': {
+                'cpu': float(row.get('cpu_usage', 0) or 0),
+                'ram': float(row.get('ram_usage', 0) or 0),
+                'gpu': float(row.get('gpu_usage', 0) or 0),
+                'network_rx': float(row.get('network_rx_mb', 0) or 0),
+                'network_tx': float(row.get('network_tx_mb', 0) or 0)
+            } if row.get('cpu_usage') is not None else None,
             'alerts': [] 
         }
 
@@ -732,9 +749,17 @@ class UnitStore:
             cur = conn.cursor(cursor_factory=RealDictCursor)
             
             query = """
-                SELECT s.*, o.name as org_display_name, o.slug as org_slug 
+                SELECT s.*, o.name as org_display_name, o.slug as org_slug,
+                       m.cpu_usage, m.ram_usage, m.gpu_usage, m.network_rx_mb, m.network_tx_mb
                 FROM systems s 
                 LEFT JOIN organizations o ON s.org_id::varchar = o.org_id::varchar
+                LEFT JOIN LATERAL (
+                    SELECT cpu_usage, ram_usage, gpu_usage, network_rx_mb, network_tx_mb
+                    FROM system_metrics
+                    WHERE system_id = s.system_id
+                    ORDER BY timestamp DESC
+                    LIMIT 1
+                ) m ON TRUE
             """
             params = []
             

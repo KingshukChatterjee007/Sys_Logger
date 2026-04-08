@@ -25,6 +25,13 @@ export interface Unit {
   status: 'online' | 'offline' | 'warning' | 'pending'
   last_seen: string | null
   ip?: string
+  metrics?: {
+    cpu: number
+    ram: number
+    gpu: number
+    network_rx: number
+    network_tx: number
+  }
   alerts?: Alert[]
 }
 
