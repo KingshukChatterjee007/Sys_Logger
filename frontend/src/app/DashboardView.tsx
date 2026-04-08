@@ -1039,6 +1039,81 @@ export default function DashboardView({ orgId: propOrgId }: DashboardViewProps) 
                     )}
                 </AnimatePresence>
 
+                {/* EXPORT & REPORT MODAL */}
+                <AnimatePresence>
+                    {isReportModalOpen && (
+                        <div className="fixed inset-0 z-[110] flex items-center justify-center p-4">
+                            <motion.div
+                                initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                                onClick={() => setIsReportModalOpen(false)}
+                                className="absolute inset-0 bg-zinc-900/60 backdrop-blur-md"
+                            />
+                            <motion.div
+                                initial={{ opacity: 0, scale: 0.9, y: 30 }}
+                                animate={{ opacity: 1, scale: 1, y: 0 }}
+                                exit={{ opacity: 0, scale: 0.9, y: 30 }}
+                                className="relative w-full max-w-lg bg-white rounded-[3rem] shadow-2xl p-12 overflow-hidden"
+                            >
+                                <div className="absolute top-0 left-0 w-full h-2 bg-zinc-900" />
+                                <div className="flex justify-between items-start mb-10">
+                                    <div>
+                                        <div className="flex items-center gap-2 text-orange-500 mb-2">
+                                            <Activity size={20} />
+                                            <span className="text-[10px] font-black uppercase tracking-[0.2em]">Data Audit Engine</span>
+                                        </div>
+                                        <h2 className="text-3xl font-black text-zinc-900 tracking-tighter uppercase whitespace-pre-line">Audit & Export{"\n"}Generation</h2>
+                                        <p className="text-sm font-bold text-zinc-400 mt-2 uppercase tracking-wide">Target: <span className="text-zinc-900">{reportTarget.name}</span></p>
+                                    </div>
+                                    <button onClick={() => setIsReportModalOpen(false)} className="p-3 bg-zinc-50 hover:bg-zinc-100 text-zinc-400 hover:text-zinc-900 rounded-2xl transition-all"><X size={20} /></button>
+                                </div>
+
+                                <div className="space-y-8">
+                                    <div>
+                                        <label className="text-[9px] font-black uppercase tracking-[0.2em] text-zinc-400 ml-1 block mb-3">1. Select Audit Timeframe</label>
+                                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                                            {['1d', '7d', '30d', '1y'].map((r) => (
+                                                <button 
+                                                    key={r}
+                                                    onClick={() => setReportTarget({ ...reportTarget, range: r } as any)}
+                                                    className={cn(
+                                                        "py-3 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all ring-1",
+                                                        (reportTarget as any).range === r 
+                                                            ? "bg-zinc-900 text-white ring-zinc-900 shadow-lg shadow-zinc-900/20" 
+                                                            : "bg-white text-zinc-500 ring-zinc-100 hover:ring-zinc-300"
+                                                    )}
+                                                >
+                                                    {r === '1d' ? '24H' : r === '7d' ? '7 Days' : r === '30d' ? '30 Days' : '1 Year'}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
+
+                                    <div className="flex flex-col gap-4">
+                                        <button 
+                                            onClick={() => { triggerIntelligentReport(reportTarget.id, reportTarget.type, (reportTarget as any).range || '7d'); setIsReportModalOpen(false); }}
+                                            className="w-full bg-gradient-to-r from-orange-600 to-orange-500 text-white rounded-[1.5rem] py-5 font-black uppercase tracking-widest text-xs flex items-center justify-center gap-3 hover:shadow-xl hover:shadow-orange-500/20 transition-all border-b-4 border-orange-700 active:border-b-0 active:translate-y-1"
+                                        >
+                                            <Zap size={18} />
+                                            View Intelligent Audit Report
+                                        </button>
+                                        <button 
+                                            onClick={() => { triggerRawExport(reportTarget.id, (reportTarget as any).range || '7d'); setIsReportModalOpen(false); }}
+                                            className="w-full bg-zinc-100 hover:bg-zinc-200 text-zinc-700 rounded-[1.5rem] py-5 font-black uppercase tracking-widest text-xs flex items-center justify-center gap-3 transition-all"
+                                        >
+                                            <Download size={18} />
+                                            Download Raw CSV Data
+                                        </button>
+                                    </div>
+
+                                    <p className="text-[10px] text-center text-zinc-400 font-medium leading-relaxed italic">
+                                        * Intelligent reports utilize heuristic patterns to detect bottlenecks, performance anomalies and provide automated resource advice.
+                                    </p>
+                                </div>
+                            </motion.div>
+                        </div>
+                    )}
+                </AnimatePresence>
+
                 <main className="flex-1 flex flex-col relative overflow-hidden w-full h-full">
                     <AnimatePresence mode="wait">
                         {activeTab === 'management' ? (
