@@ -62,22 +62,18 @@ RAZORPAY_KEY_SECRET = os.getenv('RAZORPAY_KEY_SECRET', 'secret_placeholder')
 razorpay_client = razorpay.Client(auth=(RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET))
 
 # Public URL for the agent to connect back to (useful for hosting/proxies)
-PUBLIC_SERVER_URL = os.getenv('PUBLIC_SERVER_URL')
+# Defaults to request host during registration/installer generation
+PUBLIC_SERVER_URL = os.getenv('PUBLIC_SERVER_URL', '')
 
 # DB Config
 DATABASE_URL = os.getenv('DATABASE_URL')
-if DATABASE_URL:
-    # Use connection string if provided
-    DB_HOST = None 
-    DB_USER = None
-    DB_PASS = None
-    DB_NAME = None
-else:
+if not DATABASE_URL:
     DB_HOST = os.getenv('DB_HOST', 'localhost')
     DB_USER = os.getenv('DB_USER', 'postgres')
     DB_PASS = os.getenv('DB_PASS', 'postgres')
     DB_NAME = os.getenv('DB_NAME', 'sys_logger')
-PUBLIC_SERVER_URL = "http://187.127.142.58"
+else:
+    DB_HOST = DB_USER = DB_PASS = DB_NAME = None
 
 def get_db_connection():
     try:
@@ -1468,7 +1464,9 @@ def serve_client_source():
 def generate_deploy_script():
     """Generate a PowerShell script for bulk deployment"""
     org_id = request.args.get('org_id', 'default_org')
-    server_url = request.args.get('server', 'http://187.127.142.58') 
+    # Use request origin/host as default server_url if nothing else provided
+    default_server = PUBLIC_SERVER_URL or f"{request.scheme}://{request.host}"
+    server_url = request.args.get('server', default_server) 
     
     script_content = f"""
 # Sys_Logger Bulk Deployment Script
@@ -2010,11 +2008,11 @@ def get_node_report(unit_id):
         
         return jsonify({
             "system": {
-                "name": system['system_name'],
-                "os": system['os'],
-                "ip": system['ip_address'],
-                "cpu_model": system['cpu_model'],
-                "ram_gb": float(system['ram_gb']) if system['ram_gb'] else 0
+                "name": system.get('system_name', 'Unknown'),
+                "os": system.get('os', 'Unknown'),
+                "ip": system.get('ip_address', 'Unknown'),
+                "cpu_model": system.get('cpu_info', 'Unknown CPU'),
+                "ram_gb": float(system.get('ram_gb', 0)) if system.get('ram_gb') else 0
             },
             "summary": summary,
             "health_score": health_score,
