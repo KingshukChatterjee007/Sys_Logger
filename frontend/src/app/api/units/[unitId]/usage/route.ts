@@ -8,7 +8,7 @@ export async function GET(
     const { unitId } = await params
 
     // Manual proxying for consistency across methods
-    const url = `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5010'}/api/units/${unitId}/usage`
+    const url = `${process.env.NEXT_PUBLIC_API_URL || 'http://187.127.142.58'}/api/units/${unitId}/usage`
     const response = await fetch(url, {
         method: 'GET',
         headers: { 'Content-Type': 'application/json' },

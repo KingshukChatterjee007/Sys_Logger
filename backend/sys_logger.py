@@ -1416,7 +1416,7 @@ def serve_client_source():
 def generate_deploy_script():
     """Generate a PowerShell script for bulk deployment"""
     org_id = request.args.get('org_id', 'default_org')
-    server_url = request.args.get('server', 'http://localhost:5000') 
+    server_url = request.args.get('server', 'http://187.127.142.58') 
     
     script_content = f"""
 # Sys_Logger Bulk Deployment Script

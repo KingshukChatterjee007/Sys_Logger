@@ -4,7 +4,7 @@
  */
 
 export function getBackendUrl(): string {
-    return process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5010'
+    return process.env.NEXT_PUBLIC_API_URL || 'http://187.127.142.58'
 }
 
 /**

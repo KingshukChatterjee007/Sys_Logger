@@ -34,7 +34,7 @@ except ImportError:
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 CONFIG_FILE = os.path.join(BASE_DIR, 'unit_client_config.json')
 CACHE_FILE = os.path.join(BASE_DIR, 'cached_usage.json')
-DEFAULT_SERVER_URL = 'http://187.127.142.58:5010'  # Hardcoded central server URL
+DEFAULT_SERVER_URL = 'http://187.127.142.58'  # Central server URL (Nginx on port 80 → Gunicorn on 5010)
 COLLECTION_INTERVAL = 1  # seconds - updated for 1-second updates
 RECONNECT_INTERVAL = 300  # seconds (5 minutes)
 MAX_RETRIES = 3

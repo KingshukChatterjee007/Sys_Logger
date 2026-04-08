@@ -177,9 +177,9 @@ def create_config_file(install_path):
             server_url = prompt_server_url()
         except ImportError:
             # Fallback if unit_client module not available
-            server_url = input("Enter server URL (default: http://localhost:5000): ").strip()
+            server_url = input("Enter server URL (default: http://187.127.142.58): ").strip()
             if not server_url:
-                server_url = 'http://localhost:5000'
+                server_url = 'http://187.127.142.58'
 
         default_config = {
             'system_id': system_id,

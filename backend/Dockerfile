@@ -22,17 +22,17 @@ COPY . .
 RUN mkdir -p /app/logs
 
 # Expose port
-EXPOSE 5000
+EXPOSE 5010
 
 # Set environment variables
 ENV FLASK_ENV=production
-ENV PORT=5000
+ENV PORT=5010
 ENV HOST=0.0.0.0
 ENV LOG_FOLDER=/app/logs
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:5000/api/health').read()" || exit 1
+    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:5010/health').read()" || exit 1
 
 # Run with gunicorn for production
 # Note: For Windows-specific features (GPU monitoring), you may need to run this on Windows

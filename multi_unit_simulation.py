@@ -6,7 +6,7 @@ import uuid
 from datetime import datetime
 
 # Configuration
-SERVER_URL = 'http://localhost:5000'
+SERVER_URL = 'http://187.127.142.58'
 NUM_UNITS = 5
 SUBMISSION_INTERVAL = 10  # seconds
 
