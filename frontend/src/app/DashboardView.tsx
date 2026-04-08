@@ -957,6 +957,56 @@ export default function DashboardView({ orgId: propOrgId }: DashboardViewProps) 
                     )}
                 </AnimatePresence>
 
+                {/* LINK MODAL FOR ACTIVE NODES */}
+                <AnimatePresence>
+                    {generatedLink && !isAddNodeOpen && (!selectedUnit || selectedUnit.status !== 'pending') && (
+                        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+                            <motion.div
+                                initial={{ opacity: 0 }}
+                                animate={{ opacity: 1 }}
+                                exit={{ opacity: 0 }}
+                                onClick={() => setGeneratedLink('')}
+                                className="absolute inset-0 bg-zinc-900/40 backdrop-blur-sm"
+                            />
+                            <motion.div
+                                initial={{ opacity: 0, scale: 0.95, y: 20 }}
+                                animate={{ opacity: 1, scale: 1, y: 0 }}
+                                exit={{ opacity: 0, scale: 0.95, y: 20 }}
+                                className="relative w-full max-w-md bg-white rounded-[2.5rem] shadow-[0_32px_64px_-16px_rgba(0,0,0,0.2)] p-10 overflow-hidden"
+                            >
+                                <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-orange-500 to-emerald-500" />
+                                <button
+                                    onClick={() => setGeneratedLink('')}
+                                    className="absolute top-6 right-6 p-2 text-zinc-400 hover:text-zinc-900 hover:bg-zinc-100 rounded-xl transition-all"
+                                >
+                                    <X size={20} />
+                                </button>
+                                <div className="mb-6">
+                                    <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-50 ring-1 ring-emerald-200 mb-4">
+                                        <Globe className="w-3.5 h-3.5 text-emerald-500" />
+                                        <span className="text-[10px] font-black uppercase tracking-[0.2em] text-emerald-600">Link Generated</span>
+                                    </div>
+                                    <h2 className="text-2xl font-black text-zinc-900 tracking-tight mb-2">Share Installer</h2>
+                                    <p className="text-sm font-medium text-zinc-500">Copy the URL below. It will expire in 24 hours.</p>
+                                </div>
+                                <input 
+                                    type="text" 
+                                    readOnly 
+                                    value={generatedLink} 
+                                    className="w-full bg-zinc-50 border-none ring-1 ring-zinc-200 rounded-xl py-4 px-4 text-xs font-mono text-zinc-600 focus:outline-none mb-6 text-center"
+                                    onClick={(e) => { e.currentTarget.select(); navigator.clipboard.writeText(generatedLink); }}
+                                />
+                                <button
+                                    onClick={() => { navigator.clipboard.writeText(generatedLink); setGeneratedLink(''); }}
+                                    className="w-full bg-zinc-900 text-white rounded-2xl py-4 font-black uppercase tracking-widest text-[11px] flex items-center justify-center gap-2 hover:bg-zinc-800 transition-all shadow-md"
+                                >
+                                    Copy & Close
+                                </button>
+                            </motion.div>
+                        </div>
+                    )}
+                </AnimatePresence>
+
                 <main className="flex-1 flex flex-col relative overflow-hidden w-full h-full">
                     <AnimatePresence mode="wait">
                         {activeTab === 'management' ? (
@@ -1037,6 +1087,9 @@ export default function DashboardView({ orgId: propOrgId }: DashboardViewProps) 
                                             )}
                                             <button onClick={handleDeleteUnit} disabled={isDeleting} className="p-2.5 lg:p-3 bg-white ring-1 ring-zinc-200/80 hover:bg-red-50 hover:ring-red-200 hover:text-red-600 text-zinc-400 rounded-xl transition-all shadow-sm disabled:opacity-50" title="Delete Node">
                                                 <Trash2 className="w-4 h-4" />
+                                            </button>
+                                            <button onClick={() => handleGenerateLink(selectedUnit.comp_id || selectedUnit.name.split('/').pop() || '')} disabled={isDownloading} className="p-2.5 lg:p-3 bg-white ring-1 ring-zinc-200/80 hover:bg-blue-50 hover:ring-blue-200 hover:text-blue-600 text-zinc-400 rounded-xl transition-all shadow-sm disabled:opacity-50" title="Get Installer Link">
+                                                <Globe className="w-4 h-4" />
                                             </button>
                                             <div className="hidden lg:block w-[1px] h-10 bg-zinc-200 mx-2 self-center" />
                                             <button onClick={handleCustomDownload} className="flex items-center gap-2 px-4 lg:px-5 py-2.5 lg:py-3 bg-zinc-900 hover:bg-zinc-800 text-white rounded-xl transition-all shadow-md active:scale-95">
