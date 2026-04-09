@@ -1,5 +1,5 @@
 =============================================================================
-             SYS_LOGGER - PROJECT MASTER PLAN & ROADMAP
+             SYS_LOGGER - PROJECT MASTER PLAN & ROADMA
 =============================================================================
 
 1. THE "ZERO TO HERO" DEPLOYMENT STRATEGY
