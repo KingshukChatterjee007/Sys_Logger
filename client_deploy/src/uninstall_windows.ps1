@@ -131,7 +131,7 @@ if (Test-Path $venvDir) {
     Write-Host "  OK  Virtual environment deleted."
 }
 
-Write-Host "  OK  All local data wiped. No trace remains."
+Write-Host "  OK  All local data wiped."
 
 Write-Host ""
 Write-Host "======================================"
