@@ -17,6 +17,7 @@ export async function proxyGet(backendPath: string, token?: string | null): Prom
     const response = await fetch(url, {
         headers: {
             'Content-Type': 'application/json',
+            'X-Proxy-Token-Present': effectiveToken ? 'true' : 'false',
             ...(effectiveToken ? { 'Authorization': effectiveToken.startsWith('Bearer ') ? effectiveToken : `Bearer ${effectiveToken}` } : {})
         },
         cache: 'no-store',
@@ -40,7 +41,13 @@ export async function proxyGet(backendPath: string, token?: string | null): Prom
     }
 
     const data = await response.json()
-    return Response.json(data)
+    return Response.json(data, {
+        headers: {
+            'Cache-Control': 'no-store, max-age=0, must-revalidate',
+            'Pragma': 'no-cache',
+            'Expires': '0',
+        }
+    })
 }
 
 /**
@@ -77,7 +84,13 @@ export async function proxyPost(backendPath: string, body?: unknown, token?: str
     }
 
     const data = await response.json()
-    return Response.json(data)
+    return Response.json(data, {
+        headers: {
+            'Cache-Control': 'no-store, max-age=0, must-revalidate',
+            'Pragma': 'no-cache',
+            'Expires': '0',
+        }
+    })
 }
 
 /**
@@ -91,6 +104,7 @@ export async function proxyPut(backendPath: string, body?: unknown, token?: stri
         method: 'PUT',
         headers: {
             'Content-Type': 'application/json',
+            'X-Proxy-Token-Present': effectiveToken ? 'true' : 'false',
             ...(effectiveToken ? { 'Authorization': effectiveToken.startsWith('Bearer ') ? effectiveToken : `Bearer ${effectiveToken}` } : {})
         },
         body: body ? JSON.stringify(body) : undefined,
@@ -105,7 +119,13 @@ export async function proxyPut(backendPath: string, body?: unknown, token?: stri
     }
 
     const data = await response.json()
-    return Response.json(data)
+    return Response.json(data, {
+        headers: {
+            'Cache-Control': 'no-store, max-age=0, must-revalidate',
+            'Pragma': 'no-cache',
+            'Expires': '0',
+        }
+    })
 }
 
 /**

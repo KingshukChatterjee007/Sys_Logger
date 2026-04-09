@@ -190,11 +190,15 @@ class UnitClient:
                 try:
                     error_msg = response.json().get('error', 'Unknown')
                 except: pass
-                print(f"Registration REJECTED (403): {error_msg}", flush=True)
-                print("This installer is invalid or has already been used. Request a new one from your admin.", flush=True)
+                print(f"CRITICAL: Registration REJECTED (403): {error_msg}", flush=True)
+                print(f"  System: {info.get('hostname')} | Org: {info.get('org_id')} | Node: {info.get('comp_id')}", flush=True)
+                print("  This installer is invalid, expired, or names do not match. Request a new one from your admin.", flush=True)
                 sys.exit(1)
             else:
                 print(f"Registration failed with status: {response.status_code}", flush=True)
+                try:
+                    print(f"  Server response: {response.text}", flush=True)
+                except: pass
         except requests.RequestException as e:
             print(f"Registration error: {e}", flush=True)
         return False

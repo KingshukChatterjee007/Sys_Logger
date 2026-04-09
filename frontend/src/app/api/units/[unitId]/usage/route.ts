@@ -6,15 +6,7 @@ export async function GET(
     { params }: { params: Promise<{ unitId: string }> }
 ) {
     const { unitId } = await params
-
-    // Manual proxying for consistency across methods
-    const url = `${process.env.NEXT_PUBLIC_API_URL || 'http://187.127.142.58'}/api/units/${unitId}/usage`
-    const response = await fetch(url, {
-        method: 'GET',
-        headers: { 'Content-Type': 'application/json' },
-        cache: 'no-store'
-    })
-
-    const data = await response.json().catch(() => ({}))
-    return Response.json(data, { status: response.status })
+    const token = request.headers.get('Authorization')
+    
+    return proxyGet(`/api/units/${unitId}/usage`, token)
 }

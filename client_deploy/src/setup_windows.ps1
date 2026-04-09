@@ -231,10 +231,43 @@ catch {
 }
 
 # ==========================================
-# Verify & Done
+# Step 7: Verify Connectivity
 # ==========================================
 Write-Host ""
-Write-Host "Verifying PM2 status..."
+Write-Host "[Step 7/7] Verifying connection to server..."
+Write-Host "  URL: $($configData.server_url)"
+
+$verifyUrl = "$($configData.server_url)/api/register_unit"
+$verifyBody = @{
+    system_id = $configData.system_id
+    org_id    = $configData.org_id
+    comp_id   = $configData.comp_id
+    install_token = $configData.install_token
+    hostname  = $env:COMPUTERNAME
+    os_info   = "Windows $([Environment]::OSVersion.Version)"
+} | ConvertTo-Json
+
+try {
+    $verifyResp = Invoke-RestMethod -Uri $verifyUrl -Method Post -Body $verifyBody -ContentType "application/json" -TimeoutSec 15
+    Write-Host "  OK Connection verified! Server acknowledged registration." -ForegroundColor Green
+}
+catch {
+    $statusCode = $_.Exception.Response.StatusCode.value__
+    if ($statusCode -eq 403) {
+        Write-Host "  ERROR: Registration REJECTED (403)" -ForegroundColor Red
+        Write-Host "  Likely cause: Case-sensitivity mismatch or Token already used."
+    } else {
+        Write-Host "  ERROR: Could not reach the server ($($_.Exception.Message))" -ForegroundColor Red
+    }
+    Write-Host "  Please check your internet and firewall settings."
+    Write-Host "  Your system may not show up in the dashboard until this is resolved."
+}
+
+# ==========================================
+# Verify PM2 status & Done
+# ==========================================
+Write-Host ""
+Write-Host "Verifying service status..."
 Start-Sleep -Seconds 3
 pm2 status
 Write-Host ""

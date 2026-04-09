@@ -25,8 +25,13 @@ os.makedirs(os.path.join(BASE_DIR, "logs"), exist_ok=True)
 
 
 def log(msg: str):
-    
-    pass
+    timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    try:
+        with open(LOG_FILE, "a", encoding="utf-8") as f:
+            f.write(f"[{timestamp}] {msg}\n")
+    except:
+        pass
+    print(f"[{timestamp}] {msg}", flush=True)
 
 
 def wait_for_network(timeout_secs=120, retry_interval=5):

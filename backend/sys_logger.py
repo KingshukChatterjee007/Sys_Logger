@@ -677,7 +677,7 @@ class UnitStore:
                 SELECT s.*, o.name as org_display_name, o.slug as org_slug 
                 FROM systems s 
                 LEFT JOIN organizations o ON s.org_id::varchar = o.org_id::varchar 
-                WHERE s.org_id::varchar = %s::varchar AND (s.system_name = %s OR s.system_name = %s)
+                WHERE s.org_id::varchar = %s::varchar AND (LOWER(s.system_name) = LOWER(%s) OR LOWER(s.system_name) = LOWER(%s))
             """, (org_id, name, comp_id))
             row = cur.fetchone()
             cur.close()
@@ -723,8 +723,8 @@ class UnitStore:
                 unit_data.get('os_info'),
                 unit_data.get('ram_total'),
                 org_id,
-                datetime.now() if unit_data.get('status') == 'online' else unit_data.get('last_seen'),
-                unit_data.get('status', 'online')
+                datetime.now(), # Always update last_seen to now for heartbeats/registration
+                'online'        # Always force to online during save_unit (heartbeat/reg)
             ))
             conn.commit()
             cur.close()
@@ -960,7 +960,11 @@ def health_check():
 def get_units_route(current_user):
     """Get all registered units (filtered by org)"""
     units = UnitStore.get_all_units(current_user)
-    print(f"DEBUG: get_units for {current_user.get('email')} ({current_user.get('org_id')}) -> {len(units)} units")
+    # Log detailed context for debugging sync issues
+    user_email = current_user.get('email', 'unknown')
+    user_role = current_user.get('role', 'unknown')
+    user_org = current_user.get('org_id', 'unknown')
+    print(f"DEBUG [SYNC]: Fetching units for {user_email} | Role: {user_role} | Org: {user_org} | Found: {len(units)} units")
     return jsonify(units)
 
 @app.route('/api/orgs', methods=['GET'])
@@ -1573,10 +1577,13 @@ def register_unit():
         if existing_unit:
             unit_id = existing_unit['id']
             # Update metadata and mark as ONLINE
+            # IMPORTANT: We keep the original 'name' casing from the DB 
+            # (which contains the full internal org/comp string like '1/TestCase')
+            # to ensure the 'ON CONFLICT (system_name)' logic in save_unit works correctly.
             existing_unit.update({
                 'org_id': org_id,
                 'comp_id': comp_id,
-                'name': f"{org_id or 'unknown'}/{comp_id}",
+                'name': existing_unit.get('name', f"{org_id or 'unknown'}/{comp_id}"),
                 'hostname': hostname,
                 'os_info': os_info,
                 'ram_total': ram_total,
@@ -1584,6 +1591,8 @@ def register_unit():
                 'system_id': system_id,
                 'status': 'online' # Heartbeat received!
             })
+            # Explicitly force status to online for the database update
+            existing_unit['status'] = 'online'
             UnitStore.save_unit(unit_id, existing_unit)
             
             # Broadcast update
@@ -1601,7 +1610,7 @@ def register_unit():
             name = f"{org_id}/{comp_id}"
             cur.execute("""
                 SELECT system_id, install_token FROM systems 
-                WHERE system_name = %s AND org_id = %s AND install_token = %s
+                WHERE LOWER(system_name) = LOWER(%s) AND org_id = %s AND install_token = %s
             """, (name, org_id, install_token))
             token_row = cur.fetchone()
             
