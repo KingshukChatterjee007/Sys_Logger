@@ -7,7 +7,7 @@ import time
 import atexit
 import signal
 import json
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import requests
 import socket
 import threading
@@ -611,7 +611,7 @@ class UnitStore:
         # Recalculate online/offline based on last_seen if it was previously online
         status = db_status
         if last_seen:
-            now = datetime.utcnow().replace(tzinfo=last_seen.tzinfo) if last_seen.tzinfo else datetime.utcnow()
+            now = datetime.utcnow().replace(tzinfo=last_seen.tzinfo) if last_seen.tzinfo else datetime.now(timezone.utc)
             if (now - last_seen).total_seconds() < 300:
                 status = 'online'
             else:
@@ -833,13 +833,13 @@ class UnitStore:
 
             timestamp = usage_data.get('timestamp')
             if not timestamp: 
-                timestamp = datetime.utcnow()
+                timestamp = datetime.now(timezone.utc)
             elif isinstance(timestamp, str):
                 try:
                     # Handle ISO format from frontend/client
                     timestamp = datetime.fromisoformat(timestamp.replace('Z', '+00:00'))
                 except:
-                    timestamp = datetime.utcnow()
+                    timestamp = datetime.now(timezone.utc)
             
             # CRITICAL: Automatic Partition Management
             # Ensure a partition exists for this metric's timestamp
