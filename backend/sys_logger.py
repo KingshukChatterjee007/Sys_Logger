@@ -749,39 +749,81 @@ class UnitStore:
             conn = get_db_connection()
             cur = conn.cursor()
             
-            # Robust org_id handling
+            # 1. Robust org_id handling
             raw_org = unit_data.get('org_id')
             try:
                 org_id = int(raw_org) if raw_org else None
             except:
-                org_id = None # Default to None if not a valid integer/ID
+                org_id = None
                 
-            name = unit_data.get('name', f"{org_id or 'unknown'}/{unit_data.get('comp_id', unit_id)}")
+            # 2. Identify by Serial PK (system_id) if provided
+            serial_id = None
+            try:
+                # unit_id might be a serial string (from Dashboard) or a UUID (from Agent)
+                # If it's an integer string, we treat it as the Primary Key
+                if str(unit_id).isdigit():
+                    serial_id = int(unit_id)
+            except:
+                pass
+
+            # 3. Determine name (dashboard input has priority)
+            name = unit_data.get('name')
+            if not name:
+                name = f"{org_id or 'unknown'}/{unit_data.get('comp_id', unit_id)}"
             
-            cur.execute("""
-                INSERT INTO systems 
-                (system_name, system_uuid, hostname, ip_address, os, ram_gb, org_id, last_seen, status)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
-                ON CONFLICT (system_name) DO UPDATE SET
-                    system_uuid = COALESCE(EXCLUDED.system_uuid, systems.system_uuid),
-                    hostname = EXCLUDED.hostname,
-                    ip_address = EXCLUDED.ip_address,
-                    os = EXCLUDED.os,
-                    ram_gb = EXCLUDED.ram_gb,
-                    org_id = EXCLUDED.org_id,
-                    last_seen = EXCLUDED.last_seen,
-                    status = EXCLUDED.status
-            """, (
-                name,
-                unit_data.get('system_id') if '-' in str(unit_data.get('system_id', '')) else None,
-                unit_data.get('hostname', 'Unknown'),
-                unit_data.get('ip'),
-                unit_data.get('os_info'),
-                unit_data.get('ram_total'),
-                org_id,
-                datetime.now(timezone.utc), # Always update last_seen to now for heartbeats/registration
-                'online'        # Always force to online during save_unit (heartbeat/reg)
-            ))
+            # 4. Perform Update if we have a Serial ID
+            if serial_id:
+                cur.execute("""
+                    UPDATE systems SET
+                        system_name = %s,
+                        system_uuid = COALESCE(%s, system_uuid),
+                        hostname = %s,
+                        ip_address = %s,
+                        os = %s,
+                        ram_gb = %s,
+                        org_id = %s,
+                        last_seen = %s,
+                        status = 'online'
+                    WHERE system_id = %s
+                """, (
+                    name,
+                    unit_data.get('system_id') if '-' in str(unit_data.get('system_id', '')) else None,
+                    unit_data.get('hostname', 'Unknown'),
+                    unit_data.get('ip'),
+                    unit_data.get('os_info'),
+                    unit_data.get('ram_total'),
+                    org_id,
+                    datetime.now(timezone.utc),
+                    serial_id
+                ))
+            
+            # 5. Fallback: UPSERT by name (for first-time heartbeat or registration)
+            else:
+                cur.execute("""
+                    INSERT INTO systems 
+                    (system_name, system_uuid, hostname, ip_address, os, ram_gb, org_id, last_seen, status)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    ON CONFLICT (system_name) DO UPDATE SET
+                        system_uuid = COALESCE(EXCLUDED.system_uuid, systems.system_uuid),
+                        hostname = EXCLUDED.hostname,
+                        ip_address = EXCLUDED.ip_address,
+                        os = EXCLUDED.os,
+                        ram_gb = EXCLUDED.ram_gb,
+                        org_id = EXCLUDED.org_id,
+                        last_seen = EXCLUDED.last_seen,
+                        status = EXCLUDED.status
+                """, (
+                    name,
+                    unit_data.get('system_id') if '-' in str(unit_data.get('system_id', '')) else None,
+                    unit_data.get('hostname', 'Unknown'),
+                    unit_data.get('ip'),
+                    unit_data.get('os_info'),
+                    unit_data.get('ram_total'),
+                    org_id,
+                    datetime.now(timezone.utc),
+                    'online'
+                ))
+            
             conn.commit()
             cur.close()
             conn.close()
@@ -1641,23 +1683,16 @@ def register_unit():
 
         if existing_unit:
             unit_id = existing_unit['id']
-            # Update metadata and mark as ONLINE
-            # IMPORTANT: We keep the original 'name' casing from the DB 
-            # (which contains the full internal org/comp string like '1/TestCase')
-            # to ensure the 'ON CONFLICT (system_name)' logic in save_unit works correctly.
+            # Update dynamic metadata but PRESERVE the identity (Name/Org/Comp)
+            # which is now managed by the dashboard (Source of Truth).
             existing_unit.update({
-                'org_id': org_id,
-                'comp_id': comp_id,
-                'name': existing_unit.get('name', f"{org_id or 'unknown'}/{comp_id}"),
                 'hostname': hostname,
                 'os_info': os_info,
                 'ram_total': ram_total,
                 'ip': request.remote_addr,
                 'system_id': system_id,
-                'status': 'online' # Heartbeat received!
+                'status': 'online'
             })
-            # Explicitly force status to online for the database update
-            existing_unit['status'] = 'online'
             UnitStore.save_unit(unit_id, existing_unit)
             
             # Broadcast update
@@ -1798,20 +1833,14 @@ def process_usage_record(data):
     if not unit:
         return False, 'Unit not registered'
 
-    # Update metadata and last_seen via save_unit
+    # Identity (org_id, comp_id, name) is now strictly managed by the Dashboard.
+    # Heartbeats only update dynamic metadata and state.
     unit.update({
         'status': 'online',
         'last_seen': datetime.now(timezone.utc),
         'ip': request.remote_addr,
         'hostname': data.get('hostname', unit.get('hostname'))
     })
-    
-    # If org/comp changed in heartbeat, update it
-    if 'org_id' in data and data['org_id'] != unit.get('org_id'):
-        unit['org_id'] = data['org_id']
-    if 'comp_id' in data and data['comp_id'] != unit.get('comp_id'):
-        unit['comp_id'] = data['comp_id']
-        unit['name'] = f"{unit.get('org_id', 'unknown')}/{data['comp_id']}"
 
     UnitStore.save_unit(unit_id, unit)
     
