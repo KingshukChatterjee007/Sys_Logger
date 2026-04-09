@@ -907,14 +907,14 @@ class UnitStore:
                     ON CONFLICT DO NOTHING
                 """, (sys_int_id, timestamp, cpu, ram, gpu, net_rx, net_tx))
             except Exception as ie:
-                 logging.error(f"[DB ERROR] SQL Insert failed into system_metrics: {ie}")
-                 raise ie
+                 # If this fails, it's almost certainly a missing partition
+                 logging.error(f"[CRITICAL DB ERROR] Could not save metrics for {unit_id}. This usually means a partition table is missing on the VPS: {ie}")
+                 # We still want to update last_seen though!
             
             # Update status to online and refresh last_seen (Use GMT/UTC)
             cur.execute("UPDATE systems SET last_seen = %s, status = 'online' WHERE system_id = %s", (datetime.now(timezone.utc), sys_int_id))
             
             conn.commit()
-            logging.info(f"✓ Metrics recorded for unit {unit_id} (ID: {sys_int_id}) at {timestamp}")
             cur.close()
             conn.close()
         except Exception as e:
@@ -1789,6 +1789,7 @@ def process_usage_record(data):
     # Update metadata and last_seen via save_unit
     unit.update({
         'status': 'online',
+        'last_seen': datetime.now(timezone.utc),
         'ip': request.remote_addr,
         'hostname': data.get('hostname', unit.get('hostname'))
     })
@@ -1801,12 +1802,18 @@ def process_usage_record(data):
         unit['name'] = f"{unit.get('org_id', 'unknown')}/{data['comp_id']}"
 
     UnitStore.save_unit(unit_id, unit)
-    UnitStore.add_usage(unit_id, data)
-
-    # Broadcast updates
+    
+    # CRITICAL: Broadcast SocketIO *before* attempting DB write for usage
+    # This ensures live graphs work even if the SQL historical insert fails
     socketio.emit('usage_update', {'unit_id': unit_id, 'data': data})
     if org_id:
-        socketio.emit('org_usage_update', {'unit_id': unit_id, 'data': data}, room=org_id)
+        socketio.emit('org_usage_update', {'unit_id': unit_id, 'data': data}, room=str(org_id))
+
+    # Now attempt to persist to SQL (non-blocking for the heartbeat response)
+    try:
+        UnitStore.add_usage(unit_id, data)
+    except Exception as e:
+        logging.error(f"Post-heartbeat usage storage failed: {e}")
             
     return True, 'processed'
 
