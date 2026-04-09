@@ -1634,23 +1634,16 @@ def register_unit():
 
         if existing_unit:
             unit_id = existing_unit['id']
-            # Update metadata and mark as ONLINE
-            # IMPORTANT: We keep the original 'name' casing from the DB 
-            # (which contains the full internal org/comp string like '1/TestCase')
-            # to ensure the 'ON CONFLICT (system_name)' logic in save_unit works correctly.
+            # Update dynamic metadata but PRESERVE the identity (Name/Org/Comp)
+            # which is now managed by the dashboard (Source of Truth).
             existing_unit.update({
-                'org_id': org_id,
-                'comp_id': comp_id,
-                'name': existing_unit.get('name', f"{org_id or 'unknown'}/{comp_id}"),
                 'hostname': hostname,
                 'os_info': os_info,
                 'ram_total': ram_total,
                 'ip': request.remote_addr,
                 'system_id': system_id,
-                'status': 'online' # Heartbeat received!
+                'status': 'online'
             })
-            # Explicitly force status to online for the database update
-            existing_unit['status'] = 'online'
             UnitStore.save_unit(unit_id, existing_unit)
             
             # Broadcast update
@@ -1791,20 +1784,14 @@ def process_usage_record(data):
     if not unit:
         return False, 'Unit not registered'
 
-    # Update metadata and last_seen via save_unit
+    # Identity (org_id, comp_id, name) is now strictly managed by the Dashboard.
+    # Heartbeats only update dynamic metadata and state.
     unit.update({
         'status': 'online',
         'last_seen': datetime.now(timezone.utc),
         'ip': request.remote_addr,
         'hostname': data.get('hostname', unit.get('hostname'))
     })
-    
-    # If org/comp changed in heartbeat, update it
-    if 'org_id' in data and data['org_id'] != unit.get('org_id'):
-        unit['org_id'] = data['org_id']
-    if 'comp_id' in data and data['comp_id'] != unit.get('comp_id'):
-        unit['comp_id'] = data['comp_id']
-        unit['name'] = f"{unit.get('org_id', 'unknown')}/{data['comp_id']}"
 
     UnitStore.save_unit(unit_id, unit)
     
