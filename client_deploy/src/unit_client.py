@@ -45,6 +45,34 @@ SYNC_BATCH_SIZE = 10   # Number of records to sync at once
 # Configuration prompting is handled by configure.py (run at install time).
 # unit_client.py always runs in --silent mode under PM2 and reads from config file.
 
+import logging
+from logging.handlers import RotatingFileHandler
+
+# Ensure logs directory exists
+LOGS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'logs')
+if not os.path.exists(LOGS_DIR):
+    os.makedirs(LOGS_DIR)
+
+LOG_FILE = os.path.join(LOGS_DIR, 'agent.log')
+
+# Setup logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s [%(levelname)s] %(message)s',
+    handlers=[
+        RotatingFileHandler(LOG_FILE, maxBytes=1024*1024, backupCount=5),
+        logging.StreamHandler(sys.stdout)
+    ]
+)
+
+def log_msg(msg, level="info"):
+    if level == "error":
+        logging.error(msg)
+    elif level == "debug":
+        logging.debug(msg)
+    else:
+        logging.info(msg)
+
 class UnitClient:
     def __init__(self):
         self.config = self.load_config()
@@ -182,7 +210,7 @@ class UnitClient:
                 if self.install_token:
                     self._consume_install_token()
 
-                print(f"Unit registered successfully (Status: {response.status_code})", flush=True)
+                log_msg(f"Unit registered successfully (Status: {response.status_code})")
                 return True
             elif response.status_code == 403:
                 # Token invalid or missing — admin needs to re-issue
@@ -190,17 +218,17 @@ class UnitClient:
                 try:
                     error_msg = response.json().get('error', 'Unknown')
                 except: pass
-                print(f"CRITICAL: Registration REJECTED (403): {error_msg}", flush=True)
-                print(f"  System: {info.get('hostname')} | Org: {info.get('org_id')} | Node: {info.get('comp_id')}", flush=True)
-                print("  This installer is invalid, expired, or names do not match. Request a new one from your admin.", flush=True)
+                log_msg(f"CRITICAL: Registration REJECTED (403): {error_msg}", "error")
+                log_msg(f"  System: {info.get('hostname')} | Org: {info.get('org_id')} | Node: {info.get('comp_id')}", "error")
+                log_msg("  This installer is invalid, expired, or names do not match. Request a new one from your admin.", "error")
                 sys.exit(1)
             else:
-                print(f"Registration failed with status: {response.status_code}", flush=True)
+                log_msg(f"Registration failed with status: {response.status_code}", "error")
                 try:
-                    print(f"  Server response: {response.text}", flush=True)
+                    log_msg(f"  Server response: {response.text}", "error")
                 except: pass
         except requests.RequestException as e:
-            print(f"Registration error: {e}", flush=True)
+            log_msg(f"Registration error: {e}", "error")
         return False
 
     def _consume_install_token(self):
@@ -347,19 +375,21 @@ class UnitClient:
 
             if response.status_code == 404:
                 # Server forgot us (likely restarted), force re-registration
-                print("Server responded with 404 (Unit Not Found). Re-registering...", flush=True)
+                log_msg("Server responded with 404 (Unit Not Found). Re-registering...", "error")
                 self.registered = False
                 return False
             
-            if response.status_code != 200:
-                print(f"Data submission failed with status: {response.status_code}", flush=True)
-            return response.status_code == 200
+            if response.status_code == 200:
+                log_msg(f"Heartbeat successful for {self.comp_id}")
+                return True
+            else:
+                log_msg(f"Heartbeat failed with status: {response.status_code}", "error")
         except requests.RequestException as e:
-            print(f"Data submission error: {e}", flush=True)
+            log_msg(f"Heartbeat error: {e}", "error")
             return False
 
     def sync_offline_data(self):
-        print("Sync thread started.", flush=True)
+        log_msg("Sync thread started.")
             
         while self.running:
             # 1. Build a batch
