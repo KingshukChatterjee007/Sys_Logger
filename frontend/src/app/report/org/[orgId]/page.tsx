@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell
 } from 'recharts';
@@ -26,6 +26,7 @@ interface OrgReportData {
 
 export default function OrgReportPage() {
   const { orgId } = useParams();
+  const router = useRouter();
   const [data, setData] = useState<OrgReportData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -61,7 +62,7 @@ export default function OrgReportPage() {
         <AlertCircle className="w-12 h-12 text-red-500 mx-auto mb-4" />
         <h2 className="text-xl font-black text-zinc-900 mb-2">Fleet Audit Failed</h2>
         <p className="text-zinc-500 text-sm mb-6">{error}</p>
-        <button onClick={() => window.history.back()} className="px-6 py-3 bg-zinc-900 text-white rounded-xl font-bold uppercase tracking-widest text-[10px]">Go Back</button>
+        <button onClick={() => router.push('/')} className="px-6 py-3 bg-zinc-900 text-white rounded-xl font-bold uppercase tracking-widest text-[10px]">Go Back</button>
       </div>
     </div>
   );
@@ -69,7 +70,7 @@ export default function OrgReportPage() {
   return (
     <div className="min-h-screen bg-zinc-100 p-4 md:p-8 lg:p-12 print:bg-white print:p-0">
       <div className="max-w-6xl mx-auto flex justify-between items-center mb-8 print:hidden">
-        <button onClick={() => window.history.back()} className="flex items-center gap-2 text-zinc-500 hover:text-zinc-900 font-bold transition-colors uppercase tracking-widest text-[10px]">
+        <button onClick={() => router.push('/')} className="flex items-center gap-2 text-zinc-500 hover:text-zinc-900 font-bold transition-colors uppercase tracking-widest text-[10px]">
           <ArrowLeft size={16} /> Back to Dashboard
         </button>
         <button onClick={() => window.print()} className="px-6 py-3 bg-zinc-900 text-white rounded-2xl font-black uppercase tracking-widest text-[10px] flex items-center gap-2 shadow-xl hover:bg-zinc-800 transition-all">
@@ -91,20 +92,27 @@ export default function OrgReportPage() {
               <p className="text-sm font-bold text-zinc-400 uppercase tracking-[0.2em]">Fleet Intelligence Report • {new Date().toLocaleDateString()}</p>
            </div>
            
-           <div className="bg-zinc-50 border border-zinc-100 p-8 rounded-[2rem] flex items-center gap-10 min-w-[250px]">
-              <div>
-                <p className="text-[9px] font-black text-zinc-400 uppercase tracking-widest mb-1">Active Nodes</p>
-                <p className="text-4xl font-black text-zinc-900">{data.fleet_size}</p>
-              </div>
-              <div className="h-12 w-[1px] bg-zinc-200" />
-              <div>
-                <p className="text-[9px] font-black text-zinc-400 uppercase tracking-widest mb-1">Status</p>
-                <div className="flex items-center gap-2">
-                  <div className="w-3 h-3 bg-emerald-500 rounded-full animate-pulse" />
-                  <span className="text-sm font-black text-emerald-600 uppercase tracking-tighter">Healthy</span>
-                </div>
-              </div>
-           </div>
+            <div className="flex items-center gap-8">
+               <div className="hidden lg:flex items-center gap-4 mr-8 border-r border-zinc-100 pr-8">
+                  <img src="/krishishayogi.png" alt="Logo" className="h-10 object-contain" />
+                  <img src="/Nielit_logo.jpeg" alt="Logo" className="h-12 object-contain mix-blend-multiply" />
+                  <img src="/India-AI_logo.jpeg" alt="Logo" className="h-12 object-contain mix-blend-multiply" />
+               </div>
+               <div className="bg-zinc-50 border border-zinc-100 p-8 rounded-[2rem] flex items-center gap-10 min-w-[250px]">
+                  <div>
+                    <p className="text-[9px] font-black text-zinc-400 uppercase tracking-widest mb-1">Active Nodes</p>
+                    <p className="text-4xl font-black text-zinc-900">{data.fleet_size}</p>
+                  </div>
+                  <div className="h-12 w-[1px] bg-zinc-200" />
+                  <div>
+                    <p className="text-[9px] font-black text-zinc-400 uppercase tracking-widest mb-1">Status</p>
+                    <div className="flex items-center gap-2">
+                      <div className="w-3 h-3 bg-emerald-500 rounded-full animate-pulse" />
+                      <span className="text-sm font-black text-emerald-600 uppercase tracking-tighter">Healthy</span>
+                    </div>
+                  </div>
+               </div>
+            </div>
         </header>
 
         <div className="p-12 lg:p-20 space-y-20">

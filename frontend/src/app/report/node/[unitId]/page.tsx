@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useState, useMemo } from 'react';
-import { useParams, useSearchParams } from 'next/navigation';
+import { useParams, useSearchParams, useRouter } from 'next/navigation';
 import { 
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area 
 } from 'recharts';
@@ -37,6 +37,7 @@ interface ReportData {
 
 export default function NodeReportPage() {
   const { unitId } = useParams();
+  const router = useRouter();
   const searchParams = useSearchParams();
   const range = searchParams.get('range') || '7d';
   
@@ -77,7 +78,7 @@ export default function NodeReportPage() {
         <AlertCircle className="w-12 h-12 text-red-500 mx-auto mb-4" />
         <h2 className="text-xl font-black text-zinc-900 mb-2">Report Generation Failed</h2>
         <p className="text-zinc-500 text-sm mb-6">{error || 'Data could not be processed.'}</p>
-        <button onClick={() => window.history.back()} className="px-6 py-3 bg-zinc-900 text-white rounded-xl font-bold uppercase tracking-widest text-[10px]">Go Back</button>
+        <button onClick={() => router.push('/')} className="px-6 py-3 bg-zinc-900 text-white rounded-xl font-bold uppercase tracking-widest text-[10px]">Go Back</button>
       </div>
     </div>
   );
@@ -87,7 +88,7 @@ export default function NodeReportPage() {
       {/* Top Navigation - Hidden on Print */}
       <div className="max-w-6xl mx-auto flex justify-between items-center mb-8 print:hidden">
         <button 
-          onClick={() => window.history.back()}
+          onClick={() => router.push('/')}
           className="flex items-center gap-2 text-zinc-500 hover:text-zinc-900 font-bold transition-colors group"
         >
           <ArrowLeft className="w-4 h-4 group-hover:-translate-x-1 transition-transform" />
@@ -127,6 +128,11 @@ export default function NodeReportPage() {
           </div>
           
           <div className="flex items-center gap-8">
+            <div className="hidden lg:flex items-center gap-4 mr-8 border-r border-zinc-100 pr-8">
+               <img src="/krishishayogi.png" alt="Logo" className="h-10 object-contain" />
+               <img src="/Nielit_logo.jpeg" alt="Logo" className="h-12 object-contain mix-blend-multiply" />
+               <img src="/India-AI_logo.jpeg" alt="Logo" className="h-12 object-contain mix-blend-multiply" />
+            </div>
             <div className="text-right">
               <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-1">Health Score</p>
               <div className="flex items-baseline gap-1">
@@ -228,36 +234,39 @@ export default function NodeReportPage() {
                       </div>
                     </div>
                   </div>
-                  <div className="h-[250px] w-full min-h-[250px]">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <AreaChart data={data.timeline} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
-                        <defs>
-                          <linearGradient id="colorCpu" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="5%" stopColor="#f97316" stopOpacity={0.1}/>
-                            <stop offset="95%" stopColor="#f97316" stopOpacity={0}/>
-                          </linearGradient>
-                        </defs>
-                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E4E4E7" />
-                        <XAxis 
-                          dataKey="timestamp" 
-                          tick={{fontSize: 8, fontWeight: 'bold', fill: '#A1A1AA'}}
-                          tickFormatter={(val) => new Date(val).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
-                          axisLine={false}
-                          tickLine={false}
-                        />
-                        <YAxis 
-                          tick={{fontSize: 10, fontWeight: 'bold', fill: '#A1A1AA'}}
-                          unit="%"
-                          domain={[0, 100]}
-                          axisLine={false}
-                          tickLine={false}
-                        />
-                        <Tooltip 
-                          contentStyle={{borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)', fontSize: '10px', fontWeight: 'bold'}}
-                        />
-                        <Area type="monotone" dataKey="cpu_usage" name="CPU Usage" stroke="#f97316" strokeWidth={3} fillOpacity={1} fill="url(#colorCpu)" animationDuration={1000} />
-                      </AreaChart>
-                    </ResponsiveContainer>
+                  <div className="w-full overflow-x-auto pb-4 custom-scrollbar">
+                    <div style={{ width: Math.max(100, (data.timeline.length / 100) * 10) + '%' }} className="h-[250px] min-w-full">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <AreaChart data={data.timeline} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                          <defs>
+                            <linearGradient id="colorCpu" x1="0" y1="0" x2="0" y2="1">
+                              <stop offset="5%" stopColor="#f97316" stopOpacity={0.1}/>
+                              <stop offset="95%" stopColor="#f97316" stopOpacity={0}/>
+                            </linearGradient>
+                          </defs>
+                          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E4E4E7" />
+                          <XAxis 
+                            dataKey="timestamp" 
+                            tick={{fontSize: 8, fontWeight: 'bold', fill: '#A1A1AA'}}
+                            tickFormatter={(val) => new Date(val).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                            axisLine={false}
+                            tickLine={false}
+                            minTickGap={100}
+                          />
+                          <YAxis 
+                            tick={{fontSize: 10, fontWeight: 'bold', fill: '#A1A1AA'}}
+                            unit="%"
+                            domain={[0, 100]}
+                            axisLine={false}
+                            tickLine={false}
+                          />
+                          <Tooltip 
+                            contentStyle={{borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)', fontSize: '10px', fontWeight: 'bold'}}
+                          />
+                          <Area type="monotone" dataKey="cpu_usage" name="CPU Usage" stroke="#f97316" strokeWidth={2} fillOpacity={1} fill="url(#colorCpu)" animationDuration={500} connectNulls />
+                        </AreaChart>
+                      </ResponsiveContainer>
+                    </div>
                   </div>
                 </div>
 
@@ -274,28 +283,118 @@ export default function NodeReportPage() {
                       </div>
                     </div>
                   </div>
-                  <div className="h-[250px] w-full min-h-[250px]">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <AreaChart data={data.timeline} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
-                        <defs>
-                          <linearGradient id="colorRam" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="5%" stopColor="#6366f1" stopOpacity={0.1}/>
-                            <stop offset="95%" stopColor="#6366f1" stopOpacity={0}/>
-                          </linearGradient>
-                        </defs>
-                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E4E4E7" />
-                        <XAxis 
-                          dataKey="timestamp" 
-                          tick={{fontSize: 8, fontWeight: 'bold', fill: '#A1A1AA'}}
-                          tickFormatter={(val) => new Date(val).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
-                          axisLine={false}
-                          tickLine={false}
-                        />
-                        <YAxis tick={{fontSize: 10, fontWeight: 'bold', fill: '#A1A1AA'}} unit="%" domain={[0, 100]} axisLine={false} tickLine={false} />
-                        <Tooltip contentStyle={{borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)', fontSize: '10px', fontWeight: 'bold'}} />
-                        <Area type="monotone" dataKey="ram_usage" name="RAM Usage" stroke="#6366f1" strokeWidth={3} fillOpacity={1} fill="url(#colorRam)" animationDuration={1000} />
-                      </AreaChart>
-                    </ResponsiveContainer>
+                  <div className="w-full overflow-x-auto pb-4 custom-scrollbar">
+                    <div style={{ width: Math.max(100, (data.timeline.length / 100) * 10) + '%' }} className="h-[250px] min-w-full">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <AreaChart data={data.timeline} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                          <defs>
+                            <linearGradient id="colorRam" x1="0" y1="0" x2="0" y2="1">
+                              <stop offset="5%" stopColor="#6366f1" stopOpacity={0.1}/>
+                              <stop offset="95%" stopColor="#6366f1" stopOpacity={0}/>
+                            </linearGradient>
+                          </defs>
+                          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E4E4E7" />
+                          <XAxis 
+                            dataKey="timestamp" 
+                            tick={{fontSize: 8, fontWeight: 'bold', fill: '#A1A1AA'}}
+                            tickFormatter={(val) => new Date(val).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                            axisLine={false}
+                            tickLine={false}
+                            minTickGap={100}
+                          />
+                          <YAxis tick={{fontSize: 10, fontWeight: 'bold', fill: '#A1A1AA'}} unit="%" domain={[0, 100]} axisLine={false} tickLine={false} />
+                          <Tooltip contentStyle={{borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)', fontSize: '10px', fontWeight: 'bold'}} />
+                          <Area type="monotone" dataKey="ram_usage" name="RAM Usage" stroke="#6366f1" strokeWidth={2} fillOpacity={1} fill="url(#colorRam)" animationDuration={500} connectNulls />
+                        </AreaChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </div>
+                </div>
+
+                {/* GPU Chart */}
+                <div className="bg-zinc-50/50 p-8 rounded-[2.5rem] border border-zinc-100 relative">
+                  <div className="flex justify-between items-center mb-8">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 bg-white rounded-xl shadow-sm flex items-center justify-center border border-zinc-100">
+                        <Zap className="w-5 h-5 text-zinc-400" />
+                      </div>
+                      <div>
+                        <h3 className="text-xs font-black text-zinc-900 uppercase tracking-widest">GPU Cloud Compute</h3>
+                        <p className="text-[10px] text-zinc-400 font-bold">Accelerator Load Profile (%)</p>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="w-full overflow-x-auto pb-4 custom-scrollbar">
+                    <div style={{ width: Math.max(100, (data.timeline.length / 100) * 10) + '%' }} className="h-[250px] min-w-full">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <AreaChart data={data.timeline} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                          <defs>
+                            <linearGradient id="colorGpu" x1="0" y1="0" x2="0" y2="1">
+                              <stop offset="5%" stopColor="#ec4899" stopOpacity={0.1}/>
+                              <stop offset="95%" stopColor="#ec4899" stopOpacity={0}/>
+                            </linearGradient>
+                          </defs>
+                          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E4E4E7" />
+                          <XAxis 
+                            dataKey="timestamp" 
+                            tick={{fontSize: 8, fontWeight: 'bold', fill: '#A1A1AA'}}
+                            tickFormatter={(val) => new Date(val).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                            axisLine={false}
+                            tickLine={false}
+                            minTickGap={100}
+                          />
+                          <YAxis tick={{fontSize: 10, fontWeight: 'bold', fill: '#A1A1AA'}} unit="%" domain={[0, 100]} axisLine={false} tickLine={false} />
+                          <Tooltip contentStyle={{borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)', fontSize: '10px', fontWeight: 'bold'}} />
+                          <Area type="monotone" dataKey="gpu_usage" name="GPU Usage" stroke="#ec4899" strokeWidth={2} fillOpacity={1} fill="url(#colorGpu)" animationDuration={500} connectNulls />
+                        </AreaChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Network Chart */}
+                <div className="bg-zinc-50/50 p-8 rounded-[2.5rem] border border-zinc-100 relative">
+                  <div className="flex justify-between items-center mb-8">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 bg-white rounded-xl shadow-sm flex items-center justify-center border border-zinc-100">
+                        <Wifi className="w-5 h-5 text-zinc-400" />
+                      </div>
+                      <div>
+                        <h3 className="text-xs font-black text-zinc-900 uppercase tracking-widest">Network Throughput</h3>
+                        <p className="text-[10px] text-zinc-400 font-bold">Inbound (RX) vs Outbound (TX)</p>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="w-full overflow-x-auto pb-4 custom-scrollbar">
+                    <div style={{ width: Math.max(100, (data.timeline.length / 100) * 10) + '%' }} className="h-[300px] min-w-full">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <AreaChart data={data.timeline} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                          <defs>
+                            <linearGradient id="colorRx" x1="0" y1="0" x2="0" y2="1">
+                              <stop offset="5%" stopColor="#10b981" stopOpacity={0.1}/>
+                              <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
+                            </linearGradient>
+                            <linearGradient id="colorTx" x1="0" y1="0" x2="0" y2="1">
+                              <stop offset="5%" stopColor="#4f46e5" stopOpacity={0.1}/>
+                              <stop offset="95%" stopColor="#4f46e5" stopOpacity={0}/>
+                            </linearGradient>
+                          </defs>
+                          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E4E4E7" />
+                          <XAxis 
+                            dataKey="timestamp" 
+                            tick={{fontSize: 8, fontWeight: 'bold', fill: '#A1A1AA'}}
+                            tickFormatter={(val) => new Date(val).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                            axisLine={false}
+                            tickLine={false}
+                            minTickGap={100}
+                          />
+                          <YAxis tick={{fontSize: 10, fontWeight: 'bold', fill: '#A1A1AA'}} unit=" MB" axisLine={false} tickLine={false} />
+                          <Tooltip contentStyle={{borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)', fontSize: '10px', fontWeight: 'bold'}} />
+                          <Area type="monotone" dataKey="network_rx_mb" name="Download (RX)" stroke="#10b981" strokeWidth={2} fillOpacity={1} fill="url(#colorRx)" animationDuration={500} connectNulls />
+                          <Area type="monotone" dataKey="network_tx_mb" name="Upload (TX)" stroke="#4f46e5" strokeWidth={2} fillOpacity={1} fill="url(#colorTx)" animationDuration={500} connectNulls />
+                        </AreaChart>
+                      </ResponsiveContainer>
+                    </div>
                   </div>
                 </div>
               </div>

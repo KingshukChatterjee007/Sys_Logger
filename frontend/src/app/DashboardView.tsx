@@ -530,6 +530,20 @@ export default function DashboardView({ orgId: propOrgId }: DashboardViewProps) 
                         <span className="sm:hidden">Secure</span>
                     </span>
                 </div>
+
+                {/* Branding in Header */}
+                <div className="hidden xl:flex items-center gap-6 px-6 border-l border-zinc-100 ml-6">
+                    <div className="flex items-center gap-4">
+                        <img src="/krishishayogi.png" alt="Krishi Sahayogi" className="h-8 object-contain" />
+                        <div className="h-8 w-[1px] bg-zinc-100" />
+                        <img src="/Nielit_logo.jpeg" alt="NIELIT" className="h-10 object-contain mix-blend-multiply" />
+                        <img src="/India-AI_logo.jpeg" alt="India AI" className="h-10 object-contain mix-blend-multiply" />
+                    </div>
+                    <div className="flex flex-col">
+                        <span className="text-[8px] font-black text-zinc-400 uppercase tracking-widest leading-none mb-1">Built by</span>
+                        <span className="text-[10px] font-black text-orange-600 uppercase tracking-tighter leading-none">Krishi Sahayogi</span>
+                    </div>
+                </div>
             </header>
 
             <div className="flex flex-1 overflow-hidden gap-6 relative z-10 h-full">
@@ -735,41 +749,6 @@ export default function DashboardView({ orgId: propOrgId }: DashboardViewProps) 
                         )}
                     </div>
 
-                    {/* Constant Professional Logo Section */}
-                    <div className="relative border-t border-white/60 flex flex-col items-center justify-center shrink-0 z-10 py-6 px-4 overflow-hidden bg-white/30 backdrop-blur-md">
-                        <div className="absolute inset-0 bg-gradient-to-t from-white/80 to-transparent z-0 pointer-events-none" />
-                        <div className="flex items-center justify-between w-full gap-3 mb-5 relative z-10">
-                            <div className="flex-1 h-14 flex items-center justify-center p-1 transition-transform hover:scale-105">
-                                <img
-                                    src="/krishishayogi.png"
-                                    alt="Krishi Sahayogi"
-                                    className="max-h-full max-w-full object-contain drop-shadow-lg"
-                                />
-                            </div>
-                            <div className="flex-1 h-16 rounded-[1rem] bg-white/80 backdrop-blur-xl ring-1 ring-white flex items-center justify-center p-2 shadow-[0_4px_15px_rgba(0,0,0,0.05)] transition-all hover:scale-110 hover:shadow-[0_8px_25px_rgba(0,0,0,0.1)]">
-                                <img
-                                    src="/Nielit_logo.jpeg"
-                                    alt="NIELIT"
-                                    className="h-full w-full object-contain mix-blend-multiply opacity-95"
-                                />
-                            </div>
-                            <div className="flex-1 h-16 rounded-[1rem] bg-white/80 backdrop-blur-xl ring-1 ring-white flex items-center justify-center p-2 shadow-[0_4px_15px_rgba(0,0,0,0.05)] transition-all hover:scale-110 hover:shadow-[0_8px_25px_rgba(0,0,0,0.1)]">
-                                <img
-                                    src="/India-AI_logo.jpeg"
-                                    alt="India AI"
-                                    className="h-full w-full object-contain mix-blend-multiply opacity-95"
-                                />
-                            </div>
-                        </div>
-                        <div className="text-center space-y-1.5 relative z-10">
-                            <p className="text-[9px] font-black uppercase tracking-[0.3em] text-zinc-500">
-                                Built by <span className="text-orange-500 font-black drop-shadow-sm">Krishi Sahayogi</span>
-                            </p>
-                            <p className="text-[8px] text-zinc-400 font-black tracking-[0.4em] uppercase">
-                                NIELIT Bhubaneswar
-                            </p>
-                        </div>
-                    </div>
 
                     {/* User Profile & Logout */}
                     <div className="p-4 border-t border-white/60 bg-white/50 backdrop-blur-xl">

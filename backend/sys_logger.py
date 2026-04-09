@@ -395,8 +395,15 @@ def download_installer_signed(signed_token):
             
             # Inject config into the src/ folder as expected by the updated setup scripts
             install_token = str(uuid.uuid4())
+            
+            # Dynamically determine server URL
+            server_url = PUBLIC_SERVER_URL or "https://lab-monitoring.nielitbhubaneswar.in"
+            if not PUBLIC_SERVER_URL and 'nielitbhubaneswar.in' not in request.host_url:
+                 server_url = request.host_url.rstrip('/')
+            
             config_data = {
                 'system_id': str(uuid.uuid4()),
+                'server_url': server_url,
                 'org_id': str(org_id),
                 'comp_id': comp_id,
                 'install_token': install_token
