@@ -104,6 +104,7 @@ export async function proxyPut(backendPath: string, body?: unknown, token?: stri
         method: 'PUT',
         headers: {
             'Content-Type': 'application/json',
+            'X-Proxy-Token-Present': effectiveToken ? 'true' : 'false',
             ...(effectiveToken ? { 'Authorization': effectiveToken.startsWith('Bearer ') ? effectiveToken : `Bearer ${effectiveToken}` } : {})
         },
         body: body ? JSON.stringify(body) : undefined,
