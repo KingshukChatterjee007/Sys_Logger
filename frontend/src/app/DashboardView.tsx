@@ -148,6 +148,13 @@ export default function DashboardView({ orgId: propOrgId }: DashboardViewProps) 
 
     // Determine which data to use
     const units = apiUnits.units
+    const sortedUnits = useMemo(() => {
+        return [...units].sort((a, b) => {
+            if (a.status === 'online' && b.status !== 'online') return -1;
+            if (a.status !== 'online' && b.status === 'online') return 1;
+            return 0;
+        });
+    }, [units]);
 
     const usageData = apiUsage.data
     const loading = apiUnits.loading
@@ -427,13 +434,19 @@ export default function DashboardView({ orgId: propOrgId }: DashboardViewProps) 
                     </button>
                     <div className="flex items-center gap-3 lg:pr-6">
 
-                        <Link
-                            href="/"
+                        <button
+                            onClick={() => {
+                                if (selectedUnit) {
+                                    clearSelection();
+                                } else {
+                                    router.push('/');
+                                }
+                            }}
                             className="hidden sm:flex items-center justify-center w-10 h-10 bg-zinc-100 text-zinc-600 hover:bg-orange-50 hover:text-orange-600 rounded-xl transition-colors shadow-sm"
-                            title="Return to Home"
+                            title={selectedUnit ? "Back to Fleet Overview" : "Return to Home"}
                         >
                             <ArrowLeft className="w-5 h-5" />
-                        </Link>
+                        </button>
 
                         <button
                             onClick={clearSelection}
@@ -548,7 +561,7 @@ export default function DashboardView({ orgId: propOrgId }: DashboardViewProps) 
                             </div>
                         ) : (
                             Object.entries(
-                                units.reduce((acc, unit) => {
+                                sortedUnits.reduce((acc, unit) => {
                                     const org = unit.org_id || 'Global';
                                     if (!acc[org]) acc[org] = [];
                                     acc[org].push(unit);
@@ -963,7 +976,7 @@ export default function DashboardView({ orgId: propOrgId }: DashboardViewProps) 
                                         {!isEditing && (
                                             <div className="flex bg-zinc-100/50 p-1 rounded-lg ring-1 ring-zinc-200/80 shrink-0">
                                                 <button onClick={() => setActiveTab('metrics')} className={cn("px-4 lg:px-6 py-1.5 lg:py-2 rounded-md text-[10px] font-black uppercase tracking-widest transition-all", activeTab === 'metrics' ? 'bg-white text-orange-600 shadow-sm' : 'text-zinc-500 hover:text-zinc-800')}>System View</button>
-                                                <button onClick={() => setActiveTab('logs')} className={cn("px-4 lg:px-6 py-1.5 lg:py-2 rounded-md text-[10px] font-black uppercase tracking-widest transition-all", activeTab === 'logs' ? 'bg-white text-orange-600 shadow-sm' : 'text-zinc-500 hover:text-zinc-800')}>Terminal</button>
+                                                {/* <button onClick={() => setActiveTab('logs')} className={cn("px-4 lg:px-6 py-1.5 lg:py-2 rounded-md text-[10px] font-black uppercase tracking-widest transition-all", activeTab === 'logs' ? 'bg-white text-orange-600 shadow-sm' : 'text-zinc-500 hover:text-zinc-800')}>Terminal</button> */}
                                             </div>
                                         )}
                                     </div>
@@ -1069,7 +1082,7 @@ export default function DashboardView({ orgId: propOrgId }: DashboardViewProps) 
                                         </div>
                                     </div>
                                 ) : (
-                                    <div className="bg-[#09090B] rounded-2xl lg:rounded-3xl shadow-xl border border-zinc-800 h-full min-h-[400px] lg:min-h-[500px] flex flex-col overflow-hidden">
+                                    /* <div className="bg-[#09090B] rounded-2xl lg:rounded-3xl shadow-xl border border-zinc-800 h-full min-h-[400px] lg:min-h-[500px] flex flex-col overflow-hidden">
                                         <div className="bg-[#18181B] p-3 lg:p-4 border-b border-zinc-800 flex items-center justify-between">
                                             <div className="flex items-center gap-2 lg:gap-3">
                                                 <Terminal className="text-orange-500 w-4 h-4 lg:w-5 lg:h-5" />
@@ -1087,7 +1100,8 @@ export default function DashboardView({ orgId: propOrgId }: DashboardViewProps) 
                                             <p>[{currentTime}] <span className="text-zinc-500 font-bold">INFO</span>: Telemetry stream initialized at 1000ms polling rate.</p>
                                             <p className="animate-pulse mt-4 text-zinc-600 font-bold">_</p>
                                         </div>
-                                    </div>
+                                    </div> */
+                                    null
                                 )}
                             </motion.div>
                         ) : (
@@ -1137,7 +1151,7 @@ export default function DashboardView({ orgId: propOrgId }: DashboardViewProps) 
                                         </div>
                                     ) : (
                                         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4 lg:gap-5 pb-8">
-                                            {units.map((unit) => (
+                                            {sortedUnits.map((unit) => (
                                                 <CompactStatCard
                                                     key={unit.id}
                                                     unit={unit}
