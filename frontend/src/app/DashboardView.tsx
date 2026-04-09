@@ -150,9 +150,12 @@ export default function DashboardView({ orgId: propOrgId }: DashboardViewProps) 
     const units = apiUnits.units
     const sortedUnits = useMemo(() => {
         return [...units].sort((a, b) => {
+            // 1. Primary Sort: Status (Online first)
             if (a.status === 'online' && b.status !== 'online') return -1;
             if (a.status !== 'online' && b.status === 'online') return 1;
-            return 0;
+            
+            // 2. Secondary Sort: Name (Alphabetical - stable)
+            return a.name.localeCompare(b.name);
         });
     }, [units]);
 
