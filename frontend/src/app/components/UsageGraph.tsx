@@ -18,6 +18,7 @@ import {
 import { UsageData } from './types'
 import { clsx, type ClassValue } from 'clsx'
 import { twMerge } from 'tailwind-merge'
+import { Activity } from 'lucide-react'
 
 function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
@@ -258,6 +259,18 @@ export const UsageGraph: React.FC<UsageGraphProps> = ({
     </div>
   )
   if (error) return <div className="p-8 text-center text-red-500 font-bold text-[10px] uppercase">{error}</div>
+
+  if (!filteredData.length && !loading) {
+    return (
+      <div className="flex flex-col items-center justify-center h-full gap-3 opacity-40 grayscale">
+        <Activity size={24} className="text-zinc-400" />
+        <span className="text-[10px] font-black text-zinc-400 uppercase tracking-widest text-center">
+          No telemetry data recorded<br/>
+          <span className="text-[8px] font-bold opacity-60">Waiting for first heartbeat...</span>
+        </span>
+      </div>
+    )
+  }
 
   return (
     <div className={cn("flex flex-col h-full", className)}>

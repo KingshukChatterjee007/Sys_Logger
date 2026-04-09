@@ -611,7 +611,7 @@ class UnitStore:
         # Recalculate online/offline based on last_seen if it was previously online
         status = db_status
         if last_seen:
-            now = datetime.now(last_seen.tzinfo) if last_seen.tzinfo else datetime.now()
+            now = datetime.utcnow().replace(tzinfo=last_seen.tzinfo) if last_seen.tzinfo else datetime.utcnow()
             if (now - last_seen).total_seconds() < 300:
                 status = 'online'
             else:
@@ -723,7 +723,7 @@ class UnitStore:
                 unit_data.get('os_info'),
                 unit_data.get('ram_total'),
                 org_id,
-                datetime.now(), # Always update last_seen to now for heartbeats/registration
+                datetime.utcnow(), # Always update last_seen to now for heartbeats/registration
                 'online'        # Always force to online during save_unit (heartbeat/reg)
             ))
             conn.commit()
@@ -805,7 +805,6 @@ class UnitStore:
     @staticmethod
     def add_usage(unit_id, usage_data):
         # 1. Update In-Memory Cache for Real-time Graphs (last 100)
-        # Keeping this for instant dashboard updates, though SQL is the Source of Truth
         if unit_id not in unit_usage:
             unit_usage[unit_id] = []
         unit_usage[unit_id].append(usage_data)
@@ -817,14 +816,11 @@ class UnitStore:
             conn = get_db_connection()
             cur = conn.cursor()
             
-            # Resolve System ID (unit_id is the string representation of system_id PK)
-            # We try system_id first if it's numeric, otherwise system_name
+            # Resolve System ID
             try:
-                # Test if it's a numeric ID (Integer PK)
                 int(unit_id)
                 cur.execute("SELECT system_id FROM systems WHERE system_id = %s OR system_name = %s LIMIT 1", (unit_id, unit_id))
             except (ValueError, TypeError):
-                # It's a string name (e.g. "1/TEST_LAPTOP_1")
                 cur.execute("SELECT system_id FROM systems WHERE system_name = %s LIMIT 1", (unit_id,))
 
             res = cur.fetchone()
@@ -837,8 +833,22 @@ class UnitStore:
 
             timestamp = usage_data.get('timestamp')
             if not timestamp: 
-                timestamp = datetime.now()
+                timestamp = datetime.utcnow()
+            elif isinstance(timestamp, str):
+                try:
+                    # Handle ISO format from frontend/client
+                    timestamp = datetime.fromisoformat(timestamp.replace('Z', '+00:00'))
+                except:
+                    timestamp = datetime.utcnow()
             
+            # CRITICAL: Automatic Partition Management
+            # Ensure a partition exists for this metric's timestamp
+            try:
+                cur.execute("SELECT create_system_metrics_partition(%s)", (timestamp.date(),))
+            except Exception as pe:
+                print(f"Partition check failed: {pe}")
+                # Don't crash, try to proceed as it might already exist
+
             cpu = usage_data.get('cpu', usage_data.get('cpu_usage', 0))
             ram = usage_data.get('ram', usage_data.get('ram_usage', 0))
             gpu = usage_data.get('gpu_load', usage_data.get('gpu_usage', 0))
@@ -852,11 +862,10 @@ class UnitStore:
                 ON CONFLICT DO NOTHING
             """, (sys_int_id, timestamp, cpu, ram, gpu, net_rx, net_tx))
             
-            # CRITICAL: Always update status to online and refresh last_seen
-            cur.execute("UPDATE systems SET last_seen = %s, status = 'online' WHERE system_id = %s", (timestamp, sys_int_id))
+            # Update status to online and refresh last_seen (Use GMT/UTC)
+            cur.execute("UPDATE systems SET last_seen = %s, status = 'online' WHERE system_id = %s", (datetime.utcnow(), sys_int_id))
             
             conn.commit()
-            print(f"Successfully recorded metrics for unit {unit_id} (ID: {sys_int_id})")
             cur.close()
             conn.close()
         except Exception as e:
@@ -951,7 +960,7 @@ def get_local_ip():
 def health_check():
     return jsonify({
         'status': 'ok', 
-        'timestamp': datetime.now().isoformat(),
+        'timestamp': datetime.utcnow().isoformat(),
         'local_ip': get_local_ip()
     }), 200
 
@@ -1316,7 +1325,7 @@ latest_server_stats = {
     'cpu': 0,
     'ram': 0,
     'gpu_load': 0,
-    'timestamp': datetime.now().isoformat()
+    'timestamp': datetime.utcnow().isoformat()
 }
 
 class ServerMonitor(threading.Thread):
@@ -1383,7 +1392,7 @@ class ServerMonitor(threading.Thread):
                     'cpu': cpu,
                     'ram': ram,
                     'gpu_load': round(gpu, 1),
-                    'timestamp': datetime.now().isoformat()
+                    'timestamp': datetime.utcnow().isoformat()
                 }
 
                 # Sleep small amount if not using typeperf blocking read
@@ -1405,12 +1414,7 @@ def get_system_usage_route():
     return jsonify([latest_server_stats])
 
 
-@app.route('/api/units/<unit_id>/usage', methods=['GET'])
-def get_unit_usage_route(unit_id):
-    """Fetch recent telemetry history for a specific unit (used by dashboard graphs)"""
-    limit = request.args.get('limit', default=100, type=int)
-    usage = UnitStore.get_usage(unit_id, limit=limit)
-    return jsonify(usage)
+# Duplicate route removed to favor the authenticated version at line 1296
 
 
 # --- FLEET MANAGEMENT APIS ---
@@ -1831,7 +1835,7 @@ def export_unit_data(unit_id):
             elif time_range == '10d': days = 10
             elif time_range == 'all': days = 3650
             
-            filter_start = datetime.now() - timedelta(days=days)
+            filter_start = datetime.utcnow() - timedelta(days=days)
             query += "AND timestamp >= %s "
             params.append(filter_start)
             filename_dates = time_range
