@@ -316,12 +316,13 @@ def download_installer(current_user):
             
             # Dynamically determine server URL
             # 1. Use environment variable if set (best for hosting/proxies)
-            # 2. Fallback to browser's request URL
-            server_url = PUBLIC_SERVER_URL or request.host_url.rstrip('/')
+            # 2. Hard-coded fallback for production domain (ensures HTTPS + Domain)
+            # 3. Last resort: current request URL
+            server_url = PUBLIC_SERVER_URL or "https://lab-monitoring.nielitbhubaneswar.in"
             
-            # 3. Aggressive HTTPS force: If we are on the production domain via a proxy, force HTTPS
-            if 'lab-monitoring.nielitbhubaneswar.in' in server_url:
-                server_url = server_url.replace('http://', 'https://')
+            if not PUBLIC_SERVER_URL and 'nielitbhubaneswar.in' not in request.host_url:
+                 # If we aren't on production, we can fall back to the request host (for local dev)
+                 server_url = request.host_url.rstrip('/')
             
             config_data = {
                 'system_id': str(uuid.uuid4()),
