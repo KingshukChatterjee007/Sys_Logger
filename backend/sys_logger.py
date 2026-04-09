@@ -1942,9 +1942,10 @@ def calculate_node_health(metrics_summary):
     """Calculates a health score from 0 to 100 based on metrics."""
     if not metrics_summary: return 100
     
-    cpu_avg = metrics_summary.get('avg_cpu', 0)
-    ram_avg = metrics_summary.get('avg_ram', 0)
-    gpu_avg = metrics_summary.get('avg_gpu', 0)
+    # Ensure we are working with floats and handle None
+    cpu_avg = float(metrics_summary.get('avg_cpu', 0) or 0)
+    ram_avg = float(metrics_summary.get('avg_ram', 0) or 0)
+    gpu_avg = float(metrics_summary.get('avg_gpu', 0) or 0)
     
     # Simple weighted penalty system
     score = 100
@@ -1961,16 +1962,18 @@ def calculate_node_health(metrics_summary):
 def get_intelligent_insights(metrics_rows, sys_info):
     """Generates human-readable analysis based on telemetry data patterns."""
     insights = []
-    if not metrics_rows:
+    
+    # Clean and filter metrics (only keep valid numeric data)
+    cpu_vals = [float(r['cpu_usage']) for r in metrics_rows if r.get('cpu_usage') is not None]
+    ram_vals = [float(r['ram_usage']) for r in metrics_rows if r.get('ram_usage') is not None]
+    
+    if not cpu_vals or not ram_vals:
         return [{
             "type": "info",
             "title": "Data Scarcity",
             "text": "Insufficient telemetry data detected for the selected period. Connect the node and allow some time for metrics to accumulate."
         }]
 
-    cpu_vals = [r['cpu_usage'] for r in metrics_rows]
-    ram_vals = [r['ram_usage'] for r in metrics_rows]
-    
     avg_cpu = sum(cpu_vals) / len(cpu_vals)
     max_cpu = max(cpu_vals)
     avg_ram = sum(ram_vals) / len(ram_vals)
