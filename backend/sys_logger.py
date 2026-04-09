@@ -2111,27 +2111,75 @@ def get_org_report(org_id):
         conn = get_db_connection()
         cur = conn.cursor(cursor_factory=RealDictCursor)
         
-        cur.execute("SELECT system_id, system_name FROM systems WHERE org_id::varchar = %s", (org_id,))
+        # 1. Parameter Handling
+        time_range = request.args.get('range', '7d')
+        days = 7
+        if time_range == '1d': days = 1
+        elif time_range == '30d': days = 30
+        elif time_range == '1y': days = 365
+        
+        # 2. Fetch Systems
+        cur.execute("SELECT system_id, system_name, os, ip_address, cpu_model, ram_gb FROM systems WHERE org_id::varchar = %s", (org_id,))
         systems = cur.fetchall()
         
+        if not systems:
+            return jsonify({
+                "org_id": org_id,
+                "fleet_size": 0,
+                "node_summaries": [],
+                "insights": [{"type": "info", "title": "Empty Fleet", "text": "No monitoring nodes linked to this organization."}]
+            })
+
         report_data = []
+        fleet_cpu_total = 0
+        fleet_ram_total = 0
+        valid_nodes = 0
+
         for sys in systems:
-            # Fetch summary for each node (simplified for fleet report)
-            cur.execute("SELECT AVG(cpu_usage) as avg_cpu, AVG(ram_usage) as avg_ram FROM system_metrics WHERE system_id = %s AND timestamp >= NOW() - INTERVAL '7 days'", (sys['system_id'],))
+            # Fetch summary for each node
+            # Using simple interval logic for now to stay compatible with partitioning
+            cur.execute("""
+                SELECT AVG(cpu_usage) as avg_cpu, AVG(ram_usage) as avg_ram 
+                FROM system_metrics 
+                WHERE system_id = %s AND timestamp >= NOW() - INTERVAL '%s days'
+            """, (sys['system_id'], days))
             res = cur.fetchone()
+            
+            avg_cpu = float(res['avg_cpu'] or 0)
+            avg_ram = float(res['avg_ram'] or 0)
+            
+            if avg_cpu > 0 or avg_ram > 0:
+                fleet_cpu_total += avg_cpu
+                fleet_ram_total += avg_ram
+                valid_nodes += 1
+
             report_data.append({
                 "name": sys['system_name'],
-                "avg_cpu": float(res['avg_cpu'] or 0),
-                "avg_ram": float(res['avg_ram'] or 0)
+                "avg_cpu": avg_cpu,
+                "avg_ram": avg_ram,
+                "health_score": calculate_node_health({"avg_cpu": avg_cpu, "avg_ram": avg_ram})
             })
             
+        # Fleet-wide Insights
+        fleet_avg_cpu = fleet_cpu_total / valid_nodes if valid_nodes > 0 else 0
+        fleet_avg_ram = fleet_ram_total / valid_nodes if valid_nodes > 0 else 0
+        
+        insights = [
+            {"type": "info", "title": "Fleet Capacity", "text": f"Your fleet consists of {len(systems)} nodes, with {valid_nodes} reporting data in the last {time_range}."}
+        ]
+        
+        if fleet_avg_cpu > 60:
+            insights.append({"type": "warning", "title": "High Fleet Load", "text": "Overall fleet CPU utilization is high. Consider expanding capacity."})
+        
         return jsonify({
             "org_id": org_id,
             "fleet_size": len(systems),
             "node_summaries": report_data,
-            "insights": [
-                {"type": "info", "title": "Fleet Capacity", "text": f"Your fleet currently consists of {len(systems)} active monitoring nodes."}
-            ]
+            "fleet_stats": {
+                "avg_cpu": fleet_avg_cpu,
+                "avg_ram": fleet_avg_ram
+            },
+            "insights": insights
         })
     except Exception as e:
         return jsonify({'error': str(e)}), 500
