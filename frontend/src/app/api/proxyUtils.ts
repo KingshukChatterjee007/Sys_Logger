@@ -17,6 +17,7 @@ export async function proxyGet(backendPath: string, token?: string | null): Prom
     const response = await fetch(url, {
         headers: {
             'Content-Type': 'application/json',
+            'X-Proxy-Token-Present': effectiveToken ? 'true' : 'false',
             ...(effectiveToken ? { 'Authorization': effectiveToken.startsWith('Bearer ') ? effectiveToken : `Bearer ${effectiveToken}` } : {})
         },
         cache: 'no-store',

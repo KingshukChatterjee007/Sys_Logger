@@ -6,5 +6,6 @@ export async function GET(
     { params }: { params: Promise<{ orgId: string }> }
 ) {
     const { orgId } = await params
-    return proxyGet(`/api/orgs/${orgId}/units`)
+    const token = request.headers.get('Authorization')
+    return proxyGet(`/api/orgs/${orgId}/units`, token)
 }
