@@ -94,9 +94,9 @@ export default function OrgReportPage() {
            
             <div className="flex items-center gap-8">
                <div className="hidden lg:flex items-center gap-4 mr-8 border-r border-zinc-100 pr-8">
-                  <img src="/krishishayogi.png" alt="Logo" className="h-10 object-contain" />
-                  <img src="/Nielit_logo.jpeg" alt="Logo" className="h-12 object-contain mix-blend-multiply" />
-                  <img src="/India-AI_logo.jpeg" alt="Logo" className="h-12 object-contain mix-blend-multiply" />
+                  <img src="/krishishayogi.png" alt="Logo" className="h-12 lg:h-14 object-contain mix-blend-multiply" />
+                  <img src="/Nielit_logo.jpeg" alt="Logo" className="h-14 object-contain mix-blend-multiply" />
+                  <img src="/India-AI_logo.jpeg" alt="Logo" className="h-14 object-contain mix-blend-multiply" />
                </div>
                <div className="bg-zinc-50 border border-zinc-100 p-8 rounded-[2rem] flex items-center gap-10 min-w-[250px]">
                   <div>

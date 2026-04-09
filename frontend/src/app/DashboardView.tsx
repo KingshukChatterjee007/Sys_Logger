@@ -534,10 +534,10 @@ export default function DashboardView({ orgId: propOrgId }: DashboardViewProps) 
                 {/* Branding in Header */}
                 <div className="hidden xl:flex items-center gap-6 px-6 border-l border-zinc-100 ml-6">
                     <div className="flex items-center gap-4">
-                        <img src="/krishishayogi.png" alt="Krishi Sahayogi" className="h-8 object-contain" />
-                        <div className="h-8 w-[1px] bg-zinc-100" />
-                        <img src="/Nielit_logo.jpeg" alt="NIELIT" className="h-10 object-contain mix-blend-multiply" />
-                        <img src="/India-AI_logo.jpeg" alt="India AI" className="h-10 object-contain mix-blend-multiply" />
+                        <img src="/krishishayogi.png" alt="Krishi Sahayogi" className="h-10 lg:h-11 object-contain mix-blend-multiply" />
+                        <div className="h-10 w-[1px] bg-zinc-100" />
+                        <img src="/Nielit_logo.jpeg" alt="NIELIT" className="h-11 object-contain mix-blend-multiply" />
+                        <img src="/India-AI_logo.jpeg" alt="India AI" className="h-11 object-contain mix-blend-multiply" />
                     </div>
                     <div className="flex flex-col">
                         <span className="text-[8px] font-black text-zinc-400 uppercase tracking-widest leading-none mb-1">Built by</span>
