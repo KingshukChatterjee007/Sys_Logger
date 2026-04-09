@@ -446,7 +446,7 @@ def generate_installer_link(current_user):
         'org_id': org_id,
         'comp_id': comp_id,
         'type': 'installer_download',
-        'exp': datetime.utcnow() + timedelta(hours=24)
+        'exp': datetime.now(timezone.utc) + timedelta(hours=24)
     }, app.config['SECRET_KEY'], algorithm="HS256")
     
     host = request.host_url.rstrip('/')
@@ -483,7 +483,7 @@ def login():
             'role': user['role'],
             'org_id': user['org_id'],
             'tier': user['tier'],
-            'exp': datetime.utcnow() + timedelta(hours=24)
+            'exp': datetime.now(timezone.utc) + timedelta(hours=24)
         }, app.config['SECRET_KEY'], algorithm="HS256")
         
         return jsonify({
@@ -595,7 +595,51 @@ def create_user(current_user):
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-# Legacy JSON storage logic removed (PostgreSQL is now SOT)
+# --- Database Schema Bootstrapping ---
+
+def ensure_schema_ready():
+    """Ensure required SQL functions (like partitioning) exist in the database"""
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        
+        # 1. Create Partitioning Function if missing
+        cur.execute("""
+            CREATE OR REPLACE FUNCTION create_system_metrics_partition(target_date DATE)
+            RETURNS VOID AS $$
+            DECLARE
+                partition_name TEXT;
+                start_date DATE;
+                end_date DATE;
+            BEGIN
+                start_date := DATE_TRUNC('month', target_date);
+                end_date := start_date + INTERVAL '1 month';
+                partition_name :=
+                    'system_metrics_y' || EXTRACT(YEAR FROM start_date) ||
+                    'm' || LPAD(EXTRACT(MONTH FROM start_date)::TEXT, 2, '0');
+
+                EXECUTE FORMAT(
+                    'CREATE TABLE IF NOT EXISTS %I PARTITION OF system_metrics
+                     FOR VALUES FROM (%L) TO (%L)',
+                    partition_name, start_date, end_date
+                );
+            END;
+            $$ LANGUAGE plpgsql;
+        """)
+        
+        # 2. Pre-create current and next month partitions
+        cur.execute("SELECT create_system_metrics_partition(CURRENT_DATE)")
+        cur.execute("SELECT create_system_metrics_partition(CURRENT_DATE + INTERVAL '1 month')")
+        
+        conn.commit()
+        cur.close()
+        conn.close()
+        logging.info("Database schema bootstrap complete (Partitions initialized)")
+    except Exception as e:
+        logging.error(f"Database bootstrap failed: {e}")
+
+# Run bootstrap on startup
+ensure_schema_ready()
 
 class UnitStore:
     """Store for units and usage with PostgreSQL Persistence"""
@@ -611,7 +655,7 @@ class UnitStore:
         # Recalculate online/offline based on last_seen if it was previously online
         status = db_status
         if last_seen:
-            now = datetime.utcnow().replace(tzinfo=last_seen.tzinfo) if last_seen.tzinfo else datetime.now(timezone.utc)
+            now = datetime.now(timezone.utc).replace(tzinfo=last_seen.tzinfo) if last_seen.tzinfo else datetime.now(timezone.utc)
             if (now - last_seen).total_seconds() < 300:
                 status = 'online'
             else:
@@ -723,7 +767,7 @@ class UnitStore:
                 unit_data.get('os_info'),
                 unit_data.get('ram_total'),
                 org_id,
-                datetime.utcnow(), # Always update last_seen to now for heartbeats/registration
+                datetime.now(timezone.utc), # Always update last_seen to now for heartbeats/registration
                 'online'        # Always force to online during save_unit (heartbeat/reg)
             ))
             conn.commit()
@@ -797,7 +841,7 @@ class UnitStore:
         except Exception as e:
             print(f"Error in UnitStore.get_unique_orgs: {e}")
             return []
-
+            
     @staticmethod
     def get_units_by_org(org_id):
         return UnitStore.get_all_units(user={'role': 'USER', 'org_id': org_id})
@@ -846,8 +890,8 @@ class UnitStore:
             try:
                 cur.execute("SELECT create_system_metrics_partition(%s)", (timestamp.date(),))
             except Exception as pe:
-                print(f"Partition check failed: {pe}")
-                # Don't crash, try to proceed as it might already exist
+                # Log detailed error for VPS debugging
+                logging.error(f"[DB ERROR] Partition check failed for date {timestamp.date()}: {pe}")
 
             cpu = usage_data.get('cpu', usage_data.get('cpu_usage', 0))
             ram = usage_data.get('ram', usage_data.get('ram_usage', 0))
@@ -855,21 +899,26 @@ class UnitStore:
             net_rx = usage_data.get('network_rx', 0)
             net_tx = usage_data.get('network_tx', 0)
 
-            cur.execute("""
-                INSERT INTO system_metrics 
-                (system_id, timestamp, cpu_usage, ram_usage, gpu_usage, network_rx_mb, network_tx_mb)
-                VALUES (%s, %s, %s, %s, %s, %s, %s)
-                ON CONFLICT DO NOTHING
-            """, (sys_int_id, timestamp, cpu, ram, gpu, net_rx, net_tx))
+            try:
+                cur.execute("""
+                    INSERT INTO system_metrics 
+                    (system_id, timestamp, cpu_usage, ram_usage, gpu_usage, network_rx_mb, network_tx_mb)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s)
+                    ON CONFLICT DO NOTHING
+                """, (sys_int_id, timestamp, cpu, ram, gpu, net_rx, net_tx))
+            except Exception as ie:
+                 logging.error(f"[DB ERROR] SQL Insert failed into system_metrics: {ie}")
+                 raise ie
             
             # Update status to online and refresh last_seen (Use GMT/UTC)
-            cur.execute("UPDATE systems SET last_seen = %s, status = 'online' WHERE system_id = %s", (datetime.utcnow(), sys_int_id))
+            cur.execute("UPDATE systems SET last_seen = %s, status = 'online' WHERE system_id = %s", (datetime.now(timezone.utc), sys_int_id))
             
             conn.commit()
+            logging.info(f"✓ Metrics recorded for unit {unit_id} (ID: {sys_int_id}) at {timestamp}")
             cur.close()
             conn.close()
         except Exception as e:
-            print(f"Failed to write usage to DB for unit {unit_id}: {e}")
+            logging.error(f"Failed to write usage to DB for unit {unit_id}: {e}")
 
     @staticmethod
     def get_usage(unit_id, limit=50):
@@ -960,7 +1009,7 @@ def get_local_ip():
 def health_check():
     return jsonify({
         'status': 'ok', 
-        'timestamp': datetime.utcnow().isoformat(),
+        'timestamp': datetime.now(timezone.utc).isoformat(),
         'local_ip': get_local_ip()
     }), 200
 
@@ -1325,7 +1374,7 @@ latest_server_stats = {
     'cpu': 0,
     'ram': 0,
     'gpu_load': 0,
-    'timestamp': datetime.utcnow().isoformat()
+    'timestamp': datetime.now(timezone.utc).isoformat()
 }
 
 class ServerMonitor(threading.Thread):
@@ -1392,7 +1441,7 @@ class ServerMonitor(threading.Thread):
                     'cpu': cpu,
                     'ram': ram,
                     'gpu_load': round(gpu, 1),
-                    'timestamp': datetime.utcnow().isoformat()
+                    'timestamp': datetime.now(timezone.utc).isoformat()
                 }
 
                 # Sleep small amount if not using typeperf blocking read
@@ -1835,7 +1884,7 @@ def export_unit_data(unit_id):
             elif time_range == '10d': days = 10
             elif time_range == 'all': days = 3650
             
-            filter_start = datetime.utcnow() - timedelta(days=days)
+            filter_start = datetime.now(timezone.utc) - timedelta(days=days)
             query += "AND timestamp >= %s "
             params.append(filter_start)
             filename_dates = time_range
