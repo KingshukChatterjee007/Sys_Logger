@@ -9,7 +9,10 @@ export const apiFetch = async (endpoint: string, options: RequestInit = {}) => {
     const { headers, ...otherOptions } = options
     const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null
 
-    return fetch(`${baseUrl}${endpoint}`, {
+    const cacheBuster = `cb=${Date.now()}`
+    const separator = endpoint.includes('?') ? '&' : '?'
+    
+    return fetch(`${baseUrl}${endpoint}${separator}${cacheBuster}`, {
         mode: 'cors',
         cache: 'no-store', // Disable browser caching
         ...otherOptions,
