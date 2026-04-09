@@ -1990,85 +1990,140 @@ def export_unit_data(unit_id):
 # INTELLIGENT REPORT ANALYSIS ENGINE
 # ============================================================
 
+# --- Statistical Utility Helpers ---
+def math_mean(data):
+    if not data: return 0
+    return sum(data) / len(data)
+
+def math_stddev(data, mean=None):
+    if not data or len(data) < 2: return 0
+    if mean is None: mean = math_mean(data)
+    variance = sum((x - mean) ** 2 for x in data) / len(data)
+    return variance ** 0.5
+
+def math_correlation(x, y):
+    """Calculate Pearson correlation coefficient between two series"""
+    if not x or not y or len(x) != len(y) or len(x) < 2: return 0
+    mu_x, mu_y = math_mean(x), math_mean(y)
+    
+    num = sum((xi - mu_x) * (yi - mu_y) for xi, yi in zip(x, y))
+    den_x = sum((xi - mu_x) ** 2 for xi in x) ** 0.5
+    den_y = sum((yi - mu_y) ** 2 for yi in y) ** 0.5
+    
+    if den_x == 0 or den_y == 0: return 0
+    return num / (den_x * den_y)
+
 def calculate_node_health(metrics_summary):
-    """Calculates a health score from 0 to 100 based on metrics."""
+    """Calculates a health score from 0 to 100 based on statistical deviations."""
     if not metrics_summary: return 100
     
-    # Ensure we are working with floats and handle None
+    # Ensure values are numeric
     cpu_avg = float(metrics_summary.get('avg_cpu', 0) or 0)
     ram_avg = float(metrics_summary.get('avg_ram', 0) or 0)
     gpu_avg = float(metrics_summary.get('avg_gpu', 0) or 0)
     
-    # Simple weighted penalty system
+    # Base score
     score = 100
-    if cpu_avg > 80: score -= 20
-    elif cpu_avg > 60: score -= 10
     
-    if ram_avg > 90: score -= 30
-    elif ram_avg > 75: score -= 15
+    # 1. High Load Penalties (Sustained)
+    if cpu_avg > 85: score -= 25
+    elif cpu_avg > 70: score -= 10
     
-    if gpu_avg > 85: score -= 15
+    if ram_avg > 92: score -= 30
+    elif ram_avg > 80: score -= 10
     
+    # 2. Volatility Penalties (Inferred from Max vs Avg)
+    max_cpu = float(metrics_summary.get('max_cpu', 0) or 0)
+    if max_cpu > 95 and cpu_avg < 30:
+        score -= 5 # Heavy bursty load penalty
+        
     return max(0, score)
 
 def get_intelligent_insights(metrics_rows, sys_info):
-    """Generates human-readable analysis based on telemetry data patterns."""
+    """Generates statistical analysis based on telemetry data distributions."""
     insights = []
     
-    # Clean and filter metrics (only keep valid numeric data)
+    # 1. Data Preparation
     cpu_vals = [float(r['cpu_usage']) for r in metrics_rows if r.get('cpu_usage') is not None]
     ram_vals = [float(r['ram_usage']) for r in metrics_rows if r.get('ram_usage') is not None]
+    gpu_vals = [float(r['gpu_usage']) for r in metrics_rows if r.get('gpu_usage') is not None]
+    net_rx = [float(r['network_rx_mb']) for r in metrics_rows if r.get('network_rx_mb') is not None]
     
-    if not cpu_vals or not ram_vals:
+    if len(cpu_vals) < 5:
         return [{
             "type": "info",
-            "title": "Data Scarcity",
-            "text": "Insufficient telemetry data detected for the selected period. Connect the node and allow some time for metrics to accumulate."
+            "title": "Insufficient Distribution",
+            "text": "The sampling window is too narrow for statistical analysis. Continue monitoring to build a baseline."
         }]
 
-    avg_cpu = sum(cpu_vals) / len(cpu_vals)
-    max_cpu = max(cpu_vals)
-    avg_ram = sum(ram_vals) / len(ram_vals)
-    max_ram = max(ram_vals)
+    # 2. Statistical Profiling
+    mu_cpu = math_mean(cpu_vals)
+    sigma_cpu = math_stddev(cpu_vals, mu_cpu)
+    
+    mu_ram = math_mean(ram_vals)
+    sigma_ram = math_stddev(ram_vals, mu_ram)
 
-    # 1. Resource Utilization Insights
-    if avg_cpu < 5 and max_cpu < 15:
-        insights.append({
-            "type": "optimization",
-            "title": "Severe Under-utilization",
-            "text": "This node is consistently idle (Avg CPU < 5%). Consider downgrading resources or consolidating workloads to save costs."
-        })
-    elif avg_cpu > 70:
+    # 3. Anomaly Detection (Z-Score > 2.0)
+    high_cpu_outliers = [x for x in cpu_vals if (x - mu_cpu) > (2 * sigma_cpu) and x > 50]
+    if high_cpu_outliers:
         insights.append({
             "type": "warning",
-            "title": "High Sustained Workload",
-            "text": "The CPU is under heavy load (70%+ average). This might lead to latency issues during peak operations."
+            "title": "Statistical CPU Outliers",
+            "text": f"Detected {len(high_cpu_outliers)} events where CPU usage broke the 2-sigma normal distribution of this node."
         })
 
-    if max_ram > 95:
-        insights.append({
-            "type": "critical",
-            "title": "RAM Exhaustion Detected",
-            "text": "System hit 95%+ RAM usage. This likely triggered swap-file usage, significantly slowing down performance."
-        })
-
-    # 2. Stability Analysis
-    if len(cpu_vals) > 5:
-        variance = sum((x - avg_cpu) ** 2 for x in cpu_vals) / len(cpu_vals)
-        if variance > 400: # High swing
+    # 4. Momentum & Acceleration (Sudden Jolts)
+    if len(cpu_vals) >= 3:
+        deltas = [cpu_vals[i] - cpu_vals[i-1] for i in range(1, len(cpu_vals))]
+        accelerations = [deltas[i] - deltas[i-1] for i in range(1, len(deltas))]
+        max_accel = max(accelerations) if accelerations else 0
+        
+        if max_accel > 40:
             insights.append({
-                "type": "info",
-                "title": "Unstable Load Profile",
-                "text": "We detected massive swings in CPU usage. This suggests bursty workloads or frequent periodic heavy tasks."
+                "type": "critical",
+                "title": "Load Shock Detected",
+                "text": "Sudden, extreme escalation in resource demand detected. This indicates a high-impact task launch."
             })
 
-    # 3. Recommendations
-    if avg_ram > 80:
+    # 5. Cross-Metric Correlation (Resource Dependency)
+    r_cpu_ram = math_correlation(cpu_vals, ram_vals)
+    
+    if abs(r_cpu_ram) < 0.2 and mu_cpu > 40:
         insights.append({
-            "type": "recommendation",
-            "title": "Memory Upgrade Advised",
-            "text": f"Average RAM usage is {avg_ram:.1f}%. Increasing physical memory will provide more head-room for OS caching."
+            "type": "info",
+            "title": "Asymmetric Resource Stress",
+            "text": "CPU is under heavy load while RAM remains static. This decoupling suggests pure computational tasks (e.g. rendering or logic loops)."
         })
+    elif r_cpu_ram > 0.8:
+        insights.append({
+            "type": "optimization",
+            "title": "Synchronous Scaling",
+            "text": "CPU and RAM are scaling in perfect sync. This suggests a well-balanced application environment."
+        })
+
+    # 6. Stability vs Entropy
+    if sigma_cpu < 2 and mu_cpu > 10:
+        insights.append({
+            "type": "optimization",
+            "title": "Deep Steady-State",
+            "text": "Usage is exceptionally consistent (low variance). The system is likely running a dedicated background service."
+        })
+    elif sigma_cpu > 30:
+         insights.append({
+            "type": "info",
+            "title": "High-Entropy Activity",
+            "text": "Resource usage is highly unpredictable. Typical of interactive development work or gaming."
+        })
+
+    # 7. Network Relationship
+    if net_rx and cpu_vals:
+        r_cpu_net = math_correlation(cpu_vals, net_rx)
+        if r_cpu_net > 0.7:
+             insights.append({
+                "type": "info",
+                "title": "Io-Bound Correlation",
+                "text": "Compute load is directly driven by network arrivals. This node is functioning as a data processor or gateway."
+            })
 
     return insights
 
