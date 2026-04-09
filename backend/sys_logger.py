@@ -319,6 +319,10 @@ def download_installer(current_user):
             # 2. Fallback to browser's request URL
             server_url = PUBLIC_SERVER_URL or request.host_url.rstrip('/')
             
+            # 3. Aggressive HTTPS force: If we are on the production domain via a proxy, force HTTPS
+            if 'lab-monitoring.nielitbhubaneswar.in' in server_url:
+                server_url = server_url.replace('http://', 'https://')
+            
             config_data = {
                 'system_id': str(uuid.uuid4()),
                 'server_url': server_url,
