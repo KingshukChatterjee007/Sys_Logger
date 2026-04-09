@@ -11,9 +11,13 @@ export const apiFetch = async (endpoint: string, options: RequestInit = {}) => {
 
     return fetch(`${baseUrl}${endpoint}`, {
         mode: 'cors',
+        cache: 'no-store', // Disable browser caching
         ...otherOptions,
         headers: {
             'Content-Type': 'application/json',
+            'Cache-Control': 'no-cache, no-store, must-revalidate',
+            'Pragma': 'no-cache',
+            'Expires': '0',
             ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
             ...(headers || {}),
         },

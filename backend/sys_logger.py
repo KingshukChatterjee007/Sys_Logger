@@ -964,7 +964,11 @@ def health_check():
 def get_units_route(current_user):
     """Get all registered units (filtered by org)"""
     units = UnitStore.get_all_units(current_user)
-    print(f"DEBUG: get_units for {current_user.get('email')} ({current_user.get('org_id')}) -> {len(units)} units")
+    # Log detailed context for debugging sync issues
+    user_email = current_user.get('email', 'unknown')
+    user_role = current_user.get('role', 'unknown')
+    user_org = current_user.get('org_id', 'unknown')
+    print(f"DEBUG [SYNC]: Fetching units for {user_email} | Role: {user_role} | Org: {user_org} | Found: {len(units)} units")
     return jsonify(units)
 
 @app.route('/api/orgs', methods=['GET'])
