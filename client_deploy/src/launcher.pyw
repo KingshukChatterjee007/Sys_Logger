@@ -18,19 +18,8 @@ import subprocess
 import datetime
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-LOG_FILE = os.path.join(BASE_DIR, "logs", "startup.log")
-
-# Ensure logs folder exists
-os.makedirs(os.path.join(BASE_DIR, "logs"), exist_ok=True)
-
-
 def log(msg: str):
     timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    try:
-        with open(LOG_FILE, "a", encoding="utf-8") as f:
-            f.write(f"[{timestamp}] {msg}\n")
-    except:
-        pass
     print(f"[{timestamp}] {msg}", flush=True)
 
 
@@ -81,13 +70,11 @@ def launch_client():
     CREATE_NO_WINDOW = 0x08000000
 
     try:        
-        err_f = open(os.path.join(BASE_DIR, "logs", "err.log"), "a", encoding="utf-8")
-        
         proc = subprocess.Popen(
             [python_exe, client_script],
             cwd=BASE_DIR,
             stdout=subprocess.DEVNULL,
-            stderr=err_f,
+            stderr=subprocess.DEVNULL,
             stdin=subprocess.DEVNULL,
             creationflags=DETACHED_PROCESS | CREATE_NO_WINDOW,
             close_fds=True,

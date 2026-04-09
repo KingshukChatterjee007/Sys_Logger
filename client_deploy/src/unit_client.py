@@ -45,33 +45,7 @@ SYNC_BATCH_SIZE = 10   # Number of records to sync at once
 # Configuration prompting is handled by configure.py (run at install time).
 # unit_client.py always runs in --silent mode under PM2 and reads from config file.
 
-import logging
-from logging.handlers import RotatingFileHandler
 
-# Ensure logs directory exists
-LOGS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'logs')
-if not os.path.exists(LOGS_DIR):
-    os.makedirs(LOGS_DIR)
-
-LOG_FILE = os.path.join(LOGS_DIR, 'agent.log')
-
-# Setup logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s [%(levelname)s] %(message)s',
-    handlers=[
-        RotatingFileHandler(LOG_FILE, maxBytes=1024*1024, backupCount=5),
-        logging.StreamHandler(sys.stdout)
-    ]
-)
-
-def log_msg(msg, level="info"):
-    if level == "error":
-        logging.error(msg)
-    elif level == "debug":
-        logging.debug(msg)
-    else:
-        logging.info(msg)
 
 class UnitClient:
     def __init__(self):
@@ -210,7 +184,7 @@ class UnitClient:
                 if self.install_token:
                     self._consume_install_token()
 
-                log_msg(f"Unit registered successfully (Status: {response.status_code})")
+                print(f"Unit registered successfully (Status: {response.status_code})")
                 return True
             elif response.status_code == 403:
                 # Token invalid or missing — admin needs to re-issue
@@ -218,17 +192,17 @@ class UnitClient:
                 try:
                     error_msg = response.json().get('error', 'Unknown')
                 except: pass
-                log_msg(f"CRITICAL: Registration REJECTED (403): {error_msg}", "error")
-                log_msg(f"  System: {info.get('hostname')} | Org: {info.get('org_id')} | Node: {info.get('comp_id')}", "error")
-                log_msg("  This installer is invalid, expired, or names do not match. Request a new one from your admin.", "error")
+                print(f"CRITICAL: Registration REJECTED (403): {error_msg}", "error")
+                print(f"  System: {info.get('hostname')} | Org: {info.get('org_id')} | Node: {info.get('comp_id')}", "error")
+                print("  This installer is invalid, expired, or names do not match. Request a new one from your admin.", "error")
                 sys.exit(1)
             else:
-                log_msg(f"Registration failed with status: {response.status_code}", "error")
+                print(f"Registration failed with status: {response.status_code}", "error")
                 try:
-                    log_msg(f"  Server response: {response.text}", "error")
+                    print(f"  Server response: {response.text}", "error")
                 except: pass
         except requests.RequestException as e:
-            log_msg(f"Registration error: {e}", "error")
+            print(f"Registration error: {e}", "error")
         return False
 
     def _consume_install_token(self):
@@ -375,21 +349,21 @@ class UnitClient:
 
             if response.status_code == 404:
                 # Server forgot us (likely restarted), force re-registration
-                log_msg("Server responded with 404 (Unit Not Found). Re-registering...", "error")
+                print("Server responded with 404 (Unit Not Found). Re-registering...", "error")
                 self.registered = False
                 return False
             
             if response.status_code == 200:
-                log_msg(f"Heartbeat successful for {self.comp_id}")
+                print(f"Heartbeat successful for {self.comp_id}")
                 return True
             else:
-                log_msg(f"Heartbeat failed with status: {response.status_code}", "error")
+                print(f"Heartbeat failed with status: {response.status_code}", "error")
         except requests.RequestException as e:
-            log_msg(f"Heartbeat error: {e}", "error")
+            print(f"Heartbeat error: {e}", "error")
             return False
 
     def sync_offline_data(self):
-        log_msg("Sync thread started.")
+        print("Sync thread started.")
             
         while self.running:
             # 1. Build a batch
