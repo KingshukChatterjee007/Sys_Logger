@@ -133,6 +133,25 @@ def token_required(f):
         return f(current_user, *args, **kwargs)
     return decorated
 
+def get_sanitized_server_url(requested_url):
+    """Ensure URL has protocol and no trailing slashes/whitespace"""
+    if not requested_url:
+        return ""
+    
+    url = str(requested_url).strip()
+    # Remove trailing slashes
+    url = url.rstrip('/')
+    
+    # Ensure protocol
+    if not url.lower().startswith(('http://', 'https://')):
+        # Default to https for production-like domains, http for others/IPs
+        if 'nielitbhubaneswar.in' in url.lower() or ('.' in url and not url.replace('.', '').isdigit()):
+             url = f"https://{url}"
+        else:
+             url = f"http://{url}"
+    
+    return url
+
 DATA_DIR = 'unit_data'
 if not os.path.exists(DATA_DIR):
     os.makedirs(DATA_DIR)
@@ -315,14 +334,11 @@ def download_installer(current_user):
             install_token = str(uuid.uuid4())
             
             # Dynamically determine server URL
-            # 1. Use environment variable if set (best for hosting/proxies)
-            # 2. Hard-coded fallback for production domain (ensures HTTPS + Domain)
-            # 3. Last resort: current request URL
-            server_url = PUBLIC_SERVER_URL or "https://lab-monitoring.nielitbhubaneswar.in"
+            server_url = get_sanitized_server_url(PUBLIC_SERVER_URL or "https://lab-monitoring.nielitbhubaneswar.in")
             
             if not PUBLIC_SERVER_URL and 'nielitbhubaneswar.in' not in request.host_url:
                  # If we aren't on production, we can fall back to the request host (for local dev)
-                 server_url = request.host_url.rstrip('/')
+                 server_url = get_sanitized_server_url(request.host_url)
             
             config_data = {
                 'system_id': str(uuid.uuid4()),
@@ -397,9 +413,9 @@ def download_installer_signed(signed_token):
             install_token = str(uuid.uuid4())
             
             # Dynamically determine server URL
-            server_url = PUBLIC_SERVER_URL or "https://lab-monitoring.nielitbhubaneswar.in"
+            server_url = get_sanitized_server_url(PUBLIC_SERVER_URL or "https://lab-monitoring.nielitbhubaneswar.in")
             if not PUBLIC_SERVER_URL and 'nielitbhubaneswar.in' not in request.host_url:
-                 server_url = request.host_url.rstrip('/')
+                 server_url = get_sanitized_server_url(request.host_url)
             
             config_data = {
                 'system_id': str(uuid.uuid4()),
@@ -461,7 +477,7 @@ def generate_installer_link(current_user):
         'exp': datetime.now(timezone.utc) + timedelta(hours=24)
     }, app.config['SECRET_KEY'], algorithm="HS256")
     
-    host = request.host_url.rstrip('/')
+    host = get_sanitized_server_url(request.host_url)
     download_url = f"{host}/api/units/installer/{token}"
     
     return jsonify({'download_url': download_url})

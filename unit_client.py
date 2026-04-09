@@ -124,6 +124,17 @@ class UnitClient:
                     config.update(json.load(f))
             except (json.JSONDecodeError, KeyError):
                 pass
+        
+        # Defensive sanitization
+        if config.get('server_url'):
+            url = config['server_url'].strip().rstrip('/')
+            if not url.lower().startswith(('http://', 'https://')):
+                if 'nielitbhubaneswar.in' in url.lower():
+                    url = f"https://{url}"
+                else:
+                    url = f"http://{url}"
+            config['server_url'] = url
+            
         return config
 
     def save_config(self):

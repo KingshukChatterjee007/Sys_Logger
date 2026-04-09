@@ -230,14 +230,23 @@ catch {
     Write-Host "    Action:  $pm2Path resurrect"
 }
 
-# ==========================================
 # Step 7: Verify Connectivity
 # ==========================================
 Write-Host ""
 Write-Host "[Step 7/7] Verifying connection to server..."
-Write-Host "  URL: $($configData.server_url)"
 
-$verifyUrl = "$($configData.server_url)/api/register_unit"
+# Sanitization: Ensure URL has protocol and no trailing slash
+$baseUrl = $configData.server_url.Trim().TrimEnd('/')
+if ($baseUrl -notlike "http*") {
+    if ($baseUrl -match "nielitbhubaneswar.in") {
+        $baseUrl = "https://$baseUrl"
+    } else {
+        $baseUrl = "http://$baseUrl"
+    }
+}
+Write-Host "  URL: $baseUrl"
+
+$verifyUrl = "$baseUrl/api/register_unit"
 $verifyBody = @{
     system_id = $configData.system_id
     org_id    = $configData.org_id
