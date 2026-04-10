@@ -1151,24 +1151,27 @@ def update_pricing(current_user):
     if current_user['role'] != 'ROOT':
         return jsonify({'error': 'Unauthorized'}), 403
     
-    data = request.get_json()
-    plan_id = data.get('plan_id')
-    price = data.get('price_monthly')
-    limit = data.get('node_limit')
-    features = data.get('features') # Expecting an array
-    is_active = data.get('is_active')
-    
-    if plan_id is None:
-        return jsonify({'error': 'Plan ID is required'}), 400
-        
     try:
+        data = request.get_json()
+        if not data:
+            return jsonify({'error': 'No data provided'}), 400
+            
+        plan_id = data.get('plan_id')
+        price = data.get('price_monthly')
+        limit = data.get('node_limit')
+        features = data.get('features') # Expecting an array
+        is_active = data.get('is_active')
+        
+        if plan_id is None:
+            return jsonify({'error': 'Plan ID is required'}), 400
+
         conn = get_db_connection()
         cur = conn.cursor()
         cur.execute("""
             UPDATE pricing_plans 
             SET price_monthly = COALESCE(%s, price_monthly),
                 node_limit = COALESCE(%s, node_limit),
-                features = COALESCE(%s, features),
+                features = COALESCE(%s::jsonb, features),
                 is_active = COALESCE(%s, is_active),
                 updated_at = NOW()
             WHERE plan_id = %s
