@@ -35,6 +35,48 @@ interface ReportData {
   timeline: Array<any>;
 }
 
+const INSIGHT_MAP: Record<string, { title: string; text: (original: string) => string }> = {
+  'Statistical CPU Outliers': {
+    title: 'Unusual CPU Spikes',
+    text: (orig) => {
+      const match = orig.match(/Detected (\d+) events/);
+      const count = match ? match[1] : '';
+      return count 
+        ? `Detected ${count} moments where the processor worked significantly harder than its usual average.`
+        : 'Detected moments where the processor worked significantly harder than its usual average.';
+    }
+  },
+  'Load Shock Detected': {
+    title: 'High Resource Jolt',
+    text: () => 'We detected a sudden, huge jump in resource usage, likely from starting a heavy program.'
+  },
+  'Synchronous Scaling': {
+    title: 'Balanced Workload',
+    text: () => 'The processor and memory are working together in perfect harmony, which is a sign of a well-behaved app.'
+  },
+  'Asymmetric Resource Stress': {
+    title: 'Heavy Calculation Task',
+    text: () => 'The processor is working hard while memory stays low, which usually happens during heavy math or logic tasks.'
+  },
+  'Insufficient Distribution': {
+    title: 'Waiting for more data',
+    text: () => 'We need a bit more time to collect data before we can provide a detailed analysis.'
+  },
+  'Deep Steady-State': {
+    title: 'Consistent Performance',
+    text: () => 'Everything is running very steadily, which usually means a background service is working smoothly.'
+  },
+  'High-Entropy Activity': {
+    title: 'Varied Workload',
+    text: () => 'Usage is jumping around quite a bit, which is very common when gaming or juggling many apps.'
+  },
+  'Io-Bound Correlation': {
+    title: 'Internet-Heavy Task',
+    text: () => 'The computer\'s work seems tied to your internet/network activity, like processing data from the web.'
+  }
+};
+
+
 export default function NodeReportPage() {
   const { unitId } = useParams();
   const router = useRouter();
@@ -51,6 +93,22 @@ export default function NodeReportPage() {
         const response = await fetch(`/api/reports/node/${unitId}?range=${range}`);
         if (!response.ok) throw new Error('Failed to fetch report data');
         const json = await response.json();
+        
+        // Translate insights if they match known technical keys
+        if (json.insights) {
+          json.insights = json.insights.map((insight: any) => {
+            const translation = INSIGHT_MAP[insight.title];
+            if (translation) {
+              return {
+                ...insight,
+                title: translation.title,
+                text: translation.text(insight.text)
+              };
+            }
+            return insight;
+          });
+        }
+        
         setData(json);
       } catch (err: any) {
         setError(err.message);
