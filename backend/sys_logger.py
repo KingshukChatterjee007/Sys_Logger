@@ -2052,8 +2052,8 @@ def get_intelligent_insights(metrics_rows, sys_info):
     if len(cpu_vals) < 5:
         return [{
             "type": "info",
-            "title": "Insufficient Distribution",
-            "text": "The sampling window is too narrow for statistical analysis. Continue monitoring to build a baseline."
+            "title": "Waiting for more data",
+            "text": "We need a bit more time to collect data before we can provide a detailed analysis."
         }]
 
     # 2. Statistical Profiling
@@ -2068,8 +2068,8 @@ def get_intelligent_insights(metrics_rows, sys_info):
     if high_cpu_outliers:
         insights.append({
             "type": "warning",
-            "title": "Statistical CPU Outliers",
-            "text": f"Detected {len(high_cpu_outliers)} events where CPU usage broke the 2-sigma normal distribution of this node."
+            "title": "Unusual CPU Spikes",
+            "text": f"Detected {len(high_cpu_outliers)} moments where the processor worked much harder than its usual average."
         })
 
     # 4. Momentum & Acceleration (Sudden Jolts)
@@ -2081,8 +2081,8 @@ def get_intelligent_insights(metrics_rows, sys_info):
         if max_accel > 40:
             insights.append({
                 "type": "critical",
-                "title": "Load Shock Detected",
-                "text": "Sudden, extreme escalation in resource demand detected. This indicates a high-impact task launch."
+                "title": "High Resource Jolt",
+                "text": "We detected a sudden, huge jump in resource usage, likely from starting a heavy program."
             })
 
     # 5. Cross-Metric Correlation (Resource Dependency)
@@ -2091,28 +2091,28 @@ def get_intelligent_insights(metrics_rows, sys_info):
     if abs(r_cpu_ram) < 0.2 and mu_cpu > 40:
         insights.append({
             "type": "info",
-            "title": "Asymmetric Resource Stress",
-            "text": "CPU is under heavy load while RAM remains static. This decoupling suggests pure computational tasks (e.g. rendering or logic loops)."
+            "title": "Heavy Calculation Task",
+            "text": "The processor is working hard while memory stays low, which usually happens during heavy math or logic tasks."
         })
     elif r_cpu_ram > 0.8:
         insights.append({
             "type": "optimization",
-            "title": "Synchronous Scaling",
-            "text": "CPU and RAM are scaling in perfect sync. This suggests a well-balanced application environment."
+            "title": "Balanced Workload",
+            "text": "The processor and memory are working together in perfect harmony, which is a sign of a well-behaved app."
         })
 
     # 6. Stability vs Entropy
     if sigma_cpu < 2 and mu_cpu > 10:
         insights.append({
             "type": "optimization",
-            "title": "Deep Steady-State",
-            "text": "Usage is exceptionally consistent (low variance). The system is likely running a dedicated background service."
+            "title": "Consistent Performance",
+            "text": "Everything is running very steadily, which usually means a background service is working smoothly."
         })
     elif sigma_cpu > 30:
          insights.append({
             "type": "info",
-            "title": "High-Entropy Activity",
-            "text": "Resource usage is highly unpredictable. Typical of interactive development work or gaming."
+            "title": "Varied Workload",
+            "text": "Usage is jumping around quite a bit, which is very common when gaming or juggling many apps."
         })
 
     # 7. Network Relationship
@@ -2121,8 +2121,8 @@ def get_intelligent_insights(metrics_rows, sys_info):
         if r_cpu_net > 0.7:
              insights.append({
                 "type": "info",
-                "title": "Io-Bound Correlation",
-                "text": "Compute load is directly driven by network arrivals. This node is functioning as a data processor or gateway."
+                "title": "Internet-Heavy Task",
+                "text": "The computer's work seems tied to your internet/network activity, like processing data from the web."
             })
 
     return insights

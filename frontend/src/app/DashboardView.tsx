@@ -1200,12 +1200,7 @@ export default function DashboardView({ orgId: propOrgId }: DashboardViewProps) 
                                             </button>
                                         </div>
 
-                                        {!isEditing && (
-                                            <div className="flex bg-zinc-100/50 p-1 rounded-lg ring-1 ring-zinc-200/80 shrink-0">
-                                                <button onClick={() => setActiveTab('metrics')} className={cn("px-4 lg:px-6 py-1.5 lg:py-2 rounded-md text-[10px] font-black uppercase tracking-widest transition-all", activeTab === 'metrics' ? 'bg-white text-orange-600 shadow-sm' : 'text-zinc-500 hover:text-zinc-800')}>System View</button>
-                                                {/* <button onClick={() => setActiveTab('logs')} className={cn("px-4 lg:px-6 py-1.5 lg:py-2 rounded-md text-[10px] font-black uppercase tracking-widest transition-all", activeTab === 'logs' ? 'bg-white text-orange-600 shadow-sm' : 'text-zinc-500 hover:text-zinc-800')}>Terminal</button> */}
-                                            </div>
-                                        )}
+
                                     </div>
                                 </div>
 
