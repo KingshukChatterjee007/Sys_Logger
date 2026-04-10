@@ -49,7 +49,7 @@ const CompactStatCard = ({ unit, onClick }: { unit: Unit; onClick: () => void })
 
     return (
         <motion.button
-            whileHover={{ y: -4, shadow: "0 20px 40px -10px rgba(0,0,0,0.05)" }}
+            whileHover={{ y: -4, boxShadow: "0 20px 40px -10px rgba(0,0,0,0.05)" }}
             whileTap={{ scale: 0.98 }}
             onClick={onClick}
             className={cn(
