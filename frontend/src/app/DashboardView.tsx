@@ -15,7 +15,8 @@ import {
     Monitor, Server, Database, Globe,
     ChevronRight, Download, Cpu, HardDrive,
     Wifi, Zap, Clock, AlertTriangle,
-    Terminal, Pencil, Trash2, X, Save, Activity, Menu, ArrowLeft, Shield, LogOut
+    Terminal, Pencil, Trash2, X, Save, Activity, Menu, ArrowLeft, Shield, LogOut,
+    Copy, FolderOpen, Plus
 } from 'lucide-react'
 
 function cn(...inputs: ClassValue[]) {
@@ -48,71 +49,53 @@ const CompactStatCard = ({ unit, onClick }: { unit: Unit; onClick: () => void })
 
     return (
         <motion.button
-            whileHover={{ scale: 1.02, y: -4 }}
+            whileHover={{ y: -4, shadow: "0 20px 40px -10px rgba(0,0,0,0.05)" }}
             whileTap={{ scale: 0.98 }}
             onClick={onClick}
             className={cn(
-                "flex flex-col p-5 bg-white rounded-3xl ring-1 text-left group overflow-hidden relative transition-shadow duration-300 hover:z-20",
+                "flex flex-col p-6 bg-white rounded-[2rem] border transition-all duration-300 relative group overflow-hidden",
                 isOnline
-                    ? "ring-zinc-200 hover:ring-orange-400 hover:shadow-[0_20px_40px_-15px_rgba(249,115,22,0.1)]"
-                    : "ring-zinc-100 opacity-60 hover:opacity-100 grayscale hover:grayscale-0"
+                    ? "border-zinc-100 shadow-[0_8px_30px_rgba(0,0,0,0.02)] hover:border-orange-200"
+                    : "border-zinc-50 opacity-60 grayscale"
             )}
         >
-            {isOnline && (
-                <div className="absolute top-0 right-0 w-24 h-24 bg-orange-500/5 blur-2xl rounded-full -mr-12 -mt-12 group-hover:bg-orange-500/10 transition-colors" />
-            )}
-
-            <div className="flex justify-between items-center mb-4 relative z-10">
-                <div className="flex items-center gap-2.5 min-w-0">
+            <div className="flex justify-between items-center mb-5">
+                <div className="flex items-center gap-3">
                     <div className={cn(
-                        "w-2.5 h-2.5 rounded-full ring-4 shadow-sm",
-                        isOnline ? "bg-emerald-500 ring-emerald-500/20 animate-pulse" : "bg-zinc-300 ring-zinc-300/20"
+                        "w-2 h-2 rounded-full",
+                        isOnline ? "bg-emerald-500 shadow-[0_0_12px_rgba(16,185,129,0.4)]" : "bg-zinc-300"
                     )} />
-                    <h3 className="font-black text-[11px] uppercase tracking-wider text-zinc-800 truncate">{unit.name.split('/').pop()}</h3>
+                    <h3 className="font-bold text-xs uppercase tracking-widest text-zinc-500 truncate">
+                        {unit.name.split('/').pop()}
+                    </h3>
                 </div>
-                <div className="p-1.5 rounded-lg bg-zinc-50 text-zinc-400 group-hover:text-orange-500 group-hover:bg-orange-50 transition-all">
+                <div className="w-7 h-7 rounded-full bg-zinc-50 flex items-center justify-center text-zinc-300 group-hover:bg-orange-50 group-hover:text-orange-500 transition-colors">
                     <ChevronRight size={14} />
                 </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-y-4 gap-x-6 relative z-10">
-                <div className="flex flex-col gap-0.5">
-                    <span className="text-[8px] font-black text-zinc-400 uppercase tracking-widest flex items-center gap-1">
-                        <Cpu size={10} className="text-zinc-300" /> CPU
-                    </span>
-                    <span className="text-lg font-black font-mono text-zinc-900 tracking-tighter leading-none">
-                        {metrics?.cpu !== undefined ? metrics.cpu.toFixed(0) : '--'}<span className="text-[10px] text-zinc-400 font-bold ml-0.5">%</span>
-                    </span>
-                </div>
-                <div className="flex flex-col gap-0.5 items-end">
-                    <span className="text-[8px] font-black text-zinc-400 uppercase tracking-widest flex items-center gap-1">
-                        <HardDrive size={10} className="text-zinc-300" /> RAM
-                    </span>
-                    <span className="text-lg font-black font-mono text-zinc-900 tracking-tighter leading-none">
-                        {metrics?.ram !== undefined ? metrics.ram.toFixed(0) : '--'}<span className="text-[10px] text-zinc-400 font-bold ml-0.5">%</span>
-                    </span>
-                </div>
-                <div className="flex flex-col gap-0.5">
-                    <span className="text-[8px] font-black text-zinc-400 uppercase tracking-widest flex items-center gap-1">
-                        <Zap size={10} className="text-zinc-300" /> GPU
-                    </span>
-                    <span className="text-lg font-black font-mono text-zinc-900 tracking-tighter leading-none">
-                        {metrics?.gpu !== undefined ? metrics.gpu.toFixed(0) : '--'}<span className="text-[10px] text-zinc-400 font-bold ml-0.5">%</span>
-                    </span>
-                </div>
-                <div className="flex flex-col gap-0.5 items-end">
-                    <span className="text-[8px] font-black text-zinc-400 uppercase tracking-widest flex items-center gap-1">
-                        <Wifi size={10} className="text-zinc-300" /> NET
-                    </span>
-                    <span className="text-lg font-black font-mono text-zinc-900 tracking-tighter leading-none">
-                        {metrics?.network_rx !== undefined ? metrics.network_rx.toFixed(1) : '--'}<span className="text-[8px] text-zinc-400 font-bold ml-0.5">MB/s</span>
-                    </span>
-                </div>
+            <div className="grid grid-cols-2 gap-4">
+                {[
+                    { label: 'CPU', value: metrics?.cpu, icon: <Cpu size={12} /> },
+                    { label: 'RAM', value: metrics?.ram, icon: <HardDrive size={12} /> },
+                    { label: 'GPU', value: metrics?.gpu, icon: <Zap size={12} /> },
+                    { label: 'NET', value: metrics?.network_rx, icon: <Wifi size={12} />, suffix: 'MB/s' }
+                ].map((stat, i) => (
+                    <div key={i} className="flex flex-col gap-1">
+                        <span className="text-[9px] font-bold text-zinc-400 uppercase tracking-widest flex items-center gap-1.5 font-mono">
+                            {stat.icon} {stat.label}
+                        </span>
+                        <div className="text-xl font-bold text-zinc-900 tracking-tight">
+                            {stat.value !== undefined ? (typeof stat.value === 'number' ? stat.value.toFixed(stat.label === 'NET' ? 1 : 0) : stat.value) : '--'}
+                            <span className="text-[10px] text-zinc-300 font-bold ml-1 uppercase">{stat.suffix || '%'}</span>
+                        </div>
+                    </div>
+                ))}
             </div>
 
-            <div className="mt-4 pt-4 border-t border-zinc-50 flex items-center justify-between text-[9px] font-bold text-zinc-400">
-                <span className="truncate max-w-[100px]">{unit.ip || 'no-ip'}</span>
-                <span suppressHydrationWarning>{unit.last_seen ? new Date(unit.last_seen).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'never'}</span>
+            <div className="mt-5 pt-4 border-t border-zinc-50 flex items-center justify-between text-[10px] font-medium text-zinc-400">
+                <span className="font-mono">{unit.ip || 'DISCONNECTED'}</span>
+                <span>{unit.last_seen ? new Date(unit.last_seen).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '--'}</span>
             </div>
         </motion.button>
     );
@@ -153,7 +136,7 @@ export default function DashboardView({ orgId: propOrgId }: DashboardViewProps) 
             // 1. Primary Sort: Status (Online first)
             if (a.status === 'online' && b.status !== 'online') return -1;
             if (a.status !== 'online' && b.status === 'online') return 1;
-            
+
             // 2. Secondary Sort: Name (Alphabetical - stable)
             return a.name.localeCompare(b.name);
         });
@@ -182,7 +165,7 @@ export default function DashboardView({ orgId: propOrgId }: DashboardViewProps) 
     const [plans, setPlans] = useState<PricingPlan[]>([])
     const [paymentLoading, setPaymentLoading] = useState<string | null>(null)
     const [isReportModalOpen, setIsReportModalOpen] = useState(false)
-    const [reportTarget, setReportTarget] = useState<{id: string, name: string, type: 'node' | 'org'}>({id: '', name: '', type: 'node'})
+    const [reportTarget, setReportTarget] = useState<{ id: string, name: string, type: 'node' | 'org' }>({ id: '', name: '', type: 'node' })
     const [logoIndex, setLogoIndex] = useState(0)
 
     // Dynamic logos configuration
@@ -298,19 +281,19 @@ export default function DashboardView({ orgId: propOrgId }: DashboardViewProps) 
     const handleCustomDownload = () => {
         if (!selectedUnit) return
         setReportTarget({
-          id: selectedUnit.id.toString(),
-          name: (selectedUnit.name || 'Unknown Node').split('/').pop() || '',
-          type: 'node'
+            id: selectedUnit.id.toString(),
+            name: (selectedUnit.name || 'Unknown Node').split('/').pop() || '',
+            type: 'node'
         })
         setIsReportModalOpen(true)
     }
 
     const triggerRawExport = (id: string, range: string) => {
-      window.open(`/api/units/${id}/export?range=${range}`, '_blank')
+        window.open(`/api/units/${id}/export?range=${range}`, '_blank')
     }
 
     const triggerIntelligentReport = (id: string, type: 'node' | 'org', range: string) => {
-      window.open(`/report/${type}/${id}?range=${range}`, '_blank')
+        window.open(`/report/${type}/${id}?range=${range}`, '_blank')
     }
 
     const handleUpdateUnit = async () => {
@@ -519,29 +502,32 @@ export default function DashboardView({ orgId: propOrgId }: DashboardViewProps) 
                     </div>
                 </div>
 
-                <div className="flex flex-col items-end">
-                    <div className="flex items-center gap-1.5 lg:gap-2 text-zinc-800 font-mono font-bold text-sm lg:text-base tracking-tight">
-                        <Clock className="w-3.5 h-3.5 text-zinc-400" />
-                        {currentTime}
+                <div className="flex items-center gap-4 lg:gap-8">
+                    {/* Time and Security Badge stacked compactly */}
+                    <div className="flex flex-col items-end gap-1 px-4 lg:px-8 border-r border-zinc-100 shrink-0">
+                        <div className="flex items-center gap-1.5 lg:gap-2 text-zinc-800 font-mono font-bold text-xs lg:text-sm tracking-tight whitespace-nowrap">
+                            <Clock className="w-3 h-3 text-zinc-400" />
+                            {currentTime}
+                        </div>
+                        <span className="text-[9px] text-green-600 flex items-center gap-1.5 font-black uppercase tracking-[0.1em] bg-green-50 px-2.5 py-0.5 rounded-md ring-1 ring-green-200/50 w-fit">
+                            <Shield className="w-2.5 h-2.5 text-green-500" />
+                            <span className="hidden lg:inline">Secure Link Active</span>
+                            <span className="lg:hidden text-[8px]">Secure</span>
+                        </span>
                     </div>
-                    <span className="text-[9px] text-green-600 flex items-center gap-1.5 font-bold uppercase tracking-[0.1em] mt-1 bg-green-50 px-2.5 py-0.5 rounded-md ring-1 ring-green-200/50">
-                        <Shield className="w-3 h-3 text-green-500" />
-                        <span className="hidden sm:inline">Secure Link Active</span>
-                        <span className="sm:hidden">Secure</span>
-                    </span>
-                </div>
 
-                {/* Branding in Header */}
-                <div className="hidden xl:flex items-center gap-6 px-6 border-l border-zinc-100 ml-6">
-                    <div className="flex items-center gap-4">
-                        <img src="/krishishayogi.png" alt="Krishi Sahayogi" className="h-10 lg:h-11 object-contain mix-blend-multiply" />
-                        <div className="h-10 w-[1px] bg-zinc-100" />
-                        <img src="/Nielit_logo.jpeg" alt="NIELIT" className="h-11 object-contain mix-blend-multiply" />
-                        <img src="/India-AI_logo.jpeg" alt="India AI" className="h-11 object-contain mix-blend-multiply" />
-                    </div>
-                    <div className="flex flex-col">
-                        <span className="text-[8px] font-black text-zinc-400 uppercase tracking-widest leading-none mb-1">Built by</span>
-                        <span className="text-[10px] font-black text-orange-600 uppercase tracking-tighter leading-none">Krishi Sahayogi</span>
+                    {/* Branding in Header */}
+                    <div className="hidden md:flex items-center gap-3 lg:gap-6">
+                        <div className="flex items-center gap-4 lg:gap-6">
+                            <img src="/krishishayogi.png" alt="Krishi Sahayogi" className="h-16 lg:h-20 object-contain mix-blend-multiply transition-all" />
+                            <div className="h-10 w-[1px] bg-zinc-100" />
+                            <img src="/Nielit_logo.jpeg" alt="NIELIT" className="h-10 lg:h-11 object-contain mix-blend-multiply" />
+                            <img src="/India-AI_logo.jpeg" alt="India AI" className="h-10 lg:h-11 object-contain mix-blend-multiply" />
+                        </div>
+                        <div className="hidden xl:flex flex-col">
+                            <span className="text-[8px] font-black text-zinc-400 uppercase tracking-widest leading-none mb-1">Built by</span>
+                            <span className="text-[10px] font-black text-orange-600 uppercase tracking-tighter leading-none">Krishi Sahayogi</span>
+                        </div>
                     </div>
                 </div>
             </header>
@@ -557,48 +543,46 @@ export default function DashboardView({ orgId: propOrgId }: DashboardViewProps) 
                         />
                     )}
                 </AnimatePresence>
-
                 <aside className={cn(
-                    "fixed inset-y-0 left-0 z-[110] w-[85%] sm:w-80 bg-white/40 backdrop-blur-3xl shadow-[0_8px_32px_0_rgba(249,115,22,0.15)] lg:border border-white/60 lg:ring-1 lg:ring-white/40 lg:rounded-[2.5rem] flex flex-col shrink-0 overflow-hidden lg:relative lg:translate-x-0 transition-transform duration-300 ease-in-out",
+                    "fixed inset-y-0 left-0 z-[110] w-[85%] sm:w-80 bg-white/40 backdrop-blur-3xl lg:border border-white/60 lg:shadow-2xl lg:shadow-black/5 lg:rounded-[2.5rem] flex flex-col shrink-0 lg:relative lg:translate-x-0 transition-transform duration-500 ease-[cubic-bezier(0.16,1,0.3,1)]",
                     isMobileMenuOpen ? "translate-x-0" : "-translate-x-full"
                 )}>
-                    <div className="flex items-center justify-between p-4 border-b border-white/60 lg:hidden bg-white/60 backdrop-blur-md">
-                        <span className="font-black text-zinc-800 text-xs tracking-widest uppercase flex items-center gap-2">
-                            <Activity size={16} className="text-orange-500" /> Fleet Menu
+                    <div className="flex items-center justify-between p-6 border-b border-white/40 lg:hidden bg-white/20 backdrop-blur-md">
+                        <span className="font-bold text-zinc-900 text-xs tracking-widest uppercase flex items-center gap-2">
+                            <Activity size={16} className="text-orange-500" /> Fleet Overview
                         </span>
                         <button
                             onClick={() => setIsMobileMenuOpen(false)}
-                            className="p-1.5 text-zinc-400 hover:text-orange-600 bg-white/50 hover:bg-white/90 rounded-xl transition-all shadow-sm"
+                            className="w-9 h-9 flex items-center justify-center text-zinc-400 hover:text-orange-600 bg-white/50 rounded-full shadow-sm transition-all"
                         >
                             <X size={18} />
                         </button>
                     </div>
 
-                    <div className="p-5 lg:p-6 border-b border-white/60 bg-gradient-to-br from-white/70 to-white/30 backdrop-blur-xl shadow-sm z-10 relative">
-                        <div className="absolute top-0 right-0 w-32 h-32 bg-orange-400/10 rounded-bl-full blur-2xl pointer-events-none" />
+                    <div className="p-8 border-b border-white/40 relative overflow-hidden">
+                        <div className="absolute top-0 right-0 w-32 h-32 bg-orange-400/5 rounded-bl-full blur-2xl pointer-events-none" />
                         <div className="flex justify-between items-end mb-4 relative z-10">
-                            <h3 className="text-[10px] font-black text-zinc-500 uppercase tracking-[0.2em]">Network Status</h3>
-                            <span className="px-3 py-1 rounded-lg bg-white/80 backdrop-blur-sm ring-1 ring-white shadow-sm text-[11px] font-black text-zinc-800">
-                                {activeUnits} <span className="text-zinc-400 font-bold">/ {totalUnits}</span>
+                            <h3 className="text-[10px] font-bold text-zinc-400 uppercase tracking-[0.2em]">Live Nodes</h3>
+                            <span className="px-3 py-1 rounded-full bg-white/80 backdrop-blur-sm shadow-sm text-[11px] font-bold text-zinc-900">
+                                {activeUnits} <span className="text-zinc-300 font-medium">/ {totalUnits}</span>
                             </span>
                         </div>
-                        <div className="w-full bg-black/5 rounded-full h-2 overflow-hidden shadow-inner relative z-10 p-0.5">
-                            <div
-                                className="bg-gradient-to-r from-orange-400 to-orange-500 h-full rounded-full transition-all duration-1000 ease-out shadow-[0_0_10px_rgba(249,115,22,0.5)] relative"
-                                style={{ width: `${totalUnits > 0 ? (activeUnits / totalUnits) * 100 : 0}%` }}
-                            >
-                                <div className="absolute top-0 right-0 bottom-0 w-4 bg-white/30 blur-[2px]" />
-                            </div>
+                        <div className="w-full bg-black/5 rounded-full h-1.5 overflow-hidden relative z-10">
+                            <motion.div
+                                initial={{ width: 0 }}
+                                animate={{ width: `${totalUnits > 0 ? (activeUnits / totalUnits) * 100 : 0}%` }}
+                                className="bg-orange-500 h-full rounded-full shadow-[0_0_12px_rgba(249,115,22,0.3)] transition-all duration-1000 ease-out"
+                            />
                         </div>
                     </div>
 
-                    {/* Add Monitor & Management Buttons */}
-                    <div className="px-4 lg:px-5 flex flex-col gap-3 py-4 bg-white/20">
+                    {/* Navigation Actions */}
+                    <div className="px-6 flex flex-col gap-4 py-8">
                         <button
                             onClick={() => setIsAddNodeOpen(true)}
-                            className="w-full py-4 bg-gradient-to-r from-zinc-900 to-zinc-800 text-white rounded-[1.25rem] font-black uppercase tracking-widest text-[11px] flex items-center justify-center gap-2 hover:shadow-[0_8px_25px_rgba(0,0,0,0.15)] hover:scale-[1.02] active:scale-95 transition-all duration-300 group ring-1 ring-zinc-800/50"
+                            className="w-full py-4 bg-zinc-900 text-white rounded-full font-bold uppercase tracking-widest text-[10px] flex items-center justify-center gap-2 hover:bg-orange-500 hover:shadow-xl hover:shadow-orange-500/20 active:scale-95 transition-all duration-300 group"
                         >
-                            <Zap className="w-4 h-4 text-orange-400 group-hover:text-orange-300 group-hover:drop-shadow-[0_0_8px_rgba(251,146,60,0.8)] transition-all" />
+                            <Plus className="w-4 h-4 text-orange-400 group-hover:text-white transition-colors" />
                             Deploy Monitor
                         </button>
 
@@ -610,37 +594,38 @@ export default function DashboardView({ orgId: propOrgId }: DashboardViewProps) 
                                         setIsMobileMenuOpen(false);
                                     }}
                                     className={cn(
-                                        "w-full py-3.5 rounded-[1.25rem] font-black uppercase tracking-widest text-[10px] flex items-center justify-center gap-2 transition-all duration-300 ring-1 shadow-sm hover:scale-[1.02] active:scale-95",
+                                        "w-full py-3.5 rounded-full font-bold uppercase tracking-widest text-[10px] flex items-center justify-center gap-2 transition-all duration-300 active:scale-95",
                                         activeTab === 'management'
-                                            ? "bg-gradient-to-br from-orange-400 to-orange-500 text-white shadow-[0_4px_15px_rgba(249,115,22,0.3)] ring-orange-400/50"
-                                            : "bg-white/60 backdrop-blur-md text-zinc-600 hover:bg-white hover:text-orange-500 ring-white hover:shadow-[0_8px_20px_rgba(0,0,0,0.08)]"
+                                            ? "bg-orange-50 text-orange-600 shadow-sm"
+                                            : "bg-white/60 hover:bg-white text-zinc-500 hover:text-orange-500 shadow-sm"
                                     )}
                                 >
-                                    <Shield className="w-4 h-4" />
-                                    {activeTab === 'management' ? 'Exit Management' : 'System Management'}
+                                    <Shield className={cn("w-3.5 h-3.5", activeTab === 'management' ? "text-orange-500" : "text-zinc-400")} />
+                                    {activeTab === 'management' ? 'Exit Admin' : 'Admin Panel'}
                                 </button>
-                                
-                                {activeTab === 'management' && user.org_id && (
-                                    <button
-                                        onClick={() => {
-                                            setReportTarget({
-                                                id: user.org_id.toString(),
-                                                name: 'Full Fleet Audit',
-                                                type: 'org'
-                                            });
-                                            setIsReportModalOpen(true);
-                                        }}
-                                        className="w-full py-3 rounded-[1.25rem] bg-zinc-900 border border-zinc-800 text-white font-black uppercase tracking-widest text-[10px] flex items-center justify-center gap-2 hover:bg-zinc-800 transition-all hover:scale-[1.02] shadow-lg shadow-zinc-900/10"
-                                    >
-                                        <Activity className="w-4 h-4 text-orange-400" />
-                                        Generate Fleet Audit
-                                    </button>
-                                )}
                             </div>
+                        )}
+
+                        {activeTab === 'management' && user?.org_id && (
+                            <button
+                                onClick={() => {
+                                    setReportTarget({
+                                        id: user.org_id.toString(),
+                                        name: 'Full Fleet Audit',
+                                        type: 'org'
+                                    });
+                                    setIsReportModalOpen(true);
+                                }}
+                                className="w-full py-3.5 rounded-full bg-zinc-900 text-white font-bold uppercase tracking-widest text-[10px] flex items-center justify-center gap-2 hover:bg-orange-500 transition-all active:scale-95 shadow-lg shadow-black/5"
+                            >
+                                <Activity className="w-3.5 h-3.5 text-orange-400" />
+                                Fleet Audit
+                            </button>
                         )}
                     </div>
 
-                    <div className="flex-1 overflow-y-auto p-4 lg:p-5 space-y-4 lg:space-y-6 custom-scrollbar bg-white/10 relative">
+                    {/* Unit List Explorer */}
+                    <div className="flex-1 overflow-y-auto p-6 space-y-6 custom-scrollbar bg-white/5 relative border-t border-white/20">
                         <div className="absolute inset-x-0 top-0 h-6 bg-gradient-to-b from-white/40 to-transparent pointer-events-none" />
                         {loading ? (
                             <div className="flex flex-col items-center justify-center p-8 text-zinc-500 gap-4">
@@ -788,121 +773,143 @@ export default function DashboardView({ orgId: propOrgId }: DashboardViewProps) 
                                 animate={{ opacity: 1 }}
                                 exit={{ opacity: 0 }}
                                 onClick={() => setIsAddNodeOpen(false)}
-                                className="absolute inset-0 bg-zinc-900/40 backdrop-blur-sm"
+                                className="absolute inset-0 bg-white/20 backdrop-blur-sm"
                             />
                             <motion.div
-                                initial={{ opacity: 0, scale: 0.95, y: 20 }}
+                                initial={{ opacity: 0, scale: 0.98, y: 10 }}
                                 animate={{ opacity: 1, scale: 1, y: 0 }}
-                                exit={{ opacity: 0, scale: 0.95, y: 20 }}
-                                className="relative w-full max-w-md bg-white rounded-[2.5rem] shadow-[0_32px_64px_-16px_rgba(0,0,0,0.2)] p-10 overflow-hidden"
+                                exit={{ opacity: 0, scale: 0.98, y: 10 }}
+                                className="relative w-full max-w-lg bg-white/90 backdrop-blur-2xl rounded-[3rem] shadow-[0_40px_120px_-20px_rgba(0,0,0,0.2)] p-10 lg:p-14 overflow-hidden border border-white"
                             >
-                                <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-orange-500 to-emerald-500" />
-
-                                <div className="flex justify-between items-start mb-8">
-                                    <div className="p-3 bg-zinc-900 rounded-2xl shadow-lg shadow-zinc-900/20">
-                                        <Activity className="w-6 h-6 text-orange-500" />
+                                <div className="flex justify-between items-start mb-10">
+                                    <div className="flex items-center gap-5">
+                                        <div className="w-14 h-14 bg-zinc-900 rounded-[1.25rem] flex items-center justify-center shadow-2xl shadow-zinc-900/20 ring-1 ring-zinc-800">
+                                            <Activity className="w-7 h-7 text-orange-500" />
+                                        </div>
+                                        <div>
+                                            <h2 className="text-3xl font-bold text-zinc-900 tracking-tight">Add Monitor</h2>
+                                            <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-[0.2em] mt-1">Telemetry Agent Deployment</p>
+                                        </div>
                                     </div>
                                     <button
                                         onClick={() => setIsAddNodeOpen(false)}
-                                        className="p-2 text-zinc-400 hover:text-zinc-900 hover:bg-zinc-100 rounded-xl transition-all"
+                                        className="w-10 h-10 flex items-center justify-center text-zinc-400 hover:text-zinc-900 hover:bg-zinc-100 rounded-full transition-all"
                                     >
                                         <X size={20} />
                                     </button>
                                 </div>
 
-                                <h2 className="text-2xl font-black text-zinc-900 mb-2 tracking-tight">Add New Monitor.</h2>
-                                <p className="text-sm font-medium text-zinc-500 mb-8">Deploy a telemetry agent to your system</p>
-
-                                <div className="space-y-6">
-                                    <div className="space-y-2">
-                                        <label className="text-[10px] font-black uppercase tracking-widest text-zinc-400 ml-4">Unit Identifier</label>
+                                <div className="space-y-10">
+                                    {/* STEP 1: IDENTIFY */}
+                                    <div className="space-y-4">
+                                        <div className="flex items-center gap-3">
+                                            <span className="w-6 h-6 rounded-full bg-orange-500 text-white text-[10px] font-black flex items-center justify-center shadow-lg shadow-orange-500/30">1</span>
+                                            <label className="text-[10px] font-bold uppercase tracking-widest text-zinc-400">Identify Unit</label>
+                                        </div>
                                         <div className="relative">
-                                            <Terminal className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
+                                            <Terminal className="absolute left-5 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-300" />
                                             <input
                                                 type="text"
                                                 value={newNodeName}
                                                 onChange={(e) => setNewNodeName(e.target.value)}
-                                                className="w-full bg-zinc-50 border-none ring-1 ring-zinc-200 rounded-2xl py-4 pl-12 pr-4 text-sm text-zinc-900 focus:ring-2 focus:ring-orange-500/20 transition-all font-bold placeholder:text-zinc-300"
+                                                className="w-full bg-zinc-50 border-none ring-1 ring-zinc-100 rounded-[1.5rem] py-5 pl-14 pr-5 text-sm text-zinc-900 focus:ring-2 focus:ring-orange-500/20 transition-all font-semibold placeholder:text-zinc-300 shadow-sm"
                                                 placeholder="e.g. primary-server"
                                             />
                                         </div>
                                     </div>
 
-                                    {addNodeError && (
-                                        <div className="flex items-center gap-2 bg-red-50 text-red-600 p-4 rounded-2xl text-[11px] font-black ring-1 ring-red-100 animate-shake">
-                                            <AlertTriangle className="w-4 h-4" />
-                                            {addNodeError.toUpperCase()}
-                                        </div>
-                                    )}
-
-                                    <div className="p-5 bg-orange-50/50 rounded-2xl border border-orange-100 flex flex-col gap-3">
+                                    {/* STEP 2: DEPLOY */}
+                                    <div className="space-y-4">
                                         <div className="flex items-center gap-3">
-                                            <div className="p-1.5 bg-orange-500 rounded-lg shadow-sm">
-                                                <Download className="w-3 h-3 text-white" />
-                                            </div>
-                                            <span className="text-[10px] font-black uppercase tracking-widest text-orange-600">Generated Bundle</span>
+                                            <span className="w-6 h-6 rounded-full bg-orange-500 text-white text-[10px] font-black flex items-center justify-center shadow-lg shadow-orange-500/30">2</span>
+                                            <label className="text-[10px] font-bold uppercase tracking-widest text-zinc-400">Get Pre-configured Bundle</label>
                                         </div>
-                                        <p className="text-[11px] text-zinc-600 font-medium leading-relaxed">
-                                            We will generate a specialized ZIP package pre-configured for your account. Simply extract and run <code className="font-black text-orange-600">install.bat</code>.
-                                        </p>
+
+                                        {addNodeError && (
+                                            <div className="flex items-center gap-3 bg-red-50 text-red-600 p-5 rounded-[1.5rem] text-[11px] font-bold ring-1 ring-red-100 animate-shake mb-4">
+                                                <AlertTriangle className="w-4 h-4" />
+                                                {addNodeError}
+                                            </div>
+                                        )}
+
+                                        {generatedLink ? (
+                                            <div className="p-6 bg-zinc-50 rounded-[2rem] border border-zinc-100 space-y-4">
+                                                <div className="flex justify-between items-center">
+                                                    <span className="text-[9px] font-bold uppercase tracking-widest text-zinc-500">Deployment Link</span>
+                                                    <span className="text-[9px] font-bold text-orange-500 bg-orange-50 px-2 py-1 rounded-full">Expires in 24h</span>
+                                                </div>
+                                                <div className="relative group">
+                                                    <input
+                                                        type="text"
+                                                        readOnly
+                                                        value={generatedLink}
+                                                        className="w-full bg-white border-none ring-1 ring-zinc-200 rounded-2xl py-4 pl-5 pr-14 text-xs font-mono text-zinc-600 focus:outline-none"
+                                                        onClick={(e) => { e.currentTarget.select(); navigator.clipboard.writeText(generatedLink); }}
+                                                    />
+                                                    <button 
+                                                        onClick={() => { navigator.clipboard.writeText(generatedLink); }}
+                                                        className="absolute right-2 top-1/2 -translate-y-1/2 p-3 text-zinc-400 hover:text-orange-500 hover:bg-orange-50 rounded-xl transition-all"
+                                                    >
+                                                        <Copy size={18} />
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        ) : (
+                                            <div className="grid grid-cols-2 gap-4">
+                                                <button
+                                                    onClick={handleAddNode}
+                                                    disabled={isDownloading}
+                                                    className="group bg-zinc-900 text-white rounded-full py-5 px-8 font-bold uppercase tracking-widest text-[10px] flex items-center justify-center gap-3 hover:bg-zinc-800 transition-all disabled:opacity-50 shadow-xl shadow-zinc-900/10 active:scale-[0.98]"
+                                                >
+                                                    {isDownloading ? (
+                                                        <div className="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin" />
+                                                    ) : (
+                                                        <>Download ZIP <Download size={14} /></>
+                                                    )}
+                                                </button>
+                                                <button
+                                                    onClick={() => handleGenerateLink(newNodeName)}
+                                                    disabled={isDownloading}
+                                                    className="group bg-white text-zinc-600 ring-1 ring-zinc-200 rounded-full py-5 px-8 font-bold uppercase tracking-widest text-[10px] flex items-center justify-center gap-3 hover:bg-zinc-50 hover:ring-zinc-300 transition-all disabled:opacity-50 active:scale-[0.98]"
+                                                >
+                                                    Generate Link <Globe size={14} />
+                                                </button>
+                                            </div>
+                                        )}
                                     </div>
 
-                                    {generatedLink ? (
-                                        <div className="flex flex-col gap-3">
-                                            <div className="p-4 bg-emerald-50 rounded-2xl border border-emerald-100 flex flex-col gap-2">
-                                                <div className="flex justify-between items-center">
-                                                    <span className="text-[10px] font-black uppercase tracking-widest text-emerald-600">Shareable Link</span>
-                                                    <span className="text-[9px] font-bold text-emerald-500 bg-emerald-100 px-2 py-0.5 rounded-full">Valid for 24h</span>
+                                    {/* STEP 3: SETUP */}
+                                    <div className="space-y-4">
+                                        <div className="flex items-center gap-3">
+                                            <span className="w-6 h-6 rounded-full bg-orange-500 text-white text-[10px] font-black flex items-center justify-center shadow-lg shadow-orange-500/30">3</span>
+                                            <label className="text-[10px] font-bold uppercase tracking-widest text-zinc-400">Installation Steps</label>
+                                        </div>
+                                        <div className="grid grid-cols-1 gap-3">
+                                            {[
+                                                { icon: <HardDrive className="w-4 h-4" />, text: "Extract ZIP to C:\\ drive" },
+                                                { icon: <FolderOpen className="w-4 h-4" />, text: "Open 'SysLogger_Agent' folder" },
+                                                { icon: <Zap className="w-4 h-4" />, text: "Run 'install.bat' as Admin" }
+                                            ].map((step, idx) => (
+                                                <div key={idx} className="flex items-center gap-5 p-5 bg-white rounded-[1.5rem] border border-zinc-100/80 hover:border-zinc-200 hover:shadow-sm transition-all group">
+                                                    <div className="p-2.5 bg-zinc-50 rounded-xl text-zinc-400 group-hover:text-orange-500 group-hover:bg-orange-50 transition-colors">
+                                                        {step.icon}
+                                                    </div>
+                                                    <p className="text-[11px] font-bold text-zinc-600 leading-tight">{step.text}</p>
                                                 </div>
-                                                <input 
-                                                    type="text" 
-                                                    readOnly 
-                                                    value={generatedLink} 
-                                                    className="w-full bg-white border-none ring-1 ring-emerald-200 rounded-xl py-3 px-4 text-xs font-mono text-zinc-600 focus:outline-none"
-                                                    onClick={(e) => { e.currentTarget.select(); navigator.clipboard.writeText(generatedLink); }}
-                                                />
-                                                <p className="text-[10px] text-emerald-600 font-medium">Click the link above to copy it to your clipboard. Share it with your team to install the agent without logging in.</p>
-                                            </div>
-                                            <button
-                                                onClick={() => { setIsAddNodeOpen(false); setNewNodeName(''); setGeneratedLink(''); apiUnits.refetchUnits(); }}
-                                                className="w-full bg-zinc-900 text-white rounded-2xl py-4 font-black uppercase tracking-widest text-[11px] flex items-center justify-center gap-2 hover:bg-zinc-800 transition-all shadow-md"
-                                            >
-                                                Done
-                                            </button>
+                                            ))}
                                         </div>
-                                    ) : (
-                                        <div className="flex flex-col sm:flex-row gap-3">
-                                            <button
-                                                onClick={handleAddNode}
-                                                disabled={isDownloading}
-                                                className="flex-1 bg-zinc-900 text-white rounded-2xl py-4 font-black uppercase tracking-widest text-[10px] sm:text-xs flex items-center justify-center gap-2 hover:bg-zinc-800 transition-all disabled:opacity-50 group shadow-lg"
-                                            >
-                                                {isDownloading ? (
-                                                    <div className="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin" />
-                                                ) : (
-                                                    <>
-                                                        Download directly
-                                                        <Download className="w-3.5 h-3.5" />
-                                                    </>
-                                                )}
-                                            </button>
-                                            <button
-                                                onClick={() => handleGenerateLink(newNodeName)}
-                                                disabled={isDownloading}
-                                                className="flex-1 bg-white text-zinc-700 ring-1 ring-zinc-200 rounded-2xl py-4 font-black uppercase tracking-widest text-[10px] sm:text-xs flex items-center justify-center gap-2 hover:ring-zinc-300 hover:bg-zinc-50 transition-all disabled:opacity-50 group"
-                                            >
-                                                {isDownloading ? (
-                                                    <div className="w-4 h-4 border-2 border-zinc-200 border-t-zinc-700 rounded-full animate-spin" />
-                                                ) : (
-                                                    <>
-                                                        Generate Link
-                                                        <Globe className="w-3.5 h-3.5" />
-                                                    </>
-                                                )}
-                                            </button>
-                                        </div>
-                                    )}
+                                    </div>
                                 </div>
+
+                                {generatedLink && (
+                                    <motion.button
+                                        initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
+                                        onClick={() => { setIsAddNodeOpen(false); setNewNodeName(''); setGeneratedLink(''); apiUnits.refetchUnits(); }}
+                                        className="w-full mt-10 bg-orange-500 hover:bg-orange-600 text-white rounded-full py-5 font-bold uppercase tracking-widest text-xs transition-all shadow-xl shadow-orange-500/30 active:scale-[0.98]"
+                                    >
+                                        Setup Complete
+                                    </motion.button>
+                                )}
                             </motion.div>
                         </div>
                     )}
@@ -1016,10 +1023,10 @@ export default function DashboardView({ orgId: propOrgId }: DashboardViewProps) 
                                     <h2 className="text-2xl font-black text-zinc-900 tracking-tight mb-2">Share Installer</h2>
                                     <p className="text-sm font-medium text-zinc-500">Copy the URL below. It will expire in 24 hours.</p>
                                 </div>
-                                <input 
-                                    type="text" 
-                                    readOnly 
-                                    value={generatedLink} 
+                                <input
+                                    type="text"
+                                    readOnly
+                                    value={generatedLink}
                                     className="w-full bg-zinc-50 border-none ring-1 ring-zinc-200 rounded-xl py-4 px-4 text-xs font-mono text-zinc-600 focus:outline-none mb-6 text-center"
                                     onClick={(e) => { e.currentTarget.select(); navigator.clipboard.writeText(generatedLink); }}
                                 />
@@ -1067,13 +1074,13 @@ export default function DashboardView({ orgId: propOrgId }: DashboardViewProps) 
                                         <label className="text-[9px] font-black uppercase tracking-[0.2em] text-zinc-400 ml-1 block mb-3">1. Select Audit Timeframe</label>
                                         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                                             {['1d', '7d', '30d', '1y'].map((r) => (
-                                                <button 
+                                                <button
                                                     key={r}
                                                     onClick={() => setReportTarget({ ...reportTarget, range: r } as any)}
                                                     className={cn(
                                                         "py-3 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all ring-1",
-                                                        (reportTarget as any).range === r 
-                                                            ? "bg-zinc-900 text-white ring-zinc-900 shadow-lg shadow-zinc-900/20" 
+                                                        (reportTarget as any).range === r
+                                                            ? "bg-zinc-900 text-white ring-zinc-900 shadow-lg shadow-zinc-900/20"
                                                             : "bg-white text-zinc-500 ring-zinc-100 hover:ring-zinc-300"
                                                     )}
                                                 >
@@ -1084,14 +1091,14 @@ export default function DashboardView({ orgId: propOrgId }: DashboardViewProps) 
                                     </div>
 
                                     <div className="flex flex-col gap-4">
-                                        <button 
+                                        <button
                                             onClick={() => { triggerIntelligentReport(reportTarget.id, reportTarget.type, (reportTarget as any).range || '7d'); setIsReportModalOpen(false); }}
                                             className="w-full bg-gradient-to-r from-orange-600 to-orange-500 text-white rounded-[1.5rem] py-5 font-black uppercase tracking-widest text-xs flex items-center justify-center gap-3 hover:shadow-xl hover:shadow-orange-500/20 transition-all border-b-4 border-orange-700 active:border-b-0 active:translate-y-1"
                                         >
                                             <Zap size={18} />
                                             View Intelligent Audit Report
                                         </button>
-                                        <button 
+                                        <button
                                             onClick={() => { triggerRawExport(reportTarget.id, (reportTarget as any).range || '7d'); setIsReportModalOpen(false); }}
                                             className="w-full bg-zinc-100 hover:bg-zinc-200 text-zinc-700 rounded-[1.5rem] py-5 font-black uppercase tracking-widest text-xs flex items-center justify-center gap-3 transition-all"
                                         >
@@ -1109,309 +1116,162 @@ export default function DashboardView({ orgId: propOrgId }: DashboardViewProps) 
                     )}
                 </AnimatePresence>
 
-                <main className="flex-1 flex flex-col relative overflow-hidden w-full h-full">
+                <main className="flex-1 flex flex-col relative min-w-0">
                     <AnimatePresence mode="wait">
                         {activeTab === 'management' ? (
                             <motion.div
                                 key="management"
-                                initial={{ opacity: 0, y: 10 }}
-                                animate={{ opacity: 1, y: 0 }}
-                                exit={{ opacity: 0, y: -10 }}
-                                className="flex-1 overflow-y-auto p-4 lg:p-8 custom-scrollbar"
+                                initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}
+                                className="flex-1 overflow-y-auto p-4 lg:p-10 custom-scrollbar"
                             >
                                 <OrgManager />
                             </motion.div>
                         ) : selectedUnit ? (
                             <motion.div
                                 key={selectedUnit.id}
-                                initial={{ opacity: 0, scale: 0.99, y: 5 }}
-                                animate={{ opacity: 1, scale: 1, y: 0 }}
-                                exit={{ opacity: 0, scale: 0.99, y: -5 }}
-                                transition={{ duration: 0.2, ease: "easeOut" }}
-                                className="flex-1 flex flex-col overflow-y-auto custom-scrollbar h-full"
+                                initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}
+                                className="flex-1 flex flex-col p-4 lg:p-10 overflow-y-auto custom-scrollbar"
                             >
-                                {/* ... existing unit view ... */}
-                                <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center mb-4 lg:mb-6 bg-white p-5 lg:p-6 rounded-2xl lg:rounded-3xl ring-1 ring-zinc-200/80 shadow-[0_2px_12px_rgba(0,0,0,0.03)] gap-4">
-                                    <div className="flex-1 w-full">
-                                        {isEditing ? (
-                                            <div className="flex flex-col gap-3 lg:gap-4 w-full">
-                                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 lg:gap-4">
-                                                    <div>
-                                                        <label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest mb-1.5 block">Organization ID</label>
-                                                        <input
-                                                            type="text"
-                                                            value={editModeData.org_id}
-                                                            onChange={(e) => setEditModeData({ ...editModeData, org_id: e.target.value })}
-                                                            className="w-full bg-zinc-50 ring-1 ring-zinc-200 rounded-xl p-3 text-sm font-bold text-zinc-800 focus:ring-orange-500 outline-none transition-all"
-                                                        />
-                                                    </div>
-                                                    <div>
-                                                        <label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest mb-1.5 block">Computer ID</label>
-                                                        <input
-                                                            type="text"
-                                                            value={editModeData.comp_id}
-                                                            onChange={(e) => setEditModeData({ ...editModeData, comp_id: e.target.value })}
-                                                            className="w-full bg-zinc-50 ring-1 ring-zinc-200 rounded-xl p-3 text-sm font-bold text-zinc-800 focus:ring-orange-500 outline-none transition-all"
-                                                        />
-                                                    </div>
-                                                </div>
-                                                <div className="flex gap-2 lg:gap-3 mt-1 lg:mt-2">
-                                                    <button onClick={handleUpdateUnit} className="flex-1 sm:flex-none bg-orange-600 hover:bg-orange-500 text-white rounded-xl px-4 lg:px-6 py-2.5 lg:py-3 text-[10px] lg:text-[11px] font-black uppercase tracking-widest flex items-center justify-center gap-2 transition-all shadow-md shadow-orange-500/20">
-                                                        <Save size={16} /> <span className="hidden sm:inline">Save Identity</span><span className="sm:hidden">Save</span>
-                                                    </button>
-                                                    <button onClick={() => setIsEditing(false)} className="flex-1 sm:flex-none px-4 lg:px-6 bg-zinc-100 hover:bg-zinc-200 text-zinc-600 rounded-xl py-2.5 lg:py-3 text-[10px] lg:text-[11px] font-black uppercase tracking-widest flex items-center justify-center gap-2 transition-colors">
-                                                        <X size={16} /> Cancel
-                                                    </button>
-                                                </div>
-                                            </div>
-                                        ) : (
-                                            <>
-                                                <div className="flex flex-wrap items-center gap-3 lg:gap-4 mb-2 lg:mb-0">
-                                                    <h2 className="text-2xl lg:text-3xl font-black text-zinc-900 tracking-tight uppercase truncate max-w-full">{selectedUnit.name.split('/').pop()}</h2>
-                                                    <div className={cn("px-2.5 py-1 rounded text-[10px] font-black uppercase tracking-widest", selectedUnit.status === 'online' ? 'bg-emerald-50 text-emerald-600 ring-1 ring-emerald-200/50' : 'bg-red-50 text-red-600 ring-1 ring-red-200/50')}>
-                                                        {selectedUnit.status}
-                                                    </div>
-                                                </div>
-                                                <div className="flex flex-wrap items-center gap-4 lg:gap-6 mt-2 lg:mt-3 text-xs font-bold text-zinc-500">
-                                                    <span className="flex items-center gap-2 pr-4 lg:pr-6 border-r border-zinc-200"><Globe className="w-4 h-4 text-zinc-400" /> {selectedUnit.ip}</span>
-                                                    <span className="flex items-center gap-2"><Database className="w-4 h-4 text-zinc-400" /> <span className="truncate max-w-[150px] sm:max-w-none">{selectedUnit.id}</span></span>
-                                                </div>
-                                            </>
-                                        )}
-                                    </div>
-
-                                    <div className="flex flex-row lg:flex-col items-center lg:items-end justify-between w-full lg:w-auto gap-4 lg:gap-4 border-t lg:border-t-0 border-zinc-100 pt-4 lg:pt-0 mt-2 lg:mt-0">
-                                        <div className="flex gap-2 lg:gap-2.5">
-                                            {!isEditing && (
-                                                <button onClick={() => { setEditModeData({ org_id: selectedUnit.org_id || '', comp_id: selectedUnit.comp_id || '' }); setIsEditing(true); }} className="p-2.5 lg:p-3 bg-white ring-1 ring-zinc-200/80 hover:bg-orange-50 hover:ring-orange-200 hover:text-orange-600 text-zinc-400 rounded-xl transition-all shadow-sm" title="Edit Identity">
-                                                    <Pencil className="w-4 h-4" />
-                                                </button>
-                                            )}
-                                            <button onClick={handleDeleteUnit} disabled={isDeleting} className="p-2.5 lg:p-3 bg-white ring-1 ring-zinc-200/80 hover:bg-red-50 hover:ring-red-200 hover:text-red-600 text-zinc-400 rounded-xl transition-all shadow-sm disabled:opacity-50" title="Delete Node">
-                                                <Trash2 className="w-4 h-4" />
-                                            </button>
-                                            <button onClick={() => handleGenerateLink(selectedUnit.comp_id || selectedUnit.name.split('/').pop() || '')} disabled={isDownloading} className="p-2.5 lg:p-3 bg-white ring-1 ring-zinc-200/80 hover:bg-blue-50 hover:ring-blue-200 hover:text-blue-600 text-zinc-400 rounded-xl transition-all shadow-sm disabled:opacity-50" title="Get Installer Link">
-                                                <Globe className="w-4 h-4" />
-                                            </button>
-                                            <div className="hidden lg:block w-[1px] h-10 bg-zinc-200 mx-2 self-center" />
-                                            <button onClick={handleCustomDownload} className="flex items-center gap-2 px-4 lg:px-5 py-2.5 lg:py-3 bg-zinc-900 hover:bg-zinc-800 text-white rounded-xl transition-all shadow-md active:scale-95">
-                                                <Download className="w-4 h-4" />
-                                                <span className="hidden sm:inline text-[11px] font-black uppercase tracking-widest">Export</span>
-                                            </button>
+                                {/* Unit Details Header */}
+                                <div className="bg-white/70 backdrop-blur-xl rounded-[2.5rem] p-8 mb-8 border border-white/60 shadow-[0_8px_40px_-10px_rgba(0,0,0,0.03)] flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6">
+                                    <div className="flex items-center gap-6">
+                                        <div className="w-16 h-16 bg-zinc-900 rounded-[1.5rem] flex items-center justify-center shadow-xl ring-1 ring-zinc-800">
+                                            <Monitor className="w-8 h-8 text-orange-500" />
                                         </div>
-
-
+                                        <div className="min-w-0">
+                                            <div className="flex items-center gap-3 mb-1">
+                                                <h2 className="text-3xl font-bold text-zinc-900 tracking-tight truncate">{selectedUnit.name.split('/').pop()}</h2>
+                                                <div className={cn(
+                                                    "w-2.5 h-2.5 rounded-full shrink-0",
+                                                    selectedUnit.status === 'online' ? "bg-emerald-500 shadow-[0_0_12px_rgba(16,185,129,0.4)]" : "bg-zinc-300"
+                                                )} />
+                                            </div>
+                                            <div className="flex items-center gap-4 text-xs font-bold text-zinc-400 uppercase tracking-widest whitespace-nowrap">
+                                                <span className="flex items-center gap-1.5"><Globe size={12} /> {selectedUnit.ip || 'Local Node'}</span>
+                                                <span className="w-1 h-1 bg-zinc-200 rounded-full" />
+                                                <span className="flex items-center gap-1.5 font-mono">ID: {selectedUnit.id.slice(0, 8)}</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <div className="flex items-center gap-3 w-full lg:w-auto">
+                                        <button 
+                                            onClick={() => { setEditModeData({ org_id: selectedUnit.org_id?.toString() || '', comp_id: selectedUnit.comp_id || '' }); setIsEditing(!isEditing); }}
+                                            className="flex-1 lg:flex-none px-6 py-3.5 bg-zinc-50 hover:bg-zinc-100 text-zinc-600 rounded-full font-bold text-[10px] uppercase tracking-widest transition-all ring-1 ring-zinc-100"
+                                        >
+                                            Configure
+                                        </button>
+                                        <button 
+                                            onClick={() => {
+                                                setReportTarget({ id: selectedUnit.id, name: selectedUnit.name, type: 'node' });
+                                                setIsReportModalOpen(true);
+                                            }}
+                                            className="flex-1 lg:flex-none px-6 py-3.5 bg-zinc-900 text-white rounded-full font-bold text-[10px] uppercase tracking-widest transition-all shadow-lg shadow-zinc-900/10 active:scale-95"
+                                        >
+                                            Node Audit
+                                        </button>
                                     </div>
                                 </div>
 
-                                {selectedUnit.status === 'pending' ? (
-                                    <div className="flex-1 flex items-center justify-center p-4 lg:p-8">
-                                        <div className="max-w-xl w-full bg-white rounded-[2.5rem] border border-zinc-200/60 p-10 lg:p-12 text-center shadow-sm relative overflow-hidden">
-                                            <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-orange-500/20 via-orange-500 to-orange-500/20" />
-
-                                            <div className="mb-8 relative inline-block">
-                                                <div className="w-24 h-24 bg-orange-50 rounded-full flex items-center justify-center ring-4 ring-white shadow-xl">
-                                                    <Download className="w-10 h-10 text-orange-500 animate-bounce" />
-                                                </div>
-                                                <div className="absolute -bottom-2 -right-2 bg-zinc-900 text-white p-2 rounded-xl shadow-lg ring-4 ring-white">
-                                                    <Shield className="w-4 h-4 text-emerald-400" />
-                                                </div>
-                                            </div>
-
-                                            <h2 className="text-3xl font-black text-zinc-900 mb-4 tracking-tight">Awaiting Installation.</h2>
-                                            <p className="text-zinc-500 font-medium mb-10 text-sm lg:text-base leading-relaxed">
-                                                We've registered your unit <span className="text-zinc-900 font-black px-2 py-1 bg-zinc-100 rounded-lg">{selectedUnit.name.split('/').pop()}</span>.
-                                                Now, you need to deploy the telemetry agent to start receiving live metrics.
-                                            </p>
-
-                                            <div className="space-y-4 mb-10">
-                                                <div className="flex items-start gap-4 text-left p-5 bg-zinc-50 rounded-2xl border border-zinc-100 group hover:border-orange-200 transition-colors">
-                                                    <div className="w-8 h-8 rounded-lg bg-zinc-900 text-white flex items-center justify-center text-xs font-black shrink-0 shadow-md">1</div>
-                                                    <div>
-                                                        <p className="text-[11px] font-black uppercase tracking-widest text-zinc-400 mb-1">Transfer Bundle</p>
-                                                        <p className="text-xs font-bold text-zinc-700">Move the downloaded ZIP to your target server and extract it.</p>
+                                {/* Main Metrics Display */}
+                                <div className="flex flex-col lg:flex-row gap-8 lg:flex-1 min-h-0">
+                                    <div className="grid grid-cols-2 lg:grid-cols-1 gap-4 lg:w-60 shrink-0">
+                                        {currentMetrics.map((metric) => (
+                                            <button 
+                                                key={metric.id} 
+                                                onClick={() => setSelectedMetric(metric.id as any)}
+                                                className={cn(
+                                                    "p-6 text-left rounded-[2rem] transition-all duration-300 flex flex-col justify-between items-start group relative overflow-hidden",
+                                                    selectedMetric === metric.id 
+                                                        ? 'bg-zinc-900 text-white shadow-2xl scale-[1.02] ring-1 ring-zinc-800' 
+                                                        : 'bg-white/80 backdrop-blur-md text-zinc-500 border border-white hover:border-orange-200 hover:shadow-lg'
+                                                )}
+                                            >
+                                                <div className="flex items-center justify-between w-full mb-6">
+                                                    <div className={cn(
+                                                        "w-10 h-10 rounded-2xl flex items-center justify-center transition-colors",
+                                                        selectedMetric === metric.id ? 'bg-orange-500 text-white' : 'bg-zinc-50 text-zinc-400 group-hover:bg-orange-50 group-hover:text-orange-500'
+                                                    )}>
+                                                        {metric.icon}
                                                     </div>
+                                                    <span className="text-[9px] font-bold uppercase tracking-[0.2em]">{metric.title}</span>
                                                 </div>
-                                                <div className="flex items-start gap-4 text-left p-5 bg-zinc-50 rounded-2xl border border-zinc-100 group hover:border-orange-200 transition-colors">
-                                                    <div className="w-8 h-8 rounded-lg bg-zinc-900 text-white flex items-center justify-center text-xs font-black shrink-0 shadow-md">2</div>
-                                                    <div>
-                                                        <p className="text-[11px] font-black uppercase tracking-widest text-zinc-400 mb-1">Single Command Install</p>
-                                                        <p className="text-xs font-bold text-zinc-700">Open a terminal in the folder and run <code className="text-orange-600 font-black">install.bat</code>.</p>
-                                                    </div>
-                                                </div>
-                                            </div>
-
-                                            {generatedLink ? (
-                                                <div className="flex flex-col gap-3">
-                                                    <div className="p-4 bg-emerald-50 rounded-2xl border border-emerald-100 flex flex-col gap-2 text-left">
-                                                        <div className="flex justify-between items-center">
-                                                            <span className="text-[10px] font-black uppercase tracking-widest text-emerald-600">Shareable Link</span>
-                                                            <span className="text-[9px] font-bold text-emerald-500 bg-emerald-100 px-2 py-0.5 rounded-full">Valid for 24h</span>
-                                                        </div>
-                                                        <input 
-                                                            type="text" 
-                                                            readOnly 
-                                                            value={generatedLink} 
-                                                            className="w-full bg-white border-none ring-1 ring-emerald-200 rounded-xl py-3 px-4 text-xs font-mono text-zinc-600 focus:outline-none"
-                                                            onClick={(e) => { e.currentTarget.select(); navigator.clipboard.writeText(generatedLink); }}
-                                                        />
-                                                        <p className="text-[10px] text-emerald-600 font-medium">Click the link above to copy it to your clipboard.</p>
-                                                    </div>
-                                                </div>
-                                            ) : (
-                                                <div className="flex flex-col sm:flex-row gap-3">
-                                                    <button
-                                                        onClick={() => downloadInstaller(selectedUnit.name.split('/').pop() || '')}
-                                                        disabled={isDownloading}
-                                                        className="flex-1 bg-zinc-900 text-white rounded-2xl py-5 px-8 font-black uppercase tracking-widest text-[11px] flex items-center justify-center gap-3 hover:bg-zinc-800 transition-all shadow-xl shadow-zinc-900/10 disabled:opacity-50"
-                                                    >
-                                                        {isDownloading ? (
-                                                            <div className="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin" />
-                                                        ) : (
-                                                            <>
-                                                                <Download className="w-4 h-4" />
-                                                                Download
-                                                            </>
-                                                        )}
-                                                    </button>
-                                                    <button
-                                                        onClick={() => handleGenerateLink(selectedUnit.name.split('/').pop() || '')}
-                                                        disabled={isDownloading}
-                                                        className="flex-1 bg-white text-zinc-700 ring-1 ring-zinc-200 rounded-2xl py-5 px-8 font-black uppercase tracking-widest text-[11px] flex items-center justify-center gap-3 hover:ring-zinc-300 hover:bg-zinc-50 transition-all disabled:opacity-50"
-                                                    >
-                                                        {isDownloading ? (
-                                                            <div className="w-4 h-4 border-2 border-zinc-200 border-t-zinc-700 rounded-full animate-spin" />
-                                                        ) : (
-                                                            <>
-                                                                <Globe className="w-4 h-4" />
-                                                                Get Link
-                                                            </>
-                                                        )}
-                                                    </button>
-                                                    <button
-                                                        onClick={handleDeleteUnit}
-                                                        className="px-8 bg-zinc-100 hover:bg-red-50 hover:text-red-600 text-zinc-500 rounded-2xl py-5 font-black uppercase tracking-widest text-[11px] transition-all"
-                                                    >
-                                                        Cancel Setup
-                                                    </button>
-                                                </div>
-                                            )}
-                                        </div>
-                                    </div>
-                                ) : activeTab === 'metrics' ? (
-                                    <div className="flex flex-col lg:flex-row gap-4 lg:gap-6 pb-4 lg:pb-6 flex-1 min-h-0">
-                                        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-1 gap-3 lg:gap-4 shrink-0 lg:w-48 xl:w-56 overflow-y-auto custom-scrollbar p-1">
-                                            {currentMetrics.map((metric) => (
-                                                <button key={metric.id} onClick={() => setSelectedMetric(metric.id as any)} className={cn("p-4 lg:p-5 text-left rounded-2xl transition-all duration-300 flex flex-col justify-between items-start group relative z-0", selectedMetric === metric.id ? 'bg-white ring-2 ring-orange-500 shadow-[0_4px_15px_rgba(249,115,22,0.15)] scale-[1.02] z-10' : 'bg-white ring-1 ring-zinc-200/80 hover:ring-zinc-300 hover:shadow-md hover:-translate-y-0.5')}>
-                                                    <div className="flex items-center justify-between w-full mb-3">
-                                                        <div className={cn("p-2 rounded-xl transition-colors", selectedMetric === metric.id ? 'bg-orange-50 text-orange-600' : 'bg-zinc-50 text-zinc-400 group-hover:text-zinc-600')}>
-                                                            {metric.icon}
-                                                        </div>
-                                                        <span className="text-[9px] font-black uppercase tracking-widest text-zinc-400">{metric.title}</span>
-                                                    </div>
-                                                    <div>
-                                                        <p className={cn("font-bold tracking-tight mb-1", selectedMetric === metric.id ? 'text-zinc-900' : 'text-zinc-600')}>{metric.label}</p>
-                                                        <p className="text-xl font-black font-mono text-zinc-900 tracking-tighter">
-                                                            {metric.value} <span className="text-[10px] text-zinc-400 tracking-widest uppercase">{metric.unit}</span>
-                                                        </p>
-                                                    </div>
-                                                </button>
-                                            ))}
-                                        </div>
-                                        <div className="flex-1 bg-white p-6 lg:p-8 rounded-2xl lg:rounded-3xl ring-1 ring-zinc-200/80 shadow-sm flex flex-col min-h-[400px] lg:min-h-0">
-                                            <div className="flex justify-between items-end mb-6">
                                                 <div>
-                                                    <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-400 mb-1">Live Telemetry Stream</h3>
-                                                    <h2 className="text-xl lg:text-2xl font-black text-zinc-900 tracking-widest uppercase">{activeMetricData?.label}</h2>
+                                                    <p className={cn("text-[10px] font-bold uppercase tracking-widest mb-1 opacity-60")}>{metric.label}</p>
+                                                    <p className="text-2xl font-bold font-mono tracking-tighter">
+                                                        {metric.value} <span className="text-xs font-bold opacity-40">{metric.unit}</span>
+                                                    </p>
                                                 </div>
-                                                <div className="text-right bg-zinc-50 px-4 py-2 rounded-xl ring-1 ring-zinc-100">
-                                                    <span className="text-[10px] font-black uppercase tracking-widest text-zinc-400 block mb-0.5">Current Value</span>
-                                                    <span className="text-2xl font-black font-mono text-zinc-900 tracking-tighter">
-                                                        {activeMetricData?.value} <span className="text-xs text-zinc-500">{activeMetricData?.unit}</span>
-                                                    </span>
+                                            </button>
+                                        ))}
+                                    </div>
+
+                                    <div className="flex-1 bg-white border border-zinc-100 rounded-[2.5rem] p-6 lg:p-10 shadow-[0_8px_60px_-15px_rgba(0,0,0,0.03)] flex flex-col relative overflow-hidden min-h-[450px] lg:h-full">
+                                        <div className="absolute top-0 right-0 w-64 h-64 bg-orange-500/5 blur-[80px] rounded-full -mr-32 -mt-32" />
+                                        
+                                        <div className="flex justify-between items-end mb-10 relative z-10">
+                                            <div>
+                                                <div className="flex items-center gap-2 mb-2">
+                                                    <div className="w-1.5 h-1.5 rounded-full bg-orange-500 animate-pulse" />
+                                                    <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-[0.2em]">Live Telemetry Stream</p>
                                                 </div>
+                                                <h2 className="text-2xl font-bold text-zinc-900 tracking-tight">{activeMetricData?.label} <span className="text-zinc-300 font-medium">History</span></h2>
                                             </div>
-                                            <div className="flex-1 relative bg-zinc-50/50 rounded-2xl ring-1 ring-zinc-100 p-4">
-                                                <UsageGraph data={usageData} metric={selectedMetric} className="h-full" />
+                                            <div className="text-right">
+                                                <span className="text-3xl lg:text-[2.5rem] font-bold font-mono text-zinc-900 tracking-tighter leading-none block">
+                                                    {activeMetricData?.value}<span className="text-sm lg:text-base text-zinc-300 ml-1">{activeMetricData?.unit}</span>
+                                                </span>
                                             </div>
+                                        </div>
+
+                                        <div className="flex-1 relative min-h-0 w-full">
+                                            <UsageGraph data={usageData} metric={selectedMetric} className="h-full w-full" />
                                         </div>
                                     </div>
-                                ) : (
-                                    /* <div className="bg-[#09090B] rounded-2xl lg:rounded-3xl shadow-xl border border-zinc-800 h-full min-h-[400px] lg:min-h-[500px] flex flex-col overflow-hidden">
-                                        <div className="bg-[#18181B] p-3 lg:p-4 border-b border-zinc-800 flex items-center justify-between">
-                                            <div className="flex items-center gap-2 lg:gap-3">
-                                                <Terminal className="text-orange-500 w-4 h-4 lg:w-5 lg:h-5" />
-                                                <span className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-300">Secure Node Terminal</span>
-                                            </div>
-                                            <div className="flex gap-1.5">
-                                                <div className="w-2.5 h-2.5 rounded-full bg-zinc-700"></div>
-                                                <div className="w-2.5 h-2.5 rounded-full bg-zinc-700"></div>
-                                                <div className="w-2.5 h-2.5 rounded-full bg-zinc-700"></div>
-                                            </div>
-                                        </div>
-                                        <div className="p-4 lg:p-6 font-mono text-xs lg:text-[13px] text-zinc-400 space-y-2 overflow-y-auto flex-1 leading-relaxed break-words">
-                                            <p>[{currentTime}] <span className="text-orange-400 font-bold">CONNECT</span>: Establishing secure tunnel to {selectedUnit.id}...</p>
-                                            <p>[{currentTime}] <span className="text-emerald-400 font-bold">SUCCESS</span>: Auth token verified.</p>
-                                            <p>[{currentTime}] <span className="text-zinc-500 font-bold">INFO</span>: Telemetry stream initialized at 1000ms polling rate.</p>
-                                            <p className="animate-pulse mt-4 text-zinc-600 font-bold">_</p>
-                                        </div>
-                                    </div> */
-                                    null
-                                )}
+                                </div>
                             </motion.div>
                         ) : (
                             <motion.div
                                 key="fleet-overview"
-                                initial={{ opacity: 0, scale: 0.98 }}
-                                animate={{ opacity: 1, scale: 1 }}
-                                exit={{ opacity: 0, scale: 0.98 }}
-                                className="flex-1 flex flex-col min-h-0"
+                                initial={{ opacity: 0, scale: 0.98 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.98 }}
+                                className="flex-1 flex flex-col p-4 lg:p-10 min-h-0"
                             >
-                                <div className="flex items-center justify-between mb-6 shrink-0 pt-2 px-1">
+                                <div className="flex items-center justify-between mb-10 shrink-0">
                                     <div>
-                                        <h2 className="text-2xl lg:text-3xl font-black text-zinc-900 tracking-tight uppercase">Fleet Overview</h2>
-                                        <p className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-400 mt-1">Real-time health monitoring for {units.length} active nodes</p>
+                                        <h2 className="text-4xl font-bold text-zinc-900 tracking-tight">Fleet Overview</h2>
+                                        <p className="text-[10px] font-bold uppercase tracking-[0.3em] text-zinc-400 mt-2">Active Health Monitoring • {activeUnits} Online</p>
                                     </div>
-                                    <div className="flex items-center gap-3">
-                                        <div className="px-4 py-2 bg-white ring-1 ring-zinc-200 rounded-xl shadow-sm flex items-center gap-3">
-                                            <div className="flex items-center gap-1.5">
-                                                <div className="w-2 h-2 rounded-full bg-emerald-500" />
-                                                <span className="text-[10px] font-black text-zinc-800 uppercase">{activeUnits} Online</span>
-                                            </div>
-                                            <div className="w-[1px] h-3 bg-zinc-200" />
-                                            <div className="flex items-center gap-1.5">
-                                                <div className="w-2 h-2 rounded-full bg-zinc-300" />
-                                                <span className="text-[10px] font-black text-zinc-500 uppercase">{totalUnits - activeUnits} Offline</span>
-                                            </div>
+                                    <div className="flex items-center gap-4 bg-white/70 backdrop-blur-md p-2 rounded-full border border-white/60 shadow-sm">
+                                        <div className="flex items-center gap-2 px-4 py-2 bg-emerald-50 text-emerald-600 rounded-full text-[10px] font-bold uppercase tracking-widest">
+                                            <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse shadow-[0_0_8px_rgba(16,185,129,0.5)]" />
+                                            {activeUnits} Online
+                                        </div>
+                                        <div className="flex items-center gap-2 px-4 py-2 bg-zinc-50 text-zinc-400 rounded-full text-[10px] font-bold uppercase tracking-widest">
+                                            <div className="w-1.5 h-1.5 rounded-full bg-zinc-300" />
+                                            {totalUnits - activeUnits} Offline
                                         </div>
                                     </div>
                                 </div>
 
-                                <div className="flex-1 overflow-y-auto custom-scrollbar pr-1 p-1 pt-4">
+                                <div className="flex-1 overflow-y-auto custom-scrollbar">
                                     {units.length === 0 ? (
-                                        <div className="flex-1 flex flex-col items-center justify-center p-12 bg-white rounded-3xl ring-1 ring-zinc-200/50 text-center shadow-sm">
-                                            <div className="mb-6 p-6 bg-zinc-50 rounded-full ring-1 ring-zinc-100 shadow-inner">
-                                                <Server className="w-12 h-12 text-zinc-300" />
+                                        <div className="flex-1 flex flex-col items-center justify-center p-20 bg-white/80 backdrop-blur-xl rounded-[3rem] border border-white text-center shadow-xl shadow-black/5">
+                                            <div className="w-24 h-24 bg-zinc-50 rounded-[2rem] flex items-center justify-center mb-8 ring-1 ring-zinc-100">
+                                                <Server className="w-10 h-10 text-zinc-300" />
                                             </div>
-                                            <h2 className="text-xl font-black text-zinc-900 tracking-tight uppercase mb-2">No nodes found</h2>
-                                            <p className="text-zinc-500 max-w-sm text-xs font-medium leading-relaxed mb-8">
-                                                Start by deploying a monitor to your first system to see real-time statistics here.
-                                            </p>
+                                            <h2 className="text-2xl font-bold text-zinc-900 tracking-tight mb-3">Initialize Fleet</h2>
+                                            <p className="text-zinc-500 max-w-xs text-sm font-medium leading-relaxed mb-10">Deploy your first telemetry monitor to begin tracking system health in real-time.</p>
                                             <button
                                                 onClick={() => setIsAddNodeOpen(true)}
-                                                className="bg-zinc-900 text-white rounded-2xl py-4 px-8 font-black uppercase tracking-widest text-[11px] flex items-center justify-center gap-2 hover:bg-zinc-800 transition-all shadow-xl shadow-zinc-900/10"
+                                                className="bg-zinc-900 text-white rounded-full py-5 px-10 font-bold uppercase tracking-widest text-xs flex items-center gap-3 hover:bg-orange-500 transition-all shadow-2xl shadow-zinc-900/20 active:scale-95"
                                             >
-                                                <Zap className="w-4 h-4 text-orange-400" /> Deploy First Monitor
+                                                <Plus size={18} /> Deploy First Monitor
                                             </button>
                                         </div>
                                     ) : (
-                                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4 lg:gap-5 pb-8">
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-6 pb-10">
                                             {sortedUnits.map((unit) => (
-                                                <CompactStatCard
-                                                    key={unit.id}
-                                                    unit={unit}
-                                                    onClick={() => handleUnitToggle(unit)}
-                                                />
+                                                <CompactStatCard key={unit.id} unit={unit} onClick={() => handleUnitToggle(unit)} />
                                             ))}
                                         </div>
                                     )}
